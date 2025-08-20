@@ -1,0 +1,58 @@
+import React from 'react';
+import { X } from 'lucide-react';
+import { clsx } from 'clsx';
+
+interface ModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  title: string;
+  children: React.ReactNode;
+  size?: 'sm' | 'md' | 'lg' | 'xl';
+}
+
+export const Modal: React.FC<ModalProps> = ({
+  isOpen,
+  onClose,
+  title,
+  children,
+  size = 'md'
+}) => {
+  if (!isOpen) return null;
+
+  const sizeClasses = {
+    sm: 'max-w-sm sm:max-w-md',
+    md: 'max-w-md sm:max-w-lg',
+    lg: 'max-w-lg sm:max-w-xl lg:max-w-2xl',
+    xl: 'max-w-xl sm:max-w-2xl lg:max-w-4xl',
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 overflow-y-auto p-4 sm:p-0">
+      <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+        <div
+          className="fixed inset-0 transition-opacity bg-gray-500 bg-opacity-75"
+          onClick={onClose}
+        />
+
+        <div className={clsx(
+          'inline-block w-full overflow-hidden text-left align-bottom transition-all transform bg-white rounded-lg shadow-xl sm:my-8 sm:align-middle mx-auto',
+          sizeClasses[size]
+        )}>
+          <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200">
+            <h3 className="text-base sm:text-lg font-medium text-gray-900 truncate pr-4">{title}</h3>
+            <button
+              onClick={onClose}
+              className="text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+          
+          <div className="px-4 sm:px-6 py-4 max-h-96 sm:max-h-none overflow-y-auto">
+            {children}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
