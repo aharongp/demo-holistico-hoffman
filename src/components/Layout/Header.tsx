@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Bell, User, LogOut, Settings, Menu } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
@@ -55,10 +56,14 @@ export const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
                 <div className="px-3 sm:px-4 py-2 text-xs sm:text-sm text-gray-500 border-b border-gray-100 truncate">
                   {user.email}
                 </div>
-                <button className="w-full flex items-center px-3 sm:px-4 py-2 text-xs sm:text-sm text-gray-700 hover:bg-gray-100">
+                <Link 
+                  to="/profile" 
+                  className="w-full flex items-center px-3 sm:px-4 py-2 text-xs sm:text-sm text-gray-700 hover:bg-gray-100"
+                  onClick={() => setShowUserMenu(false)}
+                >
                   <Settings className="w-3 h-3 sm:w-4 sm:h-4 mr-2" />
-                  Settings
-                </button>
+                  Profile
+                </Link>
                 <button
                   onClick={logout}
                   className="w-full flex items-center px-3 sm:px-4 py-2 text-xs sm:text-sm text-red-600 hover:bg-red-50"

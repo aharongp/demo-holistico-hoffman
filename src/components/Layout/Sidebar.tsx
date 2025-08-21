@@ -10,7 +10,8 @@ import {
   Upload,
   UserCheck,
   Activity,
-  X
+  X,
+  Settings
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { UserRole } from '../../types';
@@ -80,6 +81,12 @@ const navigation: NavItem[] = [
     icon: Upload,
     label: 'Medical History',
     roles: ['patient', 'student'],
+  },
+  {
+    to: '/profile',
+    icon: Settings,
+    label: 'Profile',
+    roles: ['administrator', 'trainer', 'therapist', 'doctor', 'coach', 'patient', 'student'],
   },
 ];
 

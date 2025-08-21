@@ -19,6 +19,7 @@ import { PatientActivities } from './pages/Activities/PatientActivities';
 import { EvolutionTracking } from './pages/Evolution/EvolutionTracking';
 import { ReportsManagement } from './pages/Reports/ReportsManagement';
 import { MedicalHistory } from './pages/MedicalHistory/MedicalHistory';
+import { UserProfile } from './pages/Profile/UserProfile';
 
 const DashboardRouter: React.FC = () => {
   const { user } = useAuth();
@@ -67,6 +68,7 @@ const AppContent: React.FC = () => {
       <Route path="/evolution" element={<Layout><EvolutionTracking /></Layout>} />
       <Route path="/reports" element={<Layout><ReportsManagement /></Layout>} />
       <Route path="/medical-history" element={<Layout><MedicalHistory /></Layout>} />
+      <Route path="/profile" element={<Layout><UserProfile /></Layout>} />
       <Route path="/" element={<Navigate to="/dashboard" replace />} />
       <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>
