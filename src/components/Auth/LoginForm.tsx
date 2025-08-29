@@ -87,6 +87,9 @@ export const LoginForm: React.FC = () => {
             >
               {isLoading ? 'Signing in...' : 'Sign in'}
             </Button>
+            <div className="text-sm text-center text-gray-600 mt-2">
+              Don't have an account? <a href="/signup" className="text-blue-600 underline">Create one</a>
+            </div>
           </form>
         </Card>
       </div>

@@ -99,8 +99,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setIsLoading(true);
     
     // Mock registration
+    const rawId = Date.now().toString();
+    const generatedId = userData.role === 'patient' ? `patient-${rawId}` : rawId;
+
     const newUser: User = {
-      id: Date.now().toString(),
+      id: generatedId,
       email: userData.email,
       firstName: userData.firstName,
       lastName: userData.lastName,

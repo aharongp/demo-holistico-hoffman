@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { AppProvider } from './context/AppContext';
 import { Layout } from './components/Layout/Layout';
 import { LoginForm } from './components/Auth/LoginForm';
+import { SignupForm } from './components/Auth/SignupForm';
 
 // Dashboard Components
 import { AdminDashboard } from './pages/Dashboard/AdminDashboard';
@@ -54,7 +55,13 @@ const AppContent: React.FC = () => {
   }
 
   if (!user) {
-    return <LoginForm />;
+    return (
+      <Routes>
+        <Route path="/signup" element={<SignupForm />} />
+        <Route path="/login" element={<LoginForm />} />
+        <Route path="*" element={<Navigate to="/login" replace />} />
+      </Routes>
+    );
   }
 
   return (

@@ -121,7 +121,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [patients, setPatients] = useState<Patient[]>(mockPatients);
   const [instruments, setInstruments] = useState<Instrument[]>(mockInstruments);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
-  const [programs, setPrograms] = useState<Program[]>([]);
+  const mockPrograms: Program[] = [
+    {
+      id: 'p1',
+      name: 'Wellness Starter',
+      description: 'Introductory program for new patients',
+      instruments: ['1'],
+      duration: 30,
+      isActive: true,
+      createdAt: new Date('2024-01-01'),
+    },
+  ];
+
+  const [programs, setPrograms] = useState<Program[]>(mockPrograms);
   const [evolutionEntries, setEvolutionEntries] = useState<EvolutionEntry[]>([]);
   const [dashboardStats] = useState<DashboardStats>(mockDashboardStats);
 

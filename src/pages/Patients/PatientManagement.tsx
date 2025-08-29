@@ -5,14 +5,18 @@ import { Button } from '../../components/UI/Button';
 import { Table } from '../../components/UI/Table';
 import { Modal } from '../../components/UI/Modal';
 import { useApp } from '../../context/AppContext';
+import { usePermissions } from '../../hooks/usePermissions';
 import { Patient } from '../../types';
 import { format } from 'date-fns';
 
 export const PatientManagement: React.FC = () => {
-  const { patients, addPatient, updatePatient, deletePatient } = useApp();
+  const { patients, addPatient, updatePatient, deletePatient, programs } = useApp();
+  const { isAdmin } = usePermissions();
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [editingPatient, setEditingPatient] = useState<Patient | null>(null);
+  const [selectedPatientForAssign, setSelectedPatientForAssign] = useState<Patient | null>(null);
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -54,6 +58,17 @@ export const PatientManagement: React.FC = () => {
       });
     }
     setIsModalOpen(true);
+  };
+
+  const handleOpenAssignModal = (patient: Patient) => {
+    setSelectedPatientForAssign(patient);
+    setIsAssignModalOpen(true);
+  };
+
+  const handleAssignProgram = (programId: string) => {
+    if (!selectedPatientForAssign) return;
+    updatePatient(selectedPatientForAssign.id, { programId });
+    setIsAssignModalOpen(false);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -116,6 +131,18 @@ export const PatientManagement: React.FC = () => {
       header: 'Actions',
       render: (patient: Patient) => (
         <div className="flex space-x-2">
+          {isAdmin && !patient.programId && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleOpenAssignModal(patient)}
+              title="Assign program"
+            >
+              <span className="inline-flex items-center px-2 py-1 bg-red-100 text-red-800 rounded">
+                New
+              </span>
+            </Button>
+          )}
           <Button variant="outline" size="sm">
             <Eye className="w-4 h-4" />
           </Button>
@@ -167,6 +194,34 @@ export const PatientManagement: React.FC = () => {
 
         <Table data={filteredPatients} columns={columns} />
       </Card>
+
+      {/* Assign Program Modal for Admins */}
+      <Modal
+        isOpen={isAssignModalOpen}
+        onClose={() => setIsAssignModalOpen(false)}
+        title={selectedPatientForAssign ? `Assign Program to ${selectedPatientForAssign.firstName}` : 'Assign Program'}
+        size="md"
+      >
+        {selectedPatientForAssign && (
+          <div className="space-y-4">
+            <p className="text-sm text-gray-700">Select a program to assign to the patient.</p>
+            <div className="space-y-2">
+              {/** using programs from context */}
+              {programs.map((program) => (
+                <div key={program.id} className="flex items-center justify-between border p-2 rounded">
+                  <div>
+                    <div className="font-medium">{program.name}</div>
+                    <div className="text-sm text-gray-500">{program.description}</div>
+                  </div>
+                  <div>
+                    <Button onClick={() => handleAssignProgram(program.id)}>Assign</Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </Modal>
 
       <Modal
         isOpen={isModalOpen}

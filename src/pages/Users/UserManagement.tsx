@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useAuth } from '../../context/AuthContext';
 import { Plus, Edit, Trash2, Search } from 'lucide-react';
 import { Card } from '../../components/UI/Card';
 import { Button } from '../../components/UI/Button';
@@ -32,6 +33,7 @@ const mockUsers: User[] = [
 
 export const UserManagement: React.FC = () => {
   const [users, setUsers] = useState<User[]>(mockUsers);
+  const { user: currentUser } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
@@ -63,7 +65,7 @@ export const UserManagement: React.FC = () => {
         firstName: '',
         lastName: '',
         email: '',
-        role: 'patient',
+  role: 'patient',
       });
     }
     setIsModalOpen(true);
@@ -81,10 +83,14 @@ export const UserManagement: React.FC = () => {
       ));
     } else {
       // Add new user
+      // generate prefixed ids: patients get patient-<ts>, staff get staff-<ts>
+      const ts = Date.now().toString();
+      const newId = formData.role === 'patient' ? `patient-${ts}` : `staff-${ts}`;
       const newUser: User = {
-        id: Date.now().toString(),
+        id: newId,
         ...formData,
         createdAt: new Date(),
+        lastLogin: new Date(),
         isActive: true,
       };
       setUsers(prev => [...prev, newUser]);
@@ -235,19 +241,24 @@ export const UserManagement: React.FC = () => {
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Role
             </label>
-            <select
-              value={formData.role}
-              onChange={(e) => setFormData(prev => ({ ...prev, role: e.target.value as UserRole }))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            >
-              <option value="administrator">Administrator</option>
-              <option value="doctor">Doctor</option>
-              <option value="therapist">Therapist</option>
-              <option value="trainer">Trainer</option>
-              <option value="coach">Coach</option>
-              <option value="patient">Patient</option>
-              <option value="student">Student</option>
-            </select>
+            {/* Non-admin users cannot create administrator or doctor roles */}
+            {editingUser && (editingUser.role === 'administrator' || editingUser.role === 'doctor') && currentUser?.role !== 'administrator' ? (
+              <input readOnly value={editingUser.role} className="w-full px-3 py-2 border border-gray-200 bg-gray-100 rounded-lg" />
+            ) : (
+              <select
+                value={formData.role}
+                onChange={(e) => setFormData(prev => ({ ...prev, role: e.target.value as UserRole }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                {currentUser?.role === 'administrator' && <option value="administrator">Administrator</option>}
+                {currentUser?.role === 'administrator' && <option value="doctor">Doctor</option>}
+                <option value="therapist">Therapist</option>
+                <option value="trainer">Trainer</option>
+                <option value="coach">Coach</option>
+                <option value="patient">Patient</option>
+                <option value="student">Student</option>
+              </select>
+            )}
           </div>
 
           <div className="flex justify-end space-x-3 pt-4">

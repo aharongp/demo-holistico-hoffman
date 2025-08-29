@@ -22,6 +22,7 @@ export interface Patient {
   phone?: string;
   address?: string;
   assignedTherapists: User[];
+  programId?: string; // optional assigned program
   createdAt: Date;
   isActive: boolean;
 }
