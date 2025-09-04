@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { Plus, Edit, Trash2, Search } from 'lucide-react';
 import { Card } from '../../components/UI/Card';
@@ -11,6 +11,7 @@ import { User, UserRole } from '../../types';
 const mockUsers: User[] = [
   {
     id: '1',
+    username: 'admin',
     email: 'admin@hoffman.com',
     firstName: 'Admin',
     lastName: 'User',
@@ -21,6 +22,7 @@ const mockUsers: User[] = [
   },
   {
     id: '2',
+    username: 'doctor',
     email: 'doctor@hoffman.com',
     firstName: 'Dr. John',
     lastName: 'Smith',
@@ -33,6 +35,8 @@ const mockUsers: User[] = [
 
 export const UserManagement: React.FC = () => {
   const [users, setUsers] = useState<User[]>(mockUsers);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const { user: currentUser } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -44,11 +48,14 @@ export const UserManagement: React.FC = () => {
     role: 'patient' as UserRole,
   });
 
-  const filteredUsers = users.filter(user =>
-    user.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    user.lastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    user.email.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredUsers = users.filter(user => {
+    const s = searchTerm.toLowerCase();
+    const username = (user as any).username ?? `${user.firstName ?? ''} ${user.lastName ?? ''}`;
+    return (
+      String(username).toLowerCase().includes(s) ||
+      (user.email ?? '').toLowerCase().includes(s)
+    );
+  });
 
   const handleOpenModal = (user?: User) => {
     if (user) {
@@ -71,6 +78,43 @@ export const UserManagement: React.FC = () => {
     setIsModalOpen(true);
   };
 
+  useEffect(() => {
+    // default to backend running on localhost:3000 when no env var provided
+    const base = import.meta.env.VITE_API_BASE || 'http://localhost:3000';
+    // Debug: print selected API base so we can diagnose failed fetches from the browser console
+    // This is safe in dev; remove before production if needed.
+    // eslint-disable-next-line no-console
+    console.log('UserManagement: API base =', base);
+    const fetchUsers = async () => {
+      setLoading(true);
+      try {
+        const res = await fetch(`${base}/users`);
+        if (!res.ok) throw new Error(`Status ${res.status}`);
+        const data = await res.json();
+        // map backend shape to frontend User type
+        const mapped: User[] = data.map((u: any) => ({
+          id: String(u.id),
+          // backend uses `username`; keep it and populate firstName for existing form fields
+          username: u.username ?? u.nombres ?? '',
+          firstName: u.username ?? u.firstName ?? u.nombres ?? '',
+          lastName: u.apellidos ?? u.lastName ?? '',
+          email: u.email ?? '',
+          role: (u.rol ?? 'patient') as any,
+          avatar: undefined,
+          createdAt: u.created_at ? new Date(u.created_at) : new Date(),
+          lastLogin: u.last_login ? new Date(u.last_login) : undefined,
+          isActive: (u.active ?? 1) === 1,
+        }));
+        setUsers(mapped);
+      } catch (err: any) {
+        setError(err.message ?? 'Failed to load users');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchUsers();
+  }, []);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -88,6 +132,7 @@ export const UserManagement: React.FC = () => {
       const newId = formData.role === 'patient' ? `patient-${ts}` : `staff-${ts}`;
       const newUser: User = {
         id: newId,
+        username: `${formData.firstName} ${formData.lastName}`.trim(),
         ...formData,
         createdAt: new Date(),
         lastLogin: new Date(),
@@ -107,9 +152,9 @@ export const UserManagement: React.FC = () => {
 
   const columns = [
     {
-      key: 'firstName',
+      key: 'username',
       header: 'Name',
-      render: (user: User) => `${user.firstName} ${user.lastName}`,
+      render: (user: User) => ((user as any).username ?? `${user.firstName} ${user.lastName}`),
     },
     {
       key: 'email',
@@ -188,7 +233,10 @@ export const UserManagement: React.FC = () => {
           </div>
         </div>
 
-        <Table data={filteredUsers} columns={columns} />
+  {loading && <div className="p-4 text-sm text-gray-600">Loading users...</div>}
+  {error && <div className="p-4 text-sm text-red-600">Error: {error}</div>}
+
+  <Table data={filteredUsers} columns={columns} />
       </Card>
 
       <Modal

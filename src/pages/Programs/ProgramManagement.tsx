@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Plus, Edit, Trash2, Search, Calendar } from 'lucide-react';
 import { Card } from '../../components/UI/Card';
 import { Button } from '../../components/UI/Button';
@@ -6,9 +6,11 @@ import { Table } from '../../components/UI/Table';
 import { Modal } from '../../components/UI/Modal';
 import { useApp } from '../../context/AppContext';
 import { Program } from '../../types';
+// useState and useEffect imported from React above
 
 export const ProgramManagement: React.FC = () => {
-  const { programs, addProgram, updateProgram, deleteProgram, instruments } = useApp();
+  const { programs: ctxPrograms, addProgram, updateProgram, deleteProgram, instruments } = useApp();
+  const [programs, setPrograms] = useState<Program[]>(ctxPrograms);
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProgram, setEditingProgram] = useState<Program | null>(null);
@@ -20,8 +22,8 @@ export const ProgramManagement: React.FC = () => {
   });
 
   const filteredPrograms = programs.filter(program =>
-    program.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    program.description.toLowerCase().includes(searchTerm.toLowerCase())
+    (program.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (program.description || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const handleOpenModal = (program?: Program) => {
@@ -55,8 +57,12 @@ export const ProgramManagement: React.FC = () => {
 
     if (editingProgram) {
       updateProgram(editingProgram.id, programData);
+      // optimistically update local list
+      setPrograms(prev => prev.map(p => p.id === editingProgram.id ? { ...p, ...programData } : p));
     } else {
       addProgram(programData);
+      // optimistic add with temporary id (backend will assign real id)
+      setPrograms(prev => [...prev, { id: Date.now().toString(), name: programData.name, description: programData.description, duration: programData.duration, instruments: programData.instruments }] as Program[]);
     }
     
     setIsModalOpen(false);
@@ -65,8 +71,30 @@ export const ProgramManagement: React.FC = () => {
   const handleDelete = (programId: string) => {
     if (confirm('Are you sure you want to delete this program?')) {
       deleteProgram(programId);
+      setPrograms(prev => prev.filter(p => p.id !== programId));
     }
   };
+
+  useEffect(() => {
+    const base = import.meta.env.VITE_API_BASE ?? 'http://localhost:3000';
+    fetch(`${base}/programs`)
+      .then(res => res.json())
+      .then((data) => {
+        // map backend shape to frontend Program type if necessary
+        const mapped: Program[] = (data || []).map((p: any) => ({
+          id: String(p.id),
+          name: p.nombre ?? p.name ?? '',
+          description: p.descripcion ?? p.description ?? '',
+          duration: (p.duration as number) ?? 30,
+          instruments: (p.instruments as string[]) ?? [],
+        }));
+        setPrograms(mapped);
+      })
+      .catch(() => {
+        // keep context programs as fallback
+        setPrograms(ctxPrograms);
+      });
+  }, [ctxPrograms]);
 
   const columns = [
     {
