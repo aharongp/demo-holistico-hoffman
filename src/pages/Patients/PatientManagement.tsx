@@ -131,16 +131,22 @@ export const PatientManagement: React.FC = () => {
       header: 'Actions',
       render: (patient: Patient) => (
         <div className="flex space-x-2">
-          {isAdmin && !patient.programId && (
+          {isAdmin && (
             <Button
               variant="outline"
               size="sm"
               onClick={() => handleOpenAssignModal(patient)}
-              title="Assign program"
+              title={patient.programId ? 'Change program' : 'Assign program'}
             >
-              <span className="inline-flex items-center px-2 py-1 bg-red-100 text-red-800 rounded">
-                New
-              </span>
+              {patient.programId ? (
+                <span className="inline-flex items-center px-2 py-1 bg-blue-100 text-blue-800 rounded">
+                  Change
+                </span>
+              ) : (
+                <span className="inline-flex items-center px-2 py-1 bg-yellow-100 text-yellow-800 rounded">
+                  Assign
+                </span>
+              )}
             </Button>
           )}
           <Button variant="outline" size="sm">
