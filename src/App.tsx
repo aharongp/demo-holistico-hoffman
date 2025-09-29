@@ -16,6 +16,7 @@ import { UserManagement } from './pages/Users/UserManagement';
 import { PatientManagement } from './pages/Patients/PatientManagement';
 import { InstrumentManagement } from './pages/Instruments/InstrumentManagement';
 import { ProgramManagement } from './pages/Programs/ProgramManagement';
+import { ProgramDetail } from './pages/Programs/ProgramDetail';
 import { PatientActivities } from './pages/Activities/PatientActivities';
 import { EvolutionTracking } from './pages/Evolution/EvolutionTracking';
 import { ReportsManagement } from './pages/Reports/ReportsManagement';
@@ -63,6 +64,7 @@ const AppContent: React.FC = () => {
       <Route path="/patients" element={<Layout><PatientManagement /></Layout>} />
       <Route path="/instruments" element={<Layout><InstrumentManagement /></Layout>} />
       <Route path="/programs" element={<Layout><ProgramManagement /></Layout>} />
+  <Route path="/programs/:programId" element={<Layout><ProgramDetail /></Layout>} />
       <Route path="/activities" element={<Layout><PatientActivities /></Layout>} />
       <Route path="/evolution" element={<Layout><EvolutionTracking /></Layout>} />
       <Route path="/reports" element={<Layout><ReportsManagement /></Layout>} />

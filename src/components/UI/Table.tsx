@@ -12,12 +12,16 @@ interface TableProps<T> {
   data: T[];
   columns: Column<T>[];
   className?: string;
+  onRowClick?: (item: T) => void;
+  rowKey?: (item: T, index: number) => React.Key;
 }
 
 export function Table<T extends Record<string, any>>({ 
   data, 
   columns, 
-  className 
+  className,
+  onRowClick,
+  rowKey,
 }: TableProps<T>) {
   return (
     <div className={clsx('overflow-hidden shadow ring-1 ring-black ring-opacity-5 rounded-lg', className)}>
@@ -40,7 +44,11 @@ export function Table<T extends Record<string, any>>({
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
             {data.map((item, rowIndex) => (
-              <tr key={rowIndex} className="hover:bg-gray-50">
+              <tr
+                key={rowKey ? rowKey(item, rowIndex) : rowIndex}
+                className={clsx('hover:bg-gray-50', onRowClick && 'cursor-pointer')}
+                onClick={onRowClick ? () => onRowClick(item) : undefined}
+              >
                 {columns.map((column, colIndex) => (
                   <td key={colIndex} className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900">
                     {column.render 

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback, useMemo } from 'react';
-import { Patient, Instrument, Assignment, Program, EvolutionEntry, DashboardStats, GenderDistributionSlice, PatientsByProgramSlice } from '../types';
+import { Patient, Instrument, Assignment, Program, ProgramActivity, ProgramDetails, EvolutionEntry, DashboardStats, GenderDistributionSlice, PatientsByProgramSlice } from '../types';
 import { useAuth } from './AuthContext';
 
 type ProgramInput = {
@@ -7,6 +7,70 @@ type ProgramInput = {
   description: string;
   instruments: string[];
   isActive?: boolean;
+};
+
+type ProgramActivityInput = {
+  name: string;
+  description?: string;
+  day?: string;
+  time?: string;
+};
+
+const parseDate = (value: any): Date | null => {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
+const mapProgramFromApi = (program: any, fallbackCreatedBy: string | null = null): Program => {
+  const createdAt = parseDate(program?.created_at ?? program?.createdAt) ?? new Date();
+  const updatedAt = parseDate(program?.updated_at ?? program?.updatedAt);
+
+  let instruments: string[] = [];
+  if (Array.isArray(program?.instruments)) {
+    instruments = program.instruments.map((id: any) => String(id));
+  } else if (Array.isArray(program?.instrumentos)) {
+    instruments = program.instrumentos.map((id: any) => String(id));
+  }
+
+  return {
+    id: String(program?.id ?? ''),
+    name: program?.nombre ?? program?.name ?? '',
+    description: program?.descripcion ?? program?.description ?? '',
+    instruments,
+    isActive: typeof program?.activo !== 'undefined'
+      ? Boolean(program.activo)
+      : (typeof program?.isActive !== 'undefined' ? Boolean(program.isActive) : true),
+    createdAt,
+    updatedAt,
+    createdBy: program?.user_created ?? program?.userCreated ?? fallbackCreatedBy ?? null,
+  };
+};
+
+const mapProgramActivityFromApi = (activity: any): ProgramActivity => {
+  const createdAt = parseDate(activity?.created_at ?? activity?.createdAt);
+  const updatedAt = parseDate(activity?.updated_at ?? activity?.updatedAt);
+
+  const hora = activity?.hora ?? activity?.time ?? null;
+  return {
+    id: String(activity?.id ?? ''),
+    name: activity?.nombre ?? activity?.name ?? '',
+    description: activity?.descripcion ?? activity?.description ?? null,
+    day: activity?.dia ?? activity?.day ?? null,
+    time: typeof hora === 'string' ? hora : null,
+    createdAt,
+    updatedAt,
+    createdBy: activity?.user_created ?? activity?.userCreated ?? null,
+  };
+};
+
+const mapProgramDetailsFromApi = (program: any, fallbackCreatedBy: string | null = null): ProgramDetails => {
+  const base = mapProgramFromApi(program, fallbackCreatedBy);
+  const rawActivities = Array.isArray(program?.activities) ? program.activities : [];
+  return {
+    ...base,
+    activities: rawActivities.map((activity: any) => mapProgramActivityFromApi(activity)),
+  };
 };
 
 interface AppContextType {
@@ -35,6 +99,8 @@ interface AppContextType {
   addProgram: (program: ProgramInput) => Promise<Program>;
   updateProgram: (id: string, program: Partial<ProgramInput>) => Promise<Program | null>;
   deleteProgram: (id: string) => Promise<boolean>;
+  getProgramDetails: (id: string) => Promise<ProgramDetails | null>;
+  addProgramActivity: (programId: string, activity: ProgramActivityInput) => Promise<ProgramActivity>;
   
   addEvolutionEntry: (entry: Omit<EvolutionEntry, 'id'>) => void;
 }
@@ -216,16 +282,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (!mounted) return;
         if (Array.isArray(data) && data.length > 0) {
           // map backend program shape to frontend Program
-          const mapped = data.map((p: any) => ({
-            id: String(p.id),
-            name: p.nombre ?? p.name ?? '',
-            description: p.descripcion ?? p.description ?? '',
-            instruments: Array.isArray(p.instruments) ? p.instruments.map(String) : (p.instrumentos ? p.instrumentos.map(String) : []),
-            isActive: typeof p.activo !== 'undefined' ? Boolean(p.activo) : (typeof p.isActive !== 'undefined' ? p.isActive : true),
-            createdAt: p.created_at ? new Date(p.created_at) : (p.createdAt ? new Date(p.createdAt) : new Date()),
-            updatedAt: p.updated_at ? new Date(p.updated_at) : (p.updatedAt ? new Date(p.updatedAt) : null),
-            createdBy: p.user_created ?? p.userCreated ?? null,
-          }));
+          const mapped = data.map((p: any) => mapProgramFromApi(p, currentUserDisplayName));
           setPrograms(mapped);
         }
       } catch (err) {
@@ -233,7 +290,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
     })();
     return () => { mounted = false; };
-  }, [apiBase]);
+  }, [apiBase, currentUserDisplayName]);
 
   // Load instruments from backend on mount
   useEffect(() => {
@@ -680,6 +737,88 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   }, [apiBase]);
 
+  const getProgramDetails = useCallback(async (id: string): Promise<ProgramDetails | null> => {
+    const numericId = Number(id);
+
+    if (Number.isNaN(numericId)) {
+      const program = programs.find(p => p.id === id);
+      if (!program) {
+        return null;
+      }
+      return {
+        ...program,
+        activities: [],
+      };
+    }
+
+    try {
+      const res = await fetch(`${apiBase}/programs/${numericId}`);
+      if (res.status === 404) {
+        return null;
+      }
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || `Failed to fetch program details: ${res.status}`);
+      }
+      const data = await res.json();
+      return mapProgramDetailsFromApi(data, currentUserDisplayName);
+    } catch (error) {
+      console.error(`Failed to load program ${id}`, error);
+      return null;
+    }
+  }, [apiBase, currentUserDisplayName, programs]);
+
+  const addProgramActivity = useCallback(async (programId: string, activity: ProgramActivityInput): Promise<ProgramActivity> => {
+    const normalizedName = activity.name?.trim?.() ?? activity.name;
+    if (!normalizedName) {
+      throw new Error('El nombre de la actividad es obligatorio');
+    }
+
+    const numericId = Number(programId);
+    if (Number.isNaN(numericId)) {
+      const mockActivity: ProgramActivity = {
+        id: Date.now().toString(),
+        name: normalizedName,
+        description: activity.description?.trim?.() ?? activity.description ?? null,
+        day: activity.day?.trim?.() || null,
+        time: activity.time?.trim?.() || null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        createdBy: currentUserDisplayName ?? null,
+      };
+      return mockActivity;
+    }
+
+    const payload = {
+      nombre: normalizedName,
+      descripcion: activity.description?.trim?.() ?? activity.description ?? null,
+      dia: activity.day?.trim?.() || null,
+      hora: activity.time?.trim?.() || null,
+      user_created: currentUserDisplayName,
+    };
+
+    try {
+      const res = await fetch(`${apiBase}/programs/${numericId}/activities`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || `Failed to create activity: ${res.status}`);
+      }
+
+      const data = await res.json();
+      return mapProgramActivityFromApi(data);
+    } catch (error) {
+      console.error(`Failed to create activity for program ${programId}`, error);
+      throw error instanceof Error ? error : new Error('Unknown error creating activity');
+    }
+  }, [apiBase, currentUserDisplayName]);
+
   const addEvolutionEntry = (entryData: Omit<EvolutionEntry, 'id'>) => {
     const newEntry: EvolutionEntry = {
       ...entryData,
@@ -709,6 +848,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       addProgram,
       updateProgram,
       deleteProgram,
+      getProgramDetails,
+      addProgramActivity,
       addEvolutionEntry,
     }}>
       {children}

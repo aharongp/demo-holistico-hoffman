@@ -77,6 +77,21 @@ export interface Program {
   createdBy?: string | null;
 }
 
+export interface ProgramActivity {
+  id: string;
+  name: string;
+  description?: string | null;
+  day?: string | null;
+  time?: string | null;
+  createdAt?: Date | null;
+  updatedAt?: Date | null;
+  createdBy?: string | null;
+}
+
+export interface ProgramDetails extends Program {
+  activities: ProgramActivity[];
+}
+
 export interface EvolutionEntry {
   id: string;
   patientId: string;

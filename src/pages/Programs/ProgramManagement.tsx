@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Plus, Edit, Trash2, Search } from 'lucide-react';
 import { Card } from '../../components/UI/Card';
 import { Button } from '../../components/UI/Button';
@@ -19,6 +20,7 @@ export const ProgramManagement: React.FC = () => {
     description: '',
     instruments: [] as string[],
   });
+  const navigate = useNavigate();
 
   const filteredPrograms = programs.filter(program =>
     (program.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -161,14 +163,20 @@ export const ProgramManagement: React.FC = () => {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => handleOpenModal(program)}
+            onClick={(event) => {
+              event.stopPropagation();
+              handleOpenModal(program);
+            }}
           >
             <Edit className="w-4 h-4" />
           </Button>
           <Button
             variant="danger"
             size="sm"
-            onClick={() => handleDelete(program.id)}
+            onClick={(event) => {
+              event.stopPropagation();
+              handleDelete(program.id);
+            }}
           >
             <Trash2 className="w-4 h-4" />
           </Button>
@@ -176,6 +184,10 @@ export const ProgramManagement: React.FC = () => {
       ),
     },
   ];
+
+  const handleRowClick = (program: Program) => {
+    navigate(`/programs/${program.id}`);
+  };
 
   return (
     <div className="space-y-6">
@@ -204,7 +216,12 @@ export const ProgramManagement: React.FC = () => {
           </div>
         </div>
 
-        <Table data={filteredPrograms} columns={columns} />
+        <Table
+          data={filteredPrograms}
+          columns={columns}
+          onRowClick={handleRowClick}
+          rowKey={(program) => program.id}
+        />
       </Card>
 
       <Modal
