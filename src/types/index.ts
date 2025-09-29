@@ -71,9 +71,10 @@ export interface Program {
   name: string;
   description: string;
   instruments: string[]; // instrument IDs
-  duration: number; // in days
   isActive: boolean;
   createdAt: Date;
+  updatedAt?: Date | null;
+  createdBy?: string | null;
 }
 
 export interface EvolutionEntry {
@@ -102,6 +103,18 @@ export interface FileAttachment {
   uploadedAt: Date;
 }
 
+export interface GenderDistributionSlice {
+  label: string;
+  count: number;
+  percentage: number;
+}
+
+export interface PatientsByProgramSlice {
+  programId: number | null;
+  name: string;
+  count: number;
+}
+
 export interface DashboardStats {
   totalPatients: number;
   totalUsers: number;
@@ -112,6 +125,8 @@ export interface DashboardStats {
     male: number;
     female: number;
     other: number;
+    breakdown: GenderDistributionSlice[];
   };
-  roleDistribution: Record<UserRole, number>;
+  patientsByProgram: PatientsByProgramSlice[];
+  lastUpdated?: string;
 }

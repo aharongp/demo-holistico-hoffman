@@ -1,22 +1,53 @@
 import React from 'react';
-import { Users, ClipboardList, Activity, FileText, UserCheck, Calendar } from 'lucide-react';
+import { Users, ClipboardList, UserX, UserCheck } from 'lucide-react';
 import { StatsCard } from '../../components/Dashboard/StatsCard';
 import { Chart } from '../../components/Dashboard/Chart';
+import { Card } from '../../components/UI/Card';
 import { useApp } from '../../context/AppContext';
 
 export const AdminDashboard: React.FC = () => {
   const { dashboardStats } = useApp();
 
-  const genderData = [
-    { name: 'Male', value: dashboardStats.genderDistribution.male },
-    { name: 'Female', value: dashboardStats.genderDistribution.female },
-    { name: 'Other', value: dashboardStats.genderDistribution.other },
-  ];
+  const fallbackGenderTotal =
+    dashboardStats.genderDistribution.male +
+    dashboardStats.genderDistribution.female +
+    dashboardStats.genderDistribution.other;
 
-  const roleData = Object.entries(dashboardStats.roleDistribution).map(([role, count]) => ({
-    name: role.charAt(0).toUpperCase() + role.slice(1),
-    value: count,
+  const genderData = dashboardStats.genderDistribution.breakdown.length
+    ? dashboardStats.genderDistribution.breakdown.map(slice => ({
+        name: slice.label,
+        value: slice.count,
+        percentage: slice.percentage,
+      }))
+    : [
+        {
+          name: 'Masculino',
+          value: dashboardStats.genderDistribution.male,
+          percentage: fallbackGenderTotal ? (dashboardStats.genderDistribution.male / fallbackGenderTotal) * 100 : 0,
+        },
+        {
+          name: 'Femenino',
+          value: dashboardStats.genderDistribution.female,
+          percentage: fallbackGenderTotal ? (dashboardStats.genderDistribution.female / fallbackGenderTotal) * 100 : 0,
+        },
+        {
+          name: 'Otros',
+          value: dashboardStats.genderDistribution.other,
+          percentage: fallbackGenderTotal ? (dashboardStats.genderDistribution.other / fallbackGenderTotal) * 100 : 0,
+        },
+      ];
+
+  const programData = (dashboardStats.patientsByProgram ?? []).map(program => ({
+    name: program.name,
+    value: program.count,
   }));
+
+  const unassignedUsersCount = (dashboardStats.patientsByProgram ?? []).find(program => {
+    const normalizedName = (program.name ?? '').toString().trim().toLowerCase();
+    return program.programId === null || normalizedName === 'sin programa';
+  })?.count ?? 0;
+
+  const lastUpdatedLabel = dashboardStats.lastUpdated ? new Date(dashboardStats.lastUpdated).toLocaleString() : null;
 
   const monthlyData = [
     { name: 'Jan', value: 120 },
@@ -51,17 +82,16 @@ export const AdminDashboard: React.FC = () => {
           color="green"
         />
         <StatsCard
-          title="Active Instruments"
+          title="Total Instruments"
           value={dashboardStats.totalInstruments}
           icon={ClipboardList}
           change={{ value: 3, positive: true }}
           color="purple"
         />
         <StatsCard
-          title="Pending Assignments"
-          value={dashboardStats.pendingAssignments}
-          icon={Activity}
-          change={{ value: -5, positive: false }}
+          title="Usuarios sin programa"
+          value={unassignedUsersCount}
+          icon={UserX}
           color="yellow"
         />
       </div>
@@ -75,11 +105,12 @@ export const AdminDashboard: React.FC = () => {
           dataKey="value"
         />
         <Chart
-          title="Users by Role"
-          data={roleData}
+          title="Patients by Program"
+          data={programData}
           type="bar"
           dataKey="value"
           xAxisKey="name"
+          layout="vertical"
         />
       </div>
 
@@ -92,6 +123,27 @@ export const AdminDashboard: React.FC = () => {
           xAxisKey="name"
         />
       </div>
+
+      <Card>
+        <div className="flex flex-col gap-4">
+          <div>
+            <h3 className="text-base sm:text-lg font-semibold text-gray-900">Detalle de distribución de género</h3>
+            {lastUpdatedLabel && (
+              <p className="text-xs text-gray-500 mt-1">Actualizado el {lastUpdatedLabel}</p>
+            )}
+          </div>
+          <ul className="space-y-2">
+            {genderData.map(item => (
+              <li key={item.name} className="flex items-center justify-between text-sm sm:text-base">
+                <span className="text-gray-600">{item.name}</span>
+                <span className="font-medium text-gray-900">
+                  {item.value.toLocaleString()} <span className="text-xs text-gray-500">({item.percentage.toFixed(2)}%)</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </Card>
     </div>
   );
 };

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Edit, Trash2, Search, Calendar } from 'lucide-react';
+import { Plus, Edit, Trash2, Search } from 'lucide-react';
 import { Card } from '../../components/UI/Card';
 import { Button } from '../../components/UI/Button';
 import { Table } from '../../components/UI/Table';
@@ -17,7 +17,6 @@ export const ProgramManagement: React.FC = () => {
   const [formData, setFormData] = useState({
     name: '',
     description: '',
-    duration: 30,
     instruments: [] as string[],
   });
 
@@ -32,46 +31,70 @@ export const ProgramManagement: React.FC = () => {
       setFormData({
         name: program.name,
         description: program.description,
-        duration: program.duration,
-        instruments: program.instruments,
+        instruments: Array.isArray(program.instruments) ? [...program.instruments] : [],
       });
     } else {
       setEditingProgram(null);
       setFormData({
         name: '',
         description: '',
-        duration: 30,
         instruments: [],
       });
     }
     setIsModalOpen(true);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    const programData = {
+
+    const programPayload = {
       ...formData,
       isActive: true,
     };
 
-    if (editingProgram) {
-      updateProgram(editingProgram.id, programData);
-      // optimistically update local list
-      setPrograms(prev => prev.map(p => p.id === editingProgram.id ? { ...p, ...programData } : p));
-    } else {
-      addProgram(programData);
-      // optimistic add with temporary id (backend will assign real id)
-      setPrograms(prev => [...prev, { id: Date.now().toString(), name: programData.name, description: programData.description, duration: programData.duration, instruments: programData.instruments }] as Program[]);
+    try {
+      if (editingProgram) {
+        const updated = await updateProgram(editingProgram.id, programPayload);
+        if (updated) {
+          setPrograms(prev => prev.map(p =>
+            p.id === editingProgram.id
+              ? { ...p, ...updated, instruments: programPayload.instruments }
+              : p
+          ));
+          alert('Programa actualizado correctamente.');
+        } else {
+          alert('No se pudo actualizar el programa.');
+          return;
+        }
+      } else {
+        const created = await addProgram(programPayload);
+        setPrograms(prev => [...prev, { ...created, instruments: programPayload.instruments }]);
+        alert('Programa creado correctamente.');
+      }
+
+      setIsModalOpen(false);
+    } catch (error) {
+      console.error('Program submission failed', error);
+      alert('No se pudo guardar el programa. Intenta nuevamente.');
     }
-    
-    setIsModalOpen(false);
   };
 
-  const handleDelete = (programId: string) => {
-    if (confirm('Are you sure you want to delete this program?')) {
-      deleteProgram(programId);
-      setPrograms(prev => prev.filter(p => p.id !== programId));
+  const handleDelete = async (programId: string) => {
+    if (!confirm('Are you sure you want to delete this program?')) {
+      return;
+    }
+
+    try {
+      const deleted = await deleteProgram(programId);
+      if (deleted) {
+        setPrograms(prev => prev.filter(p => p.id !== programId));
+        alert('Programa eliminado correctamente.');
+      } else {
+        alert('El programa no se pudo eliminar.');
+      }
+    } catch (error) {
+      console.error('Failed to delete program', error);
+      alert('No se pudo eliminar el programa.');
     }
   };
 
@@ -81,13 +104,20 @@ export const ProgramManagement: React.FC = () => {
       .then(res => res.json())
       .then((data) => {
         // map backend shape to frontend Program type if necessary
-        const mapped: Program[] = (data || []).map((p: any) => ({
-          id: String(p.id),
-          name: p.nombre ?? p.name ?? '',
-          description: p.descripcion ?? p.description ?? '',
-          duration: (p.duration as number) ?? 30,
-          instruments: (p.instruments as string[]) ?? [],
-        }));
+        const mapped: Program[] = (data || []).map((p: any) => {
+          const createdAt = p.created_at ? new Date(p.created_at) : new Date();
+          const updatedAt = p.updated_at ? new Date(p.updated_at) : (p.updatedAt ? new Date(p.updatedAt) : createdAt);
+          return {
+            id: String(p.id),
+            name: p.nombre ?? p.name ?? '',
+            description: p.descripcion ?? p.description ?? '',
+            instruments: Array.isArray(p.instruments) ? p.instruments.map(String) : [],
+            isActive: typeof p.isActive === 'boolean' ? p.isActive : true,
+            createdAt,
+            updatedAt,
+            createdBy: p.user_created ?? p.userCreated ?? null,
+          };
+        });
         setPrograms(mapped);
       })
       .catch(() => {
@@ -109,14 +139,19 @@ export const ProgramManagement: React.FC = () => {
       ),
     },
     {
-      key: 'duration',
-      header: 'Duration',
-      render: (program: Program) => `${program.duration} days`,
-    },
-    {
       key: 'instruments',
       header: 'Instruments',
       render: (program: Program) => program.instruments.length,
+    },
+    {
+      key: 'createdBy',
+      header: 'Created By',
+      render: (program: Program) => program.createdBy ?? '—',
+    },
+    {
+      key: 'updatedAt',
+      header: 'Last Updated',
+      render: (program: Program) => program.updatedAt ? program.updatedAt.toLocaleDateString() : '—',
     },
     {
       key: 'actions',
@@ -201,20 +236,6 @@ export const ProgramManagement: React.FC = () => {
               value={formData.description}
               onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
               rows={3}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Duration (days)
-            </label>
-            <input
-              type="number"
-              min="1"
-              max="365"
-              value={formData.duration}
-              onChange={(e) => setFormData(prev => ({ ...prev, duration: parseInt(e.target.value) }))}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
           </div>

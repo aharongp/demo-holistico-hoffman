@@ -1,22 +1,28 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { Button } from '../UI/Button';
 import { Card } from '../UI/Card';
 
 export const LoginForm: React.FC = () => {
-  const [email, setEmail] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const { login, isLoading } = useAuth();
+  const { login, isLoading, getDashboardPath } = useAuth();
+  const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
-    const success = await login(email, password);
-    if (!success) {
-      setError('Invalid email or password');
+    const loggedUser = await login(identifier, password);
+    if (!loggedUser) {
+      setError('Credenciales inválidas. Verifica tu usuario o contraseña.');
+      return;
     }
+
+    const destination = getDashboardPath(loggedUser.role);
+    navigate(destination, { replace: true });
   };
 
   return (
@@ -40,18 +46,18 @@ export const LoginForm: React.FC = () => {
             )}
             
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-                Email address
+              <label htmlFor="identifier" className="block text-sm font-medium text-gray-700">
+                Email o nombre de usuario
               </label>
               <input
-                id="email"
-                name="email"
-                type="email"
+                id="identifier"
+                name="identifier"
+                type="text"
                 required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                value={identifier}
+                onChange={(e) => setIdentifier(e.target.value)}
                 className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 text-sm sm:text-base"
-                placeholder="Email address"
+                placeholder="Correo electrónico o usuario"
               />
             </div>
             
@@ -69,15 +75,6 @@ export const LoginForm: React.FC = () => {
                 className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 text-sm sm:text-base"
                 placeholder="Password"
               />
-            </div>
-
-            <div className="text-xs sm:text-sm text-gray-600 bg-blue-50 p-3 rounded-md">
-              <p><strong>Demo Accounts:</strong></p>
-              <div className="mt-1 space-y-1">
-                <p>Admin: admin@hoffman.com / password</p>
-                <p>Doctor: doctor@hoffman.com / password</p>
-                <p>Patient: patient@hoffman.com / password</p>
-              </div>
             </div>
 
             <Button

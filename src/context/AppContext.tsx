@@ -1,5 +1,13 @@
-import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback } from 'react';
-import { Patient, Instrument, Assignment, Program, EvolutionEntry, DashboardStats } from '../types';
+import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback, useMemo } from 'react';
+import { Patient, Instrument, Assignment, Program, EvolutionEntry, DashboardStats, GenderDistributionSlice, PatientsByProgramSlice } from '../types';
+import { useAuth } from './AuthContext';
+
+type ProgramInput = {
+  name: string;
+  description: string;
+  instruments: string[];
+  isActive?: boolean;
+};
 
 interface AppContextType {
   // State
@@ -7,6 +15,8 @@ interface AppContextType {
   instruments: Instrument[];
   assignments: Assignment[];
   programs: Program[];
+  instrumentTypes: any[];
+  myInstrumentTypes: any[];
   evolutionEntries: EvolutionEntry[];
   dashboardStats: DashboardStats;
   
@@ -22,9 +32,9 @@ interface AppContextType {
   addAssignment: (assignment: Omit<Assignment, 'id' | 'assignedAt'>) => void;
   updateAssignment: (id: string, assignment: Partial<Assignment>) => void;
   
-  addProgram: (program: Omit<Program, 'id' | 'createdAt'>) => void;
-  updateProgram: (id: string, program: Partial<Program>) => void;
-  deleteProgram: (id: string) => void;
+  addProgram: (program: ProgramInput) => Promise<Program>;
+  updateProgram: (id: string, program: Partial<ProgramInput>) => Promise<Program | null>;
+  deleteProgram: (id: string) => Promise<boolean>;
   
   addEvolutionEntry: (entry: Omit<EvolutionEntry, 'id'>) => void;
 }
@@ -105,16 +115,18 @@ const mockDashboardStats: DashboardStats = {
     male: 75,
     female: 70,
     other: 5,
+    breakdown: [
+      { label: 'Femenino', count: 70, percentage: 46.67 },
+      { label: 'Masculino', count: 75, percentage: 50 },
+      { label: 'Otros', count: 5, percentage: 3.33 },
+    ],
   },
-  roleDistribution: {
-    administrator: 2,
-    trainer: 3,
-    therapist: 8,
-    doctor: 5,
-    coach: 4,
-    patient: 120,
-    student: 30,
-  },
+  patientsByProgram: [
+    { programId: 1, name: 'Bienestar Integral', count: 80 },
+    { programId: 2, name: 'Salud Preventiva', count: 45 },
+    { programId: 3, name: 'Mindfulness', count: 25 },
+  ],
+  lastUpdated: undefined,
 };
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
@@ -127,17 +139,30 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       name: 'Wellness Starter',
       description: 'Introductory program for new patients',
       instruments: ['1'],
-      duration: 30,
       isActive: true,
       createdAt: new Date('2024-01-01'),
+      updatedAt: new Date('2024-01-02'),
+      createdBy: 'system',
     },
   ];
 
   const [programs, setPrograms] = useState<Program[]>(mockPrograms);
+  const [instrumentTypes, setInstrumentTypes] = useState<any[]>([]);
+  const [myInstrumentTypes, setMyInstrumentTypes] = useState<any[]>([]);
   const [evolutionEntries, setEvolutionEntries] = useState<EvolutionEntry[]>([]);
-  const [dashboardStats] = useState<DashboardStats>(mockDashboardStats);
+  const [dashboardStats, setDashboardStats] = useState<DashboardStats>(mockDashboardStats);
 
   const apiBase = (import.meta as any).env?.VITE_API_BASE ?? 'http://localhost:3000';
+  const { user } = useAuth();
+
+  const currentUserDisplayName = useMemo(() => {
+    if (!user) return null;
+    const parts = [user.firstName, user.lastName].map(part => (part ?? '').trim()).filter(Boolean);
+    if (parts.length) {
+      return parts.join(' ');
+    }
+    return user.username?.trim() || null;
+  }, [user]);
 
   // Map backend paciente -> frontend Patient
   const mapPacienteToPatient = (p: any): Patient => ({
@@ -196,9 +221,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             name: p.nombre ?? p.name ?? '',
             description: p.descripcion ?? p.description ?? '',
             instruments: Array.isArray(p.instruments) ? p.instruments.map(String) : (p.instrumentos ? p.instrumentos.map(String) : []),
-            duration: p.duracion ?? p.duration ?? 0,
             isActive: typeof p.activo !== 'undefined' ? Boolean(p.activo) : (typeof p.isActive !== 'undefined' ? p.isActive : true),
             createdAt: p.created_at ? new Date(p.created_at) : (p.createdAt ? new Date(p.createdAt) : new Date()),
+            updatedAt: p.updated_at ? new Date(p.updated_at) : (p.updatedAt ? new Date(p.updatedAt) : null),
+            createdBy: p.user_created ?? p.userCreated ?? null,
           }));
           setPrograms(mapped);
         }
@@ -221,29 +247,193 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (Array.isArray(data) && data.length > 0) {
           // Map backend instrumento -> frontend Instrument
           const mapped = data.map((ins: any) => ({
-            id: String(ins.id),
-            name: ins.descripcion ?? ins.nombre ?? `Instrument ${ins.id}`,
-            description: ins.descripcion ?? '',
-            category: (ins.categoria || ins.tipo || 'psychological') as any,
-            questions: Array.isArray(ins.preguntas) ? ins.preguntas.map((q: any) => ({
-              id: String(q.id),
-              text: q.texto ?? q.text ?? '',
-              type: (q.tipo === 'scale' || q.tipo === 'text' || q.tipo === 'boolean') ? q.tipo : 'text',
-              options: q.opciones ?? q.options ?? undefined,
-              required: typeof q.requerido !== 'undefined' ? Boolean(q.requerido) : (typeof q.required !== 'undefined' ? q.required : true),
-              order: q.orden ?? q.order ?? 0,
-            })) : [],
-            estimatedDuration: ins.duracion_estimada ?? ins.estimatedDuration ?? 0,
-            isActive: typeof ins.activo !== 'undefined' ? Boolean(ins.activo) : true,
-            createdAt: ins.created_at ? new Date(ins.created_at) : new Date(),
+            raw: ins,
+            mapped: {
+              id: String(ins.id),
+              name: ins.descripcion ?? ins.nombre ?? `Instrument ${ins.id}`,
+              description: ins.descripcion ?? '',
+              category: (ins.categoria || ins.tipo || 'psychological') as any,
+              questions: Array.isArray(ins.preguntas) ? ins.preguntas.map((q: any) => ({
+                id: String(q.id),
+                text: q.texto ?? q.text ?? '',
+                type: (q.tipo === 'scale' || q.tipo === 'text' || q.tipo === 'boolean') ? q.tipo : 'text',
+                options: q.opciones ?? q.options ?? undefined,
+                required: typeof q.requerido !== 'undefined' ? Boolean(q.requerido) : (typeof q.required !== 'undefined' ? q.required : true),
+                order: q.orden ?? q.order ?? 0,
+              })) : [],
+              estimatedDuration: ins.duracion_estimada ?? ins.estimatedDuration ?? 0,
+              isActive: typeof ins.activo !== 'undefined' ? Boolean(ins.activo) : true,
+              createdAt: ins.created_at ? new Date(ins.created_at) : new Date(),
+            } as Instrument,
           }));
-          setInstruments(mapped);
+
+          // fetch topic names for instruments that reference an id_tema
+          const topicCache: Record<number, string | null> = {};
+          const temaIds = Array.from(new Set(data.map((ins: any) => ins.id_tema).filter((id: any) => typeof id !== 'undefined' && id !== null)));
+          for (const temaId of temaIds) {
+            try {
+              const r = await fetch(`${apiBase}/topics/${temaId}`);
+              if (!r.ok) {
+                topicCache[temaId] = null;
+                continue;
+              }
+              const t = await r.json();
+              topicCache[temaId] = t ? (t.nombre ?? null) : null;
+            } catch (err) {
+              console.error('Failed to fetch topic', temaId, err);
+              topicCache[temaId] = null;
+            }
+          }
+
+          // apply topic names to mapped instruments
+          const final = mapped.map((entry: any) => {
+            const insRaw = entry.raw;
+            const ins: Instrument = { ...entry.mapped };
+            const temaId = insRaw?.id_tema;
+            if (temaId && topicCache[temaId]) {
+              ins.name = topicCache[temaId] as string;
+            }
+            return ins;
+          });
+
+          setInstruments(final);
         }
       } catch (err) {
         console.error('Error loading instruments from API, keeping mock instruments.', err);
       }
     })();
     return () => { mounted = false; };
+  }, [apiBase]);
+
+  // Load instrument types (all) and types created by current user
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const res = await fetch(`${apiBase}/instruments/types`);
+        if (!res.ok) throw new Error(`Failed to fetch instrument types: ${res.status}`);
+        const data = await res.json();
+        if (!mounted) return;
+        if (Array.isArray(data)) setInstrumentTypes(data);
+      } catch (err) {
+        console.error('Error loading instrument types', err);
+      }
+    })();
+
+    // fetch types by user if available
+    (async () => {
+      if (!user) return;
+      try {
+        // use email as identifier for user_created field
+        const res = await fetch(`${apiBase}/instruments/types/user/${encodeURIComponent(user.email)}`);
+        if (!res.ok) throw new Error(`Failed to fetch user's instrument types: ${res.status}`);
+        const data = await res.json();
+        if (!mounted) return;
+        if (Array.isArray(data)) setMyInstrumentTypes(data);
+      } catch (err) {
+        console.error('Error loading my instrument types', err);
+      }
+    })();
+
+    return () => { mounted = false; };
+  }, [apiBase, user]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const normalizeGenderLabel = (value: string | null | undefined): 'male' | 'female' | 'other' => {
+      const normalized = (value ?? '').toString().trim().toLowerCase();
+      if (['male', 'masculino', 'hombre', 'm'].includes(normalized)) return 'male';
+      if (['female', 'femenino', 'mujer', 'f'].includes(normalized)) return 'female';
+      if (['other', 'otro', 'otros', 'otras', 'sin especificar', 'no especificado', 'n/a', ''].includes(normalized)) return 'other';
+      return 'other';
+    };
+
+    (async () => {
+      try {
+        const res = await fetch(`${apiBase}/dashboard/summary`);
+        if (!res.ok) throw new Error(`Failed to fetch dashboard summary: ${res.status}`);
+        const data = await res.json();
+        if (!mounted) return;
+
+        const rawBreakdown = Array.isArray(data?.patientGenderDistribution)
+          ? data.patientGenderDistribution
+          : [];
+
+        const breakdown: GenderDistributionSlice[] = rawBreakdown
+          .map((item: any) => ({
+            label: item?.gender ?? 'Sin especificar',
+            count: Number(item?.count ?? 0),
+            percentage: Number(item?.percentage ?? 0),
+          }))
+          .filter((slice: GenderDistributionSlice) => Number.isFinite(slice.count));
+
+        const totals = data?.totals ?? {};
+        const parsedPatients = Number.isFinite(Number(totals.patients)) ? Number(totals.patients) : undefined;
+        const parsedUsers = Number.isFinite(Number(totals.users)) ? Number(totals.users) : undefined;
+        const parsedInstruments = Number.isFinite(Number(totals.instruments)) ? Number(totals.instruments) : undefined;
+        const rawProgramDistribution = Array.isArray(data?.patientsByProgram) ? data.patientsByProgram : [];
+        const patientsByProgram: PatientsByProgramSlice[] = rawProgramDistribution
+          .map((item: any) => ({
+            programId: typeof item?.programId === 'number' ? item.programId : null,
+            name: item?.programName ?? item?.name ?? (typeof item?.programId === 'number' ? `Programa ${item.programId}` : 'Sin programa'),
+            count: Number(item?.count ?? 0),
+          }))
+          .filter((entry: PatientsByProgramSlice) => Number.isFinite(entry.count));
+
+        const sums = breakdown.reduce<Record<'male' | 'female' | 'other', number>>(
+          (acc, slice) => {
+            const normalized = normalizeGenderLabel(slice.label);
+            acc[normalized] += slice.count;
+            return acc;
+          },
+          { male: 0, female: 0, other: 0 }
+        );
+
+        const withPercentages = (list: GenderDistributionSlice[]): GenderDistributionSlice[] => {
+          const total = list.reduce((acc, item) => acc + item.count, 0);
+          if (total === 0) {
+            return list.map(item => ({ ...item, percentage: 0 }));
+          }
+          return list.map(item => ({
+            ...item,
+            percentage: Number(((item.count / total) * 100).toFixed(2)),
+          }));
+        };
+
+        const fallbackBreakdown = withPercentages([
+          { label: 'Masculino', count: sums.male, percentage: 0 },
+          { label: 'Femenino', count: sums.female, percentage: 0 },
+          { label: 'Sin especificar', count: sums.other, percentage: 0 },
+        ]);
+
+        const finalBreakdown = breakdown.length ? breakdown : fallbackBreakdown;
+        const maleCount = sums.male;
+        const femaleCount = sums.female;
+        const otherCount = sums.other;
+
+        setDashboardStats(prev => ({
+          ...prev,
+          totalPatients: typeof parsedPatients === 'number' && !Number.isNaN(parsedPatients) ? parsedPatients : prev.totalPatients,
+          totalUsers: typeof parsedUsers === 'number' && !Number.isNaN(parsedUsers) ? parsedUsers : prev.totalUsers,
+          totalInstruments: typeof parsedInstruments === 'number' && !Number.isNaN(parsedInstruments) ? parsedInstruments : prev.totalInstruments,
+          genderDistribution: {
+            male: maleCount,
+            female: femaleCount,
+            other: otherCount,
+            breakdown: finalBreakdown.length ? finalBreakdown : prev.genderDistribution.breakdown,
+          },
+          patientsByProgram: patientsByProgram.length ? patientsByProgram : prev.patientsByProgram,
+          lastUpdated: new Date().toISOString(),
+        }));
+      } catch (err) {
+        console.error('Error loading dashboard summary, keeping cached stats.', err);
+      }
+    })();
+
+    return () => {
+      mounted = false;
+    };
   }, [apiBase]);
 
   const addPatient = useCallback(async (patientData: Omit<Patient, 'id' | 'createdAt'>) => {
@@ -351,22 +541,144 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setAssignments(prev => prev.map(a => a.id === id ? { ...a, ...assignmentData } : a));
   };
 
-  const addProgram = (programData: Omit<Program, 'id' | 'createdAt'>) => {
-    const newProgram: Program = {
-      ...programData,
-      id: Date.now().toString(),
-      createdAt: new Date(),
+  const addProgram = useCallback(async (programData: ProgramInput): Promise<Program> => {
+    const payload = {
+      nombre: programData.name?.trim?.() ?? programData.name,
+      descripcion: programData.description?.trim?.() ?? programData.description,
+      user_created: currentUserDisplayName,
     };
-    setPrograms(prev => [...prev, newProgram]);
-  };
 
-  const updateProgram = (id: string, programData: Partial<Program>) => {
-    setPrograms(prev => prev.map(p => p.id === id ? { ...p, ...programData } : p));
-  };
+    try {
+      const res = await fetch(`${apiBase}/programs`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
 
-  const deleteProgram = (id: string) => {
-    setPrograms(prev => prev.filter(p => p.id !== id));
-  };
+      if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error(errorText || `Request failed with status ${res.status}`);
+      }
+
+      const response = await res.json();
+      const createdAt = response.created_at ? new Date(response.created_at) : new Date();
+      const updatedAt = response.updated_at ? new Date(response.updated_at) : (response.updatedAt ? new Date(response.updatedAt) : createdAt);
+      const created: Program = {
+        id: String(response.id ?? Date.now()),
+        name: response.nombre ?? response.name ?? programData.name,
+        description: response.descripcion ?? response.description ?? programData.description,
+        instruments: Array.isArray(programData.instruments) ? [...programData.instruments] : [],
+        isActive: typeof programData.isActive === 'boolean' ? programData.isActive : true,
+        createdAt,
+        updatedAt,
+        createdBy: response.user_created ?? response.userCreated ?? currentUserDisplayName,
+      };
+
+      setPrograms(prev => [...prev, created]);
+      return created;
+    } catch (error) {
+      console.error('Failed to create program', error);
+      throw error instanceof Error ? error : new Error('Unknown error creating program');
+    }
+  }, [apiBase, currentUserDisplayName]);
+
+  const updateProgram = useCallback(async (id: string, programData: Partial<ProgramInput>): Promise<Program | null> => {
+    const numericId = Number(id);
+    if (Number.isNaN(numericId)) {
+      let normalized: Program | null = null;
+      setPrograms(prev => prev.map(p => {
+        if (p.id !== id) return p;
+        normalized = {
+          ...p,
+          name: programData.name ?? p.name,
+          description: programData.description ?? p.description,
+          instruments: Array.isArray(programData.instruments) ? [...programData.instruments] : p.instruments,
+          isActive: typeof programData.isActive === 'boolean' ? programData.isActive : p.isActive,
+        };
+        return normalized;
+      }));
+      return normalized;
+    }
+
+    const payload = {
+      nombre: programData.name?.trim?.(),
+      descripcion: programData.description?.trim?.(),
+    };
+
+    try {
+      const res = await fetch(`${apiBase}/programs/${numericId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error(errorText || `Update failed with status ${res.status}`);
+      }
+
+      const response = await res.json();
+
+      let normalized: Program | null = null;
+      setPrograms(prev => prev.map(p => {
+  if (p.id !== id) return p;
+
+        const createdAt = response.created_at ? new Date(response.created_at) : p.createdAt;
+        const updatedAt = response.updated_at ? new Date(response.updated_at) : (response.updatedAt ? new Date(response.updatedAt) : p.updatedAt ?? createdAt);
+
+        normalized = {
+          ...p,
+          name: response.nombre ?? response.name ?? programData.name ?? p.name,
+          description: response.descripcion ?? response.description ?? programData.description ?? p.description,
+          instruments: Array.isArray(programData.instruments) ? [...programData.instruments] : p.instruments,
+          isActive: typeof programData.isActive === 'boolean' ? programData.isActive : p.isActive,
+          createdAt,
+          updatedAt,
+          createdBy: response.user_created ?? response.userCreated ?? p.createdBy ?? currentUserDisplayName ?? null,
+        };
+
+        return normalized;
+      }));
+
+      return normalized;
+    } catch (error) {
+      console.error(`Failed to update program ${id}`, error);
+      throw error instanceof Error ? error : new Error('Unknown error updating program');
+    }
+  }, [apiBase, currentUserDisplayName]);
+
+  const deleteProgram = useCallback(async (id: string): Promise<boolean> => {
+    const numericId = Number(id);
+    if (Number.isNaN(numericId)) {
+      setPrograms(prev => prev.filter(p => p.id !== id));
+      return true;
+    }
+    try {
+      const res = await fetch(`${apiBase}/programs/${numericId}`, {
+        method: 'DELETE',
+      });
+
+      if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error(errorText || `Delete failed with status ${res.status}`);
+      }
+
+      const body = await res.json().catch(() => null);
+      const wasDeleted = Boolean(body?.deleted ?? true);
+      if (wasDeleted) {
+        const removedId = body?.id ?? numericId;
+        setPrograms(prev => prev.filter(p => p.id !== String(removedId)));
+      }
+      return wasDeleted;
+    } catch (error) {
+      console.error(`Failed to delete program ${id}`, error);
+      throw error instanceof Error ? error : new Error('Unknown error deleting program');
+    }
+  }, [apiBase]);
 
   const addEvolutionEntry = (entryData: Omit<EvolutionEntry, 'id'>) => {
     const newEntry: EvolutionEntry = {
@@ -382,6 +694,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       instruments,
       assignments,
       programs,
+  instrumentTypes,
+  myInstrumentTypes,
       evolutionEntries,
       dashboardStats,
       addPatient,

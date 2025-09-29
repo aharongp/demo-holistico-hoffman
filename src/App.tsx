@@ -23,28 +23,17 @@ import { MedicalHistory } from './pages/MedicalHistory/MedicalHistory';
 import { UserProfile } from './pages/Profile/UserProfile';
 
 const DashboardRouter: React.FC = () => {
-  const { user } = useAuth();
+  const { user, getDashboardPath } = useAuth();
 
-  if (!user) return null;
-
-  // Route to appropriate dashboard based on user role
-  if (user.role === 'administrator') {
-    return <AdminDashboard />;
+  if (!user) {
+    return <Navigate to="/login" replace />;
   }
 
-  if (['trainer', 'therapist', 'doctor', 'coach'].includes(user.role)) {
-    return <TherapistDashboard />;
-  }
-
-  if (['patient', 'student'].includes(user.role)) {
-    return <PatientDashboard />;
-  }
-
-  return <AdminDashboard />;
+  return <Navigate to={getDashboardPath(user.role)} replace />;
 };
 
 const AppContent: React.FC = () => {
-  const { user, isLoading } = useAuth();
+  const { user, isLoading, getDashboardPath } = useAuth();
 
   if (isLoading) {
     return (
@@ -67,6 +56,9 @@ const AppContent: React.FC = () => {
   return (
     <Routes>
       <Route path="/dashboard" element={<Layout><DashboardRouter /></Layout>} />
+      <Route path="/dashboard/admin" element={<Layout><AdminDashboard /></Layout>} />
+      <Route path="/dashboard/doctor" element={<Layout><TherapistDashboard /></Layout>} />
+      <Route path="/dashboard/patient" element={<Layout><PatientDashboard /></Layout>} />
       <Route path="/users" element={<Layout><UserManagement /></Layout>} />
       <Route path="/patients" element={<Layout><PatientManagement /></Layout>} />
       <Route path="/instruments" element={<Layout><InstrumentManagement /></Layout>} />
@@ -76,8 +68,8 @@ const AppContent: React.FC = () => {
       <Route path="/reports" element={<Layout><ReportsManagement /></Layout>} />
       <Route path="/medical-history" element={<Layout><MedicalHistory /></Layout>} />
       <Route path="/profile" element={<Layout><UserProfile /></Layout>} />
-      <Route path="/" element={<Navigate to="/dashboard" replace />} />
-      <Route path="*" element={<Navigate to="/dashboard" replace />} />
+      <Route path="/" element={<Navigate to={getDashboardPath(user.role)} replace />} />
+      <Route path="*" element={<Navigate to={getDashboardPath(user.role)} replace />} />
     </Routes>
   );
 };
