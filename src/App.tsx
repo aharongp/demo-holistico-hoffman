@@ -15,6 +15,7 @@ import { PatientDashboard } from './pages/Dashboard/PatientDashboard';
 import { UserManagement } from './pages/Users/UserManagement';
 import { PatientManagement } from './pages/Patients/PatientManagement';
 import { InstrumentManagement } from './pages/Instruments/InstrumentManagement';
+import { InstrumentDetail } from './pages/Instruments/InstrumentDetail';
 import { ProgramManagement } from './pages/Programs/ProgramManagement';
 import { ProgramDetail } from './pages/Programs/ProgramDetail';
 import { PatientActivities } from './pages/Activities/PatientActivities';
@@ -62,7 +63,8 @@ const AppContent: React.FC = () => {
       <Route path="/dashboard/patient" element={<Layout><PatientDashboard /></Layout>} />
       <Route path="/users" element={<Layout><UserManagement /></Layout>} />
       <Route path="/patients" element={<Layout><PatientManagement /></Layout>} />
-      <Route path="/instruments" element={<Layout><InstrumentManagement /></Layout>} />
+  <Route path="/instruments" element={<Layout><InstrumentManagement /></Layout>} />
+  <Route path="/instruments/:instrumentId" element={<Layout><InstrumentDetail /></Layout>} />
       <Route path="/programs" element={<Layout><ProgramManagement /></Layout>} />
   <Route path="/programs/:programId" element={<Layout><ProgramDetail /></Layout>} />
       <Route path="/activities" element={<Layout><PatientActivities /></Layout>} />

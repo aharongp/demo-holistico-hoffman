@@ -30,7 +30,7 @@ const TOKEN_EXP_STORAGE_KEY = 'hoffman_token_exp';
 const normalizeRole = (role: string | null | undefined): UserRole => {
   const value = (role ?? '').toString().trim().toLowerCase();
   if (['administrator', 'admin', 'administrador'].includes(value)) return 'administrator';
-  if (['patient', 'paciente'].includes(value)) return 'patient';
+  if (['patient', 'paciente', 'usuario', 'user', 'usuarios'].includes(value)) return 'patient';
   if (['student', 'estudiante'].includes(value)) return 'student';
   if (['therapist', 'terapeuta'].includes(value)) return 'therapist';
   if (['coach'].includes(value)) return 'coach';

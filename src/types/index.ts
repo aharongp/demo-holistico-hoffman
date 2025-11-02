@@ -37,13 +37,43 @@ export interface Instrument {
   estimatedDuration: number; // in minutes
   isActive: boolean;
   createdAt: Date;
+  instrumentTypeId?: string | null;
+  subjectId?: string | null;
+  subjectName?: string | null;
+  availability?: string | null;
+  resource?: string | null;
+  resultDelivery?: 'sistema' | 'programado' | null;
+  colorResponse?: 0 | 1;
+  createdBy?: string | null;
+  updatedAt?: Date | null;
+}
+
+export interface InstrumentType {
+  id: string;
+  name: string;
+  description?: string | null;
+  createdBy?: string | null;
+  createdAt?: Date | null;
+  updatedAt?: Date | null;
+  criterionId?: string | null;
+}
+
+export interface QuestionAnswer {
+  id: string;
+  label: string;
+  value?: string | null;
+  color?: string | null;
+  createdBy?: string | null;
+  createdAt?: Date | null;
+  updatedAt?: Date | null;
 }
 
 export interface Question {
   id: string;
   text: string;
-  type: 'multiple_choice' | 'scale' | 'text' | 'boolean';
+  type: 'multiple_choice' | 'scale' | 'text' | 'boolean' | 'radio' | 'select';
   options?: string[];
+  answers?: QuestionAnswer[];
   required: boolean;
   order: number;
 }
@@ -144,4 +174,24 @@ export interface DashboardStats {
   };
   patientsByProgram: PatientsByProgramSlice[];
   lastUpdated?: string;
+}
+
+export interface Subject {
+  id: string;
+  name: string;
+  description?: string | null;
+  createdBy?: string | null;
+  createdAt?: Date | null;
+  updatedAt?: Date | null;
+  instrumentType?: string | null;
+  ribbonId?: number | null;
+}
+
+export interface Criterion {
+  id: string;
+  name: string;
+  description?: string | null;
+  createdBy?: string | null;
+  createdAt?: Date | null;
+  updatedAt?: Date | null;
 }

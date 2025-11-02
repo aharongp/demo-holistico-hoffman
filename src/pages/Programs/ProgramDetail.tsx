@@ -1,12 +1,29 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Calendar, Clock, FileText, Loader2, Plus, User } from 'lucide-react';
+import { ArrowLeft, Calendar, Clock, Edit, FileText, Loader2, Plus, Trash2, User } from 'lucide-react';
 import { Card } from '../../components/UI/Card';
 import { Button } from '../../components/UI/Button';
 import { Modal } from '../../components/UI/Modal';
 import { Table } from '../../components/UI/Table';
 import { useApp } from '../../context/AppContext';
 import { ProgramActivity, ProgramDetails } from '../../types';
+
+const DAY_OPTIONS = [
+  { value: 'Mon', label: 'Lunes' },
+  { value: 'Tue', label: 'Martes' },
+  { value: 'Wed', label: 'Miércoles' },
+  { value: 'Thu', label: 'Jueves' },
+  { value: 'Fri', label: 'Viernes' },
+  { value: 'Sat', label: 'Sábado' },
+  { value: 'Sun', label: 'Domingo' },
+];
+
+const DAY_LABEL_MAP = DAY_OPTIONS.reduce<Record<string, string>>((acc, option) => {
+  acc[option.value] = option.label;
+  return acc;
+}, {});
+
+const DAY_ORDER = DAY_OPTIONS.map(option => option.value);
 
 const initialFormState = {
   name: '',
@@ -20,12 +37,13 @@ type ActivityFormState = typeof initialFormState;
 export const ProgramDetail: React.FC = () => {
   const { programId } = useParams<{ programId: string }>();
   const navigate = useNavigate();
-  const { getProgramDetails, addProgramActivity } = useApp();
+  const { getProgramDetails, addProgramActivity, updateProgramActivity, deleteProgramActivity } = useApp();
 
   const [program, setProgram] = useState<ProgramDetails | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
+  const [editingActivity, setEditingActivity] = useState<ProgramActivity | null>(null);
   const [formState, setFormState] = useState<ActivityFormState>(initialFormState);
   const [isSaving, setIsSaving] = useState<boolean>(false);
 
@@ -59,14 +77,26 @@ export const ProgramDetail: React.FC = () => {
     };
   }, [programId, getProgramDetails]);
 
-  const handleOpenModal = () => {
-    setFormState(initialFormState);
+  const handleOpenModal = (activity?: ProgramActivity) => {
+    if (activity) {
+      setEditingActivity(activity);
+      setFormState({
+        name: activity.name,
+        description: activity.description ?? '',
+        day: activity.day ?? '',
+        time: activity.time ?? '',
+      });
+    } else {
+      setEditingActivity(null);
+      setFormState(initialFormState);
+    }
     setIsModalOpen(true);
   };
 
   const handleCloseModal = () => {
     if (isSaving) return;
     setIsModalOpen(false);
+    setEditingActivity(null);
   };
 
   const handleInputChange = (field: keyof ActivityFormState) => (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -78,36 +108,88 @@ export const ProgramDetail: React.FC = () => {
     event.preventDefault();
     if (!program || !programId) return;
 
+    if (!formState.day) {
+      alert('Selecciona un día para la actividad.');
+      return;
+    }
+
     try {
       setIsSaving(true);
-      const created = await addProgramActivity(programId, formState);
-      setProgram(prev => (
-        prev
-          ? {
-              ...prev,
-              activities: [...prev.activities, created],
-            }
-          : prev
-      ));
+      if (editingActivity) {
+        const updated = await updateProgramActivity(programId, editingActivity.id, formState);
+        setProgram(prev => (
+          prev
+            ? {
+                ...prev,
+                activities: prev.activities.map(activity =>
+                  activity.id === editingActivity.id ? updated : activity
+                ),
+              }
+            : prev
+        ));
+        alert('Actividad actualizada correctamente.');
+      } else {
+        const created = await addProgramActivity(programId, formState);
+        setProgram(prev => (
+          prev
+            ? {
+                ...prev,
+                activities: [...prev.activities, created],
+              }
+            : prev
+        ));
+        alert('Actividad añadida correctamente.');
+      }
       setIsModalOpen(false);
+      setEditingActivity(null);
       setFormState(initialFormState);
-      alert('Actividad añadida correctamente.');
     } catch (err) {
       console.error('Failed to create activity', err);
-      alert('No se pudo crear la actividad. Intenta nuevamente.');
+      const message = editingActivity ? 'No se pudo actualizar la actividad. Intenta nuevamente.' : 'No se pudo crear la actividad. Intenta nuevamente.';
+      alert(message);
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleDeleteActivity = async (activity: ProgramActivity) => {
+    if (!programId || !program) return;
+
+    if (!confirm(`¿Seguro que deseas eliminar la actividad "${activity.name}"?`)) {
+      return;
+    }
+
+    try {
+      const success = await deleteProgramActivity(programId, activity.id);
+      if (success) {
+        setProgram(prev => (
+          prev
+            ? {
+                ...prev,
+                activities: prev.activities.filter(item => item.id !== activity.id),
+              }
+            : prev
+        ));
+        alert('Actividad eliminada correctamente.');
+      } else {
+        alert('No se pudo eliminar la actividad.');
+      }
+    } catch (error) {
+      console.error('Failed to delete activity', error);
+      alert('No se pudo eliminar la actividad. Intenta nuevamente.');
     }
   };
 
   const sortedActivities = useMemo(() => {
     if (!program) return [] as ProgramActivity[];
     return [...program.activities].sort((a, b) => {
-      const dayA = (a.day ?? '').toLowerCase();
-      const dayB = (b.day ?? '').toLowerCase();
-      if (dayA && !dayB) return -1;
-      if (!dayA && dayB) return 1;
-      if (dayA !== dayB) return dayA.localeCompare(dayB);
+      const indexA = a.day ? DAY_ORDER.indexOf(a.day) : -1;
+      const indexB = b.day ? DAY_ORDER.indexOf(b.day) : -1;
+      if (indexA !== indexB) {
+        if (indexA === -1) return 1;
+        if (indexB === -1) return -1;
+        return indexA - indexB;
+      }
 
       const timeA = a.time ?? '';
       const timeB = b.time ?? '';
@@ -146,7 +228,7 @@ export const ProgramDetail: React.FC = () => {
         <div className="flex flex-col text-sm text-gray-700">
           <span className="flex items-center gap-1">
             <Calendar className="w-4 h-4 text-gray-400" />
-            {activity.day ?? 'Sin día'}
+            {activity.day ? DAY_LABEL_MAP[activity.day] ?? activity.day : 'Sin día'}
           </span>
           <span className="flex items-center gap-1">
             <Clock className="w-4 h-4 text-gray-400" />
@@ -168,6 +250,29 @@ export const ProgramDetail: React.FC = () => {
             <Clock className="w-4 h-4 text-gray-400" />
             {formatDateTime(activity.createdAt)}
           </span>
+        </div>
+      ),
+    },
+    {
+      key: 'actions',
+      header: 'Acciones',
+      className: 'text-right',
+      render: (activity: ProgramActivity) => (
+        <div className="flex justify-end gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => handleOpenModal(activity)}
+          >
+            <Edit className="w-4 h-4" />
+          </Button>
+          <Button
+            variant="danger"
+            size="sm"
+            onClick={() => handleDeleteActivity(activity)}
+          >
+            <Trash2 className="w-4 h-4" />
+          </Button>
         </div>
       ),
     },
@@ -212,7 +317,7 @@ export const ProgramDetail: React.FC = () => {
             <p className="text-gray-600">Gestión de actividades del programa</p>
           </div>
         </div>
-        <Button onClick={handleOpenModal}>
+        <Button onClick={() => handleOpenModal()}>
           <Plus className="w-4 h-4 mr-2" />
           Añadir actividad
         </Button>
@@ -250,7 +355,7 @@ export const ProgramDetail: React.FC = () => {
               <h2 className="text-xl font-semibold text-gray-900">Actividades</h2>
               <p className="text-gray-600 text-sm">Listado de actividades asociadas a este programa</p>
             </div>
-            <Button variant="outline" onClick={handleOpenModal}>
+            <Button variant="outline" onClick={() => handleOpenModal()}>
               <Plus className="w-4 h-4 mr-2" />
               Nueva actividad
             </Button>
@@ -273,7 +378,7 @@ export const ProgramDetail: React.FC = () => {
       <Modal
         isOpen={isModalOpen}
         onClose={handleCloseModal}
-        title="Añadir actividad"
+  title={editingActivity ? 'Editar actividad' : 'Añadir actividad'}
         size="md"
       >
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -307,13 +412,21 @@ export const ProgramDetail: React.FC = () => {
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Día sugerido
               </label>
-              <input
-                type="text"
+              <select
+                required
                 value={formState.day}
-                onChange={handleInputChange('day')}
-                placeholder="Ej. Lunes"
+                onChange={event => setFormState(prev => ({ ...prev, day: event.target.value }))}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
+              >
+                <option value="" disabled>
+                  Selecciona un día
+                </option>
+                {DAY_OPTIONS.map(option => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -342,7 +455,7 @@ export const ProgramDetail: React.FC = () => {
                 <span className="flex items-center gap-2">
                   <Loader2 className="w-4 h-4 animate-spin" /> Guardando...
                 </span>
-              ) : 'Guardar actividad'}
+              ) : editingActivity ? 'Actualizar actividad' : 'Guardar actividad'}
             </Button>
           </div>
         </form>

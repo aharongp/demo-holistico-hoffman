@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { Plus, Edit, Trash2, Search } from 'lucide-react';
 import { Card } from '../../components/UI/Card';
@@ -7,46 +7,44 @@ import { Table } from '../../components/UI/Table';
 import { Modal } from '../../components/UI/Modal';
 import { User, UserRole } from '../../types';
 
-// Mock data
-const mockUsers: User[] = [
-  {
-    id: '1',
-    username: 'admin',
-    email: 'admin@hoffman.com',
-    firstName: 'Admin',
-    lastName: 'User',
-    role: 'administrator',
-    createdAt: new Date('2024-01-01'),
-    lastLogin: new Date(),
-    isActive: true,
-  },
-  {
-    id: '2',
-    username: 'doctor',
-    email: 'doctor@hoffman.com',
-    firstName: 'Dr. John',
-    lastName: 'Smith',
-    role: 'doctor',
-    createdAt: new Date('2024-01-01'),
-    lastLogin: new Date(),
-    isActive: true,
-  },
-];
+const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3000';
+
+const mapUserFromApi = (u: any): User => {
+  const firstName = (u?.firstName ?? u?.nombres ?? '').toString();
+  const lastName = (u?.lastName ?? u?.apellidos ?? '').toString();
+  const fallbackUsername = `${firstName} ${lastName}`.trim();
+
+  return {
+    id: String(u?.id ?? ''),
+    username: (u?.username ?? fallbackUsername).toString(),
+    email: (u?.email ?? '').toString(),
+    firstName,
+    lastName,
+    role: ((u?.rol ?? u?.role) || 'patient') as UserRole,
+    avatar: undefined,
+    createdAt: u?.created_at ? new Date(u.created_at) : new Date(),
+    lastLogin: u?.last_login ? new Date(u.last_login) : undefined,
+    isActive: (u?.active ?? 1) === 1,
+  };
+};
 
 export const UserManagement: React.FC = () => {
-  const [users, setUsers] = useState<User[]>(mockUsers);
+  const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { user: currentUser } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
     email: '',
     role: 'patient' as UserRole,
   });
+
+  const apiBase = useMemo(() => API_BASE, []);
 
   const filteredUsers = users.filter(user => {
     const s = searchTerm.toLowerCase();
@@ -72,39 +70,24 @@ export const UserManagement: React.FC = () => {
         firstName: '',
         lastName: '',
         email: '',
-  role: 'patient',
+        role: 'patient',
       });
     }
     setIsModalOpen(true);
   };
 
   useEffect(() => {
-    // default to backend running on localhost:3000 when no env var provided
-    const base = import.meta.env.VITE_API_BASE || 'http://localhost:3000';
     // Debug: print selected API base so we can diagnose failed fetches from the browser console
     // This is safe in dev; remove before production if needed.
     // eslint-disable-next-line no-console
-    console.log('UserManagement: API base =', base);
+    console.log('UserManagement: API base =', apiBase);
     const fetchUsers = async () => {
       setLoading(true);
       try {
-        const res = await fetch(`${base}/users`);
+        const res = await fetch(`${apiBase}/users`);
         if (!res.ok) throw new Error(`Status ${res.status}`);
         const data = await res.json();
-        // map backend shape to frontend User type
-        const mapped: User[] = data.map((u: any) => ({
-          id: String(u.id),
-          // backend uses `username`; keep it and populate firstName for existing form fields
-          username: u.username ?? u.nombres ?? '',
-          firstName: u.username ?? u.firstName ?? u.nombres ?? '',
-          lastName: u.apellidos ?? u.lastName ?? '',
-          email: u.email ?? '',
-          role: (u.rol ?? 'patient') as any,
-          avatar: undefined,
-          createdAt: u.created_at ? new Date(u.created_at) : new Date(),
-          lastLogin: u.last_login ? new Date(u.last_login) : undefined,
-          isActive: (u.active ?? 1) === 1,
-        }));
+        const mapped: User[] = Array.isArray(data) ? data.map((u: any) => mapUserFromApi(u)) : [];
         setUsers(mapped);
       } catch (err: any) {
         setError(err.message ?? 'Failed to load users');
@@ -113,35 +96,56 @@ export const UserManagement: React.FC = () => {
       }
     };
     fetchUsers();
-  }, []);
+  }, [apiBase]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+    setError(null);
+
+    if (isSaving) return;
+
     if (editingUser) {
-      // Update user
-      setUsers(prev => prev.map(u => 
-        u.id === editingUser.id 
-          ? { ...u, ...formData }
+      // Update user locally for now; backend integration pending dedicated endpoint support
+      setUsers((prev: User[]) => prev.map((u: User) =>
+        u.id === editingUser.id
+          ? { ...u, ...formData, username: `${formData.firstName} ${formData.lastName}`.trim() }
           : u
       ));
-    } else {
-      // Add new user
-      // generate prefixed ids: patients get patient-<ts>, staff get staff-<ts>
-      const ts = Date.now().toString();
-      const newId = formData.role === 'patient' ? `patient-${ts}` : `staff-${ts}`;
-      const newUser: User = {
-        id: newId,
-        username: `${formData.firstName} ${formData.lastName}`.trim(),
-        ...formData,
-        createdAt: new Date(),
-        lastLogin: new Date(),
-        isActive: true,
-      };
-      setUsers(prev => [...prev, newUser]);
+      setIsModalOpen(false);
+      return;
     }
-    
-    setIsModalOpen(false);
+
+    setIsSaving(true);
+    try {
+      const response = await fetch(`${apiBase}/users`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          firstName: formData.firstName,
+          lastName: formData.lastName,
+          email: formData.email,
+          role: formData.role,
+        }),
+      });
+
+      if (!response.ok) {
+        const errBody = await response.json().catch(() => null);
+        const message = errBody?.message ?? `Failed to create user (status ${response.status})`;
+        throw new Error(Array.isArray(message) ? message.join(', ') : message);
+      }
+
+      const payload = await response.json();
+      const createdUser = mapUserFromApi(payload);
+      setUsers((prev: User[]) => [...prev, createdUser]);
+      setIsModalOpen(false);
+      setFormData({ firstName: '', lastName: '', email: '', role: 'patient' });
+    } catch (err: any) {
+      setError(err?.message ?? 'Error creating user');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleDelete = (userId: string) => {
@@ -317,8 +321,8 @@ export const UserManagement: React.FC = () => {
             >
               Cancel
             </Button>
-            <Button type="submit">
-              {editingUser ? 'Update User' : 'Create User'}
+            <Button type="submit" disabled={isSaving}>
+              {isSaving ? 'Saving...' : editingUser ? 'Update User' : 'Create User'}
             </Button>
           </div>
         </form>
