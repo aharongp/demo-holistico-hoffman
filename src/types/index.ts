@@ -15,6 +15,7 @@ export type UserRole = 'administrator' | 'trainer' | 'therapist' | 'doctor' | 'c
 
 export interface Patient {
   id: string;
+  userId?: string;
   firstName: string;
   lastName: string;
   email: string;

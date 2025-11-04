@@ -1,22 +1,37 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Plus, Edit, Trash2, Search, Eye } from 'lucide-react';
 import { Card } from '../../components/UI/Card';
 import { Button } from '../../components/UI/Button';
 import { Table } from '../../components/UI/Table';
 import { Modal } from '../../components/UI/Modal';
 import { useApp } from '../../context/AppContext';
+import { useAuth } from '../../context/AuthContext';
 import { usePermissions } from '../../hooks/usePermissions';
 import { Patient } from '../../types';
 import { format } from 'date-fns';
+import {
+  MedicalHistoryData,
+  MedicalHistoryViewModal,
+  RemotePatientMedicalHistory,
+  createInitialMedicalHistory,
+  mapRemoteMedicalHistoryToState,
+} from '../MedicalHistory/MedicalHistory';
 
 export const PatientManagement: React.FC = () => {
   const { patients, addPatient, updatePatient, deletePatient, programs } = useApp();
+  const { token } = useAuth();
   const { isAdmin } = usePermissions();
+  const apiBase = useMemo(() => (import.meta as any).env?.VITE_API_BASE ?? 'http://localhost:3000', []);
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [editingPatient, setEditingPatient] = useState<Patient | null>(null);
   const [selectedPatientForAssign, setSelectedPatientForAssign] = useState<Patient | null>(null);
+  const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
+  const [selectedPatientForHistory, setSelectedPatientForHistory] = useState<Patient | null>(null);
+  const [historyData, setHistoryData] = useState<MedicalHistoryData>(createInitialMedicalHistory());
+  const [historyError, setHistoryError] = useState<string | null>(null);
+  const [isHistoryLoading, setIsHistoryLoading] = useState(false);
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -69,6 +84,60 @@ export const PatientManagement: React.FC = () => {
     if (!selectedPatientForAssign) return;
     updatePatient(selectedPatientForAssign.id, { programId });
     setIsAssignModalOpen(false);
+  };
+
+  const handleOpenHistoryModal = async (patient: Patient) => {
+    setSelectedPatientForHistory(patient);
+    setIsHistoryModalOpen(true);
+    setHistoryError(null);
+    setHistoryData(createInitialMedicalHistory());
+
+    if (!patient.userId) {
+      setHistoryError('El paciente no tiene un usuario vinculado para consultar la historia médica.');
+      return;
+    }
+
+    if (!token) {
+      setHistoryError('No se pudo autenticar la solicitud. Intenta iniciar sesión nuevamente.');
+      return;
+    }
+
+    setIsHistoryLoading(true);
+
+    try {
+      const response = await fetch(`${apiBase}/patient/user/${patient.userId}/history`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      
+
+      if (response.status === 404) {
+        setHistoryError('El paciente aún no registra una historia médica.');
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch medical history (${response.status})`);
+      }
+
+      const payload = await response.json() as RemotePatientMedicalHistory | null;
+      const mappedHistory = mapRemoteMedicalHistoryToState(payload);
+      setHistoryData(mappedHistory);
+    } catch (error) {
+      console.error('Failed to load medical history for patient', error);
+      setHistoryError('No se pudo cargar la historia médica. Intenta nuevamente.');
+    } finally {
+      setIsHistoryLoading(false);
+    }
+  };
+
+  const handleCloseHistoryModal = () => {
+    setIsHistoryModalOpen(false);
+    setSelectedPatientForHistory(null);
+    setHistoryError(null);
+    setIsHistoryLoading(false);
+    setHistoryData(createInitialMedicalHistory());
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -149,7 +218,12 @@ export const PatientManagement: React.FC = () => {
               )}
             </Button>
           )}
-          <Button variant="outline" size="sm">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => handleOpenHistoryModal(patient)}
+            title={patient.userId ? 'Ver historia médica' : 'Paciente sin usuario vinculado'}
+          >
             <Eye className="w-4 h-4" />
           </Button>
           <Button
@@ -343,6 +417,15 @@ export const PatientManagement: React.FC = () => {
           </div>
         </form>
       </Modal>
+
+      <MedicalHistoryViewModal
+        isOpen={isHistoryModalOpen}
+        onClose={handleCloseHistoryModal}
+        data={historyData}
+        isLoading={isHistoryLoading}
+        errorMessage={historyError}
+        title={selectedPatientForHistory ? `Historia médica de ${selectedPatientForHistory.firstName} ${selectedPatientForHistory.lastName}` : 'Historia médica'}
+      />
     </div>
   );
 };

@@ -509,6 +509,7 @@ export const useApp = () => {
 const mockPatients: Patient[] = [
   {
     id: '1',
+    userId: '1',
     firstName: 'Jane',
     lastName: 'Doe',
     email: 'jane.doe@email.com',
@@ -521,6 +522,7 @@ const mockPatients: Patient[] = [
   },
   {
     id: '2',
+    userId: '2',
     firstName: 'John',
     lastName: 'Smith',
     email: 'john.smith@email.com',
@@ -825,6 +827,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   // Map backend paciente -> frontend Patient
   const mapPacienteToPatient = (p: any): Patient => ({
     id: String(p.id),
+    userId: p.id_usuario ? String(p.id_usuario) : undefined,
     firstName: p.nombres ?? '',
     lastName: p.apellidos ?? '',
     email: p.contacto_correo ?? p.contacto ?? '',

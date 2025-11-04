@@ -1,11 +1,11 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Upload, File, Download, Trash2, Plus, Edit, Eye } from 'lucide-react';
 import { Card } from '../../components/UI/Card';
 import { Button } from '../../components/UI/Button';
 import { Modal } from '../../components/UI/Modal';
 import { useAuth } from '../../context/AuthContext';
 
-type AlterationKey =
+export type AlterationKey =
   | 'perdidaDePeso'
   | 'gananciaDePeso'
   | 'confusion'
@@ -62,7 +62,7 @@ type AlterationKey =
   | 'dolorRectalRafagas'
   | 'miomasQuistesOvarios';
 
-type DiseaseKey =
+export type DiseaseKey =
   | 'sarampion'
   | 'lechina'
   | 'escarlatina'
@@ -106,7 +106,7 @@ type DiseaseKey =
   | 'gota'
   | 'cancer';
 
-interface MedicalHistoryData {
+export interface MedicalHistoryData {
   personal: {
     birthPlace: string;
     birthTime: string;
@@ -239,13 +239,15 @@ interface MedicalFile {
   size: number;
   uploadedAt: Date;
   category: 'lab_results' | 'imaging' | 'prescription' | 'consultation' | 'other';
+  attachmentId?: number | null;
+  downloadPath?: string | null;
 }
 
 type NullableStringRecord<T> = {
   [K in keyof T]?: string | null;
 };
 
-interface RemotePatientMedicalHistory {
+export interface RemotePatientMedicalHistory {
   personal?: NullableStringRecord<MedicalHistoryData['personal']>;
   contacts?: NullableStringRecord<MedicalHistoryData['contacts']>;
   treatingDoctor?: NullableStringRecord<MedicalHistoryData['treatingDoctor']>;
@@ -426,7 +428,7 @@ const createInitialDiseases = (): Record<DiseaseKey, string> => ({
   cancer: '',
 });
 
-const createInitialMedicalHistory = (): MedicalHistoryData => ({
+export const createInitialMedicalHistory = (): MedicalHistoryData => ({
   personal: {
     birthPlace: '',
     birthTime: '',
@@ -554,16 +556,18 @@ const createInitialMedicalHistory = (): MedicalHistoryData => ({
 
 const mapAttachmentToMedicalFile = (attachment: NonNullable<RemotePatientMedicalHistory['attachments']>[number]): MedicalFile => {
   const createdAt = attachment?.createdAt ? new Date(attachment.createdAt) : new Date();
-  const filePath = attachment?.file ?? '';
-  const name = filePath ? filePath.split('/').pop() ?? filePath : `Archivo_${attachment?.id ?? 'sin_id'}`;
+  const relativePath = sanitizeAttachmentPath(attachment?.file);
+  const name = relativePath ? relativePath.split('/').pop() ?? relativePath : `Archivo_${attachment?.id ?? 'sin_id'}`;
 
   return {
     id: (attachment?.id ?? `attachment-${createdAt.getTime()}`).toString(),
     name,
-    type: 'application/octet-stream',
+    type: guessMimeTypeFromName(name),
     size: 0,
     uploadedAt: createdAt,
     category: 'other',
+    attachmentId: typeof attachment?.id === 'number' ? attachment.id : null,
+    downloadPath: relativePath,
   };
 };
 
@@ -594,6 +598,252 @@ const displayValue = (value?: string | null): string => {
 };
 const displayBoolean = (value: boolean): string => (value ? 'Sí' : 'No');
 
+const guessMimeTypeFromName = (filename: string): string => {
+  const extension = filename.includes('.') ? filename.substring(filename.lastIndexOf('.')).toLowerCase() : '';
+  switch (extension) {
+    case '.pdf':
+      return 'application/pdf';
+    case '.jpg':
+    case '.jpeg':
+      return 'image/jpeg';
+    case '.png':
+      return 'image/png';
+    case '.doc':
+      return 'application/msword';
+    case '.docx':
+      return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    case '.xls':
+      return 'application/vnd.ms-excel';
+    case '.xlsx':
+      return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+    case '.txt':
+      return 'text/plain';
+    default:
+      return 'application/octet-stream';
+  }
+};
+
+const sanitizeAttachmentPath = (path: string | null | undefined): string | null => {
+  if (!path) {
+    return null;
+  }
+  return path.replace(/^\/+/, '').trim() || null;
+};
+
+export const familyPathologyLabels: Record<
+  keyof MedicalHistoryData['family']['pathologies'],
+  string
+> = {
+  cancer: 'Cáncer',
+  tuberculosis: 'Tuberculosis',
+  diabetes: 'Diabetes',
+  asthma: 'Asma',
+  highBloodPressure: 'Tensión alta',
+  epilepsy: 'Epilepsia',
+  mentalIllness: 'Enfermedad mental',
+  suicide: 'Suicidio',
+  bloodDisease: 'Enfermedad sangre',
+  vascularDisease: 'Enfermedad vasos',
+  arthritis: 'Artritis',
+  syphilis: 'Sífilis',
+  others: 'Otras',
+};
+
+export const immunizationOptions: Array<{
+  key: Exclude<keyof MedicalHistoryData['immunizations'], 'otherImmunization'>;
+  label: string;
+}> = [
+  { key: 'bcg', label: 'BCG' },
+  { key: 'polio', label: 'Polio' },
+  { key: 'measles', label: 'Sarampión' },
+  { key: 'typhoid', label: 'Fiebre tifoidea' },
+  { key: 'triple', label: 'Triple' },
+  { key: 'tetanus', label: 'Tétanos' },
+  { key: 'cholera', label: 'Cólera' },
+  { key: 'yellowFever', label: 'Fiebre amarilla' },
+];
+
+export const diseaseOptions: Array<{
+  key: DiseaseKey;
+  label: string;
+}> = [
+  { key: 'sarampion', label: 'Sarampión' },
+  { key: 'lechina', label: 'Lechina' },
+  { key: 'escarlatina', label: 'Escarlatina' },
+  { key: 'difteria', label: 'Difteria' },
+  { key: 'tosferina', label: 'Tosferina' },
+  { key: 'paperas', label: 'Paperas' },
+  { key: 'polio', label: 'Polio' },
+  { key: 'tetano', label: 'Tétano' },
+  { key: 'disenteria', label: 'Disentería' },
+  { key: 'parasitos', label: 'Parásitos' },
+  { key: 'meningitis', label: 'Meningitis' },
+  { key: 'asma', label: 'Asma' },
+  { key: 'acne', label: 'Acné' },
+  { key: 'forunculosis', label: 'Forunculosis' },
+  { key: 'eczema', label: 'Eczema' },
+  { key: 'psoriasis', label: 'Psoriasis' },
+  { key: 'alergia', label: 'Alergia' },
+  { key: 'sinusitis', label: 'Sinusitis' },
+  { key: 'anginas', label: 'Anginas' },
+  { key: 'bronquitis', label: 'Bronquitis' },
+  { key: 'diabetes', label: 'Diabetes' },
+  { key: 'enfermedadTiroidea', label: 'Enfermedad tiroidea' },
+  { key: 'enfermedadCardiaca', label: 'Enfermedad cardiaca' },
+  { key: 'enfermedadNeurologica', label: 'Enfermedad neurológica' },
+  { key: 'enfermedadMental', label: 'Enfermedad mental' },
+  { key: 'epilepsia', label: 'Epilepsia' },
+  { key: 'litiasisRenal', label: 'Litiasis renal' },
+  { key: 'litiasisVesicular', label: 'Litiasis vesicular' },
+  { key: 'hepatitis', label: 'Hepatitis' },
+  { key: 'nefritis', label: 'Nefritis' },
+  { key: 'gastritis', label: 'Gastritis' },
+  { key: 'ulcera', label: 'Úlcera' },
+  { key: 'lepra', label: 'Lepra' },
+  { key: 'tbc', label: 'TBC' },
+  { key: 'sifilis', label: 'Sífilis' },
+  { key: 'blenorragia', label: 'Blenorragia' },
+  { key: 'otraVenerea', label: 'Otra venérea' },
+  { key: 'fiebreReumatica', label: 'Fiebre reumática' },
+  { key: 'artritis', label: 'Artritis' },
+  { key: 'enfermedadMuscular', label: 'Enfermedad muscular' },
+  { key: 'gota', label: 'Gota' },
+  { key: 'cancer', label: 'Cáncer' },
+];
+
+export const alterationOptions: Array<{
+  key: AlterationKey;
+  label: string;
+}> = [
+  { key: 'perdidaDePeso', label: 'Pérdida de peso' },
+  { key: 'gananciaDePeso', label: 'Ganancia de peso' },
+  { key: 'confusion', label: 'Confusión' },
+  { key: 'nerviosismo', label: 'Nerviosismo' },
+  { key: 'descontrolEmotivo', label: 'Descontrol emotivo' },
+  { key: 'tensionMuscular', label: 'Tensión muscular' },
+  { key: 'calambreMuscular', label: 'Calambre muscular' },
+  { key: 'cambioColorPiel', label: 'Cambio de color en piel' },
+  { key: 'picazon', label: 'Picazón' },
+  { key: 'erupcionesCutaneas', label: 'Erupciones cutáneas' },
+  { key: 'furunculos', label: 'Furúnculos' },
+  { key: 'fiebres', label: 'Fiebres' },
+  { key: 'pesadillas', label: 'Pesadillas' },
+  { key: 'vertigoMareos', label: 'Vértigo o mareos' },
+  { key: 'desmayos', label: 'Desmayos' },
+  { key: 'ruidosOidos', label: 'Ruidos en los oídos' },
+  { key: 'doloresOidos', label: 'Dolores en los oídos' },
+  { key: 'secrecionesOidos', label: 'Secreciones en los oídos' },
+  { key: 'visionBorrosaDoble', label: 'Visión borrosa o doble' },
+  { key: 'secrecionesArdorOjos', label: 'Secreciones o ardor en los ojos' },
+  { key: 'congestionNasal', label: 'Congestión nasal' },
+  { key: 'hemorragiaNasal', label: 'Hemorragia nasal' },
+  { key: 'llagasBoca', label: 'Llagas en la boca' },
+  { key: 'malAliento', label: 'Mal aliento' },
+  { key: 'problemasDientesEncias', label: 'Problemas en dientes y encías' },
+  { key: 'gargantaDolorida', label: 'Garganta dolorida' },
+  { key: 'tos', label: 'Tos' },
+  { key: 'esputoConSangre', label: 'Esputo con sangre' },
+  { key: 'dificultadesRespiratorias', label: 'Dificultades respiratorias' },
+  { key: 'palpitaciones', label: 'Palpitaciones' },
+  { key: 'doloresCuello', label: 'Dolores de cuello' },
+  { key: 'doloresPecho', label: 'Dolores en el pecho' },
+  { key: 'bultosDoloresSenos', label: 'Bultos o dolores en los senos' },
+  { key: 'dolorAbdominal', label: 'Dolor abdominal' },
+  { key: 'dificultadDigestiva', label: 'Dificultad digestiva' },
+  { key: 'estrenimiento', label: 'Estreñimiento' },
+  { key: 'diarrea', label: 'Diarrea' },
+  { key: 'hecesNegrasSangre', label: 'Heces negras con sangre' },
+  { key: 'colicos', label: 'Cólicos' },
+  { key: 'acidez', label: 'Acidez' },
+  { key: 'hemorroides', label: 'Hemorroides' },
+  { key: 'orinaQuemante', label: 'Orina quemante' },
+  { key: 'despiertaOrinar', label: 'Se despierta para orinar' },
+  { key: 'sangreOrina', label: 'Sangre en la orina' },
+  { key: 'doloresEspalda', label: 'Dolores de espalda' },
+  { key: 'piernasHinchadas', label: 'Piernas hinchadas' },
+  { key: 'doloresHuesos', label: 'Dolores en los huesos' },
+  { key: 'doloresArticulaciones', label: 'Dolores en las articulaciones' },
+  { key: 'problemasBrazos', label: 'Problemas en brazos' },
+  { key: 'problemasHombros', label: 'Problemas en hombros' },
+  { key: 'problemasPiernas', label: 'Problemas en piernas' },
+  { key: 'paralisis', label: 'Parálisis' },
+  { key: 'trastornosSensibilidad', label: 'Trastornos de la sensibilidad' },
+  { key: 'dolorRectalRafagas', label: 'Dolor rectal ráfagas punzantes' },
+  { key: 'miomasQuistesOvarios', label: 'Miomas y quistes en ovarios' },
+];
+
+export const gynecologicalFields: Array<{
+  key: keyof MedicalHistoryData['gynecological'];
+  label: string;
+}> = [
+  { key: 'developmentAge', label: 'Edad desarrollo' },
+  { key: 'menstruation', label: 'Menstruación' },
+  { key: 'menstrualCycle', label: 'Ciclo menstrual' },
+  { key: 'flow', label: 'Flujo' },
+  { key: 'birthControlMethod', label: 'Método anticonceptivo' },
+  { key: 'pregnancies', label: 'Embarazos' },
+  { key: 'labors', label: 'Partos' },
+  { key: 'cesareans', label: 'Cesáreas' },
+  { key: 'births', label: 'Nacidos vivos' },
+  { key: 'abortions', label: 'Abortos' },
+  { key: 'menopauseAge', label: 'Edad menopausia' },
+];
+
+export const lifestyleFields: Array<{
+  key: keyof MedicalHistoryData['lifestyle'];
+  label: string;
+}> = [
+  { key: 'sport', label: 'Deporte que practica' },
+  { key: 'sportFrequency', label: 'Frecuencia deportiva' },
+  { key: 'workingHours', label: 'Horas de trabajo diarias' },
+  { key: 'jobSatisfaction', label: '¿Lo satisface su trabajo?' },
+  { key: 'jobStability', label: '¿La remuneración le da estabilidad?' },
+  { key: 'rest', label: '¿Descansa lo necesario?' },
+  { key: 'freeTime', label: '¿Como emplea su tiempo libre?' },
+  { key: 'workSharing', label: '¿Con quién lo comparte?' },
+  { key: 'leisure', label: 'hobbies' },
+  { key: 'pets', label: 'Mascotas' },
+  { key: 'plants', label: 'Plantas' },
+  { key: 'technology', label: 'Tecnología' },
+  { key: 'creed', label: 'Creencias' },
+  { key: 'consumption', label: 'Consumos' },
+  { key: 'friendships', label: 'Amistades' },
+  { key: 'partner', label: 'Pareja' },
+  { key: 'family', label: 'Familia' },
+  { key: 'spirituality', label: 'Espiritualidad' },
+];
+
+export const clinicalBackgroundFields: Array<{
+  key: keyof MedicalHistoryData['clinicalBackground'];
+  label: string;
+  type?: 'textarea';
+}> = [
+  { key: 'otherDisease', label: 'Otras enfermedades', type: 'textarea' },
+  { key: 'surgeries', label: 'Cirugías', type: 'textarea' },
+  { key: 'injuries', label: 'Lesiones', type: 'textarea' },
+  { key: 'therapies', label: 'Terapias', type: 'textarea' },
+  { key: 'allergies', label: 'Alergias', type: 'textarea' },
+  { key: 'currentIllness', label: 'Enfermedad actual', type: 'textarea' },
+  { key: 'otherAlteration', label: 'Otras alteraciones', type: 'textarea' },
+  { key: 'breathing', label: 'Respiración' },
+  { key: 'appetite', label: 'Apetito' },
+  { key: 'aversions', label: 'Aversión' },
+  { key: 'intolerances', label: 'Intolerancias' },
+  { key: 'drinks', label: 'Bebidas' },
+  { key: 'addictions', label: 'Adicciones' },
+  { key: 'evacuation', label: 'Evacuaciones' },
+  { key: 'vitality', label: 'Vitalidad' },
+  { key: 'sleep', label: 'Sueño' },
+  { key: 'skinManifestation', label: 'Manifestaciones en piel' },
+  { key: 'sweatingTemperature', label: 'Sudoración/Temperatura' },
+  { key: 'urination', label: 'Orina' },
+  { key: 'sexuality', label: 'Sexualidad' },
+  { key: 'psychiatricCondition', label: 'Condición psiquiátrica', type: 'textarea' },
+  { key: 'physicalCondition', label: 'Condición física', type: 'textarea' },
+  { key: 'bloodGroup', label: 'Grupo sanguíneo' },
+  { key: 'biotype', label: 'Biotipo' },
+];
+
 const mapRemoteDiseasesToState = (
   diseases?: RemotePatientMedicalHistory['diseases'],
 ): Record<DiseaseKey, string> => {
@@ -621,7 +871,7 @@ const mapRemoteDiseasesToState = (
   return mapped;
 };
 
-const mapRemoteMedicalHistoryToState = (
+export const mapRemoteMedicalHistoryToState = (
   remoteHistory?: RemotePatientMedicalHistory | null,
 ): MedicalHistoryData => {
   const history = createInitialMedicalHistory();
@@ -786,7 +1036,7 @@ const mapRemoteMedicalHistoryToState = (
   return history;
 };
 
-const mapRemoteAttachmentsToFiles = (
+export const mapRemoteAttachmentsToFiles = (
   attachments?: RemotePatientMedicalHistory['attachments'],
 ): MedicalFile[] => {
   if (!Array.isArray(attachments)) {
@@ -794,7 +1044,417 @@ const mapRemoteAttachmentsToFiles = (
   }
   return attachments
     .filter((attachment): attachment is NonNullable<typeof attachment> => Boolean(attachment))
+    .filter(attachment => Boolean(attachment.file))
     .map(mapAttachmentToMedicalFile);
+};
+
+type NullableStringSection<T extends Record<string, string>> = {
+  [K in keyof T]: string | null;
+};
+
+interface UpdateHistoryPayload {
+  personal: NullableStringSection<MedicalHistoryData['personal']>;
+  contacts: NullableStringSection<MedicalHistoryData['contacts']>;
+  treatingDoctor: NullableStringSection<MedicalHistoryData['treatingDoctor']>;
+  family: {
+    pathologies: NullableStringSection<MedicalHistoryData['family']['pathologies']>;
+    context: NullableStringSection<MedicalHistoryData['family']['context']>;
+  };
+  immunizations: {
+    bcg: boolean;
+    polio: boolean;
+    measles: boolean;
+    typhoid: boolean;
+    triple: boolean;
+    tetanus: boolean;
+    cholera: boolean;
+    yellowFever: boolean;
+    otherImmunization: string | null;
+  };
+  gynecological: NullableStringSection<MedicalHistoryData['gynecological']>;
+  lifestyle: NullableStringSection<MedicalHistoryData['lifestyle']>;
+  clinicalBackground: NullableStringSection<MedicalHistoryData['clinicalBackground']>;
+  diseases: Record<DiseaseKey, string | null>;
+  alterations: Record<AlterationKey, boolean>;
+}
+
+const toNullableString = (value: string | null | undefined): string | null => {
+  if (typeof value !== 'string') {
+    return null;
+  }
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+};
+
+const mapStringSection = <T extends Record<string, string>>(section: T): NullableStringSection<T> => {
+  return Object.keys(section).reduce((acc, key) => {
+    const typedKey = key as keyof T;
+    acc[typedKey] = toNullableString(section[typedKey]);
+    return acc;
+  }, {} as NullableStringSection<T>);
+};
+
+const buildUpdatePayload = (data: MedicalHistoryData): UpdateHistoryPayload => {
+  const diseases = Object.keys(data.diseases).reduce((acc, key) => {
+    const diseaseKey = key as DiseaseKey;
+    acc[diseaseKey] = toNullableString(data.diseases[diseaseKey]);
+    return acc;
+  }, {} as Record<DiseaseKey, string | null>);
+
+  return {
+    personal: mapStringSection(data.personal),
+    contacts: mapStringSection(data.contacts),
+    treatingDoctor: mapStringSection(data.treatingDoctor),
+    family: {
+      pathologies: mapStringSection(data.family.pathologies),
+      context: mapStringSection(data.family.context),
+    },
+    immunizations: {
+      bcg: data.immunizations.bcg,
+      polio: data.immunizations.polio,
+      measles: data.immunizations.measles,
+      typhoid: data.immunizations.typhoid,
+      triple: data.immunizations.triple,
+      tetanus: data.immunizations.tetanus,
+      cholera: data.immunizations.cholera,
+      yellowFever: data.immunizations.yellowFever,
+      otherImmunization: toNullableString(data.immunizations.otherImmunization),
+    },
+    gynecological: mapStringSection(data.gynecological),
+    lifestyle: mapStringSection(data.lifestyle),
+    clinicalBackground: mapStringSection(data.clinicalBackground),
+    diseases,
+    alterations: { ...data.alterations },
+  };
+};
+
+interface MedicalHistoryViewModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  data: MedicalHistoryData;
+  isLoading?: boolean;
+  errorMessage?: string | null;
+  title?: string;
+}
+
+export const MedicalHistoryViewModal: React.FC<MedicalHistoryViewModalProps> = ({
+  isOpen,
+  onClose,
+  data,
+  isLoading = false,
+  errorMessage = null,
+  title = 'Historia médica',
+}) => {
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+
+  const handleExportPdf = async () => {
+    const contentElement = contentRef.current;
+    if (!contentElement) {
+      return;
+    }
+
+    setExportError(null);
+    setIsExporting(true);
+
+    const previousStyles = {
+      maxHeight: contentElement.style.maxHeight,
+      height: contentElement.style.height,
+      overflow: contentElement.style.overflow,
+      overflowY: contentElement.style.overflowY,
+    };
+
+    try {
+      const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
+        import('html2canvas'),
+        import('jspdf'),
+      ]);
+
+      contentElement.style.maxHeight = 'none';
+      contentElement.style.height = 'auto';
+      contentElement.style.overflow = 'visible';
+      contentElement.style.overflowY = 'visible';
+
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+
+      const canvas = await html2canvas(contentElement, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#ffffff',
+        scrollY: -window.scrollY,
+      });
+
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const margin = 15;
+      const imgProps = pdf.getImageProperties(imgData);
+      const pdfWidth = pdf.internal.pageSize.getWidth() - margin * 2;
+      const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const usablePageHeight = pageHeight - margin * 2;
+
+      let heightLeft = pdfHeight;
+      let position = margin;
+
+      pdf.addImage(imgData, 'PNG', margin, position, pdfWidth, pdfHeight);
+      heightLeft -= usablePageHeight;
+
+      while (heightLeft > 0) {
+        position = margin - (pdfHeight - heightLeft);
+        pdf.addPage();
+        pdf.addImage(imgData, 'PNG', margin, position, pdfWidth, pdfHeight);
+        heightLeft -= usablePageHeight;
+      }
+
+      const safeTitle = title
+        .toLowerCase()
+        .replace(/[^a-z0-9\s-]/gi, '')
+        .replace(/\s+/g, '-')
+        .replace(/-+/g, '-')
+        .replace(/^-|-$/g, '');
+      const filename = safeTitle ? `${safeTitle}.pdf` : 'historia-medica.pdf';
+
+      pdf.save(filename);
+    } catch (error) {
+      console.error('Failed to export medical history PDF', error);
+      setExportError('No se pudo exportar la historia médica. Intenta nuevamente.');
+    } finally {
+      if (contentElement) {
+        contentElement.style.maxHeight = previousStyles.maxHeight;
+        contentElement.style.height = previousStyles.height;
+        contentElement.style.overflow = previousStyles.overflow;
+        contentElement.style.overflowY = previousStyles.overflowY;
+      }
+
+      setIsExporting(false);
+    }
+  };
+
+  return (
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={title}
+      size="xl"
+    >
+      <div className="space-y-4">
+        {exportError && (
+          <div className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
+            {exportError}
+          </div>
+        )}
+
+        <div
+          ref={contentRef}
+          className="space-y-6 max-h-[70vh] overflow-y-auto pr-2"
+        >
+          {isLoading && (
+            <div className="rounded-md bg-blue-50 px-3 py-2 text-sm text-blue-700">
+              Cargando historia médica...
+            </div>
+          )}
+
+          {errorMessage && (
+            <div className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
+              {errorMessage}
+            </div>
+          )}
+
+          {!isLoading && !errorMessage && (
+            <>
+          <section>
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Identificación</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {[
+                { label: 'Lugar de nacimiento', value: data.personal.birthPlace },
+                { label: 'Hora de nacimiento', value: data.personal.birthTime },
+                { label: 'Fecha de nacimiento', value: data.personal.birthDate },
+                { label: 'Estado civil', value: data.personal.maritalStatus },
+                { label: 'Profesión', value: data.personal.profession },
+                { label: 'Ocupación', value: data.personal.occupation },
+              ].map(({ label, value }) => (
+                <div key={label} className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">{label}</p>
+                  <p className="mt-1 text-sm text-gray-900">{displayValue(value)}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section>
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Contacto y Emergencias</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {[
+                { label: 'Teléfono', value: data.contacts.phone },
+                { label: 'Familiar cercano', value: data.contacts.closeFamily },
+                { label: 'Parentesco', value: data.contacts.relationship },
+                { label: 'Teléfono del familiar', value: data.contacts.familyPhone },
+                { label: 'Contacto de emergencia', value: data.contacts.emergencyContact },
+                { label: 'Correo de emergencia', value: data.contacts.emergencyEmail },
+                { label: 'Teléfono de emergencia', value: data.contacts.emergencyPhone },
+              ].map(({ label, value }) => (
+                <div key={label} className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">{label}</p>
+                  <p className="mt-1 text-sm text-gray-900">{displayValue(value)}</p>
+                </div>
+              ))}
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+              <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 md:col-span-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Dirección</p>
+                <p className="mt-1 text-sm text-gray-900 whitespace-pre-wrap">{displayValue(data.contacts.address)}</p>
+              </div>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 md:col-span-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Empresa y dirección laboral</p>
+                <p className="mt-1 text-sm text-gray-900 whitespace-pre-wrap">{displayValue(data.contacts.companyAddress)}</p>
+              </div>
+            </div>
+          </section>
+
+          <section>
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Médico Tratante</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {[
+                { label: 'Médico tratante', value: data.treatingDoctor.treatingDoctor },
+                { label: 'Especialidad', value: data.treatingDoctor.specialty },
+              ].map(({ label, value }) => (
+                <div key={label} className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">{label}</p>
+                  <p className="mt-1 text-sm text-gray-900">{displayValue(value)}</p>
+                </div>
+              ))}
+            </div>
+            <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 mt-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Medicación que recibe</p>
+              <p className="mt-1 text-sm text-gray-900 whitespace-pre-wrap">{displayValue(data.treatingDoctor.currentMedication)}</p>
+            </div>
+          </section>
+
+          <section>
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Antecedentes Familiares</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {(Object.keys(familyPathologyLabels) as Array<keyof MedicalHistoryData['family']['pathologies']>).map((key) => (
+                <div key={key} className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">{familyPathologyLabels[key]}</p>
+                  <p className="mt-1 text-sm text-gray-900 whitespace-pre-wrap">{displayValue(data.family.pathologies[key])}</p>
+                </div>
+              ))}
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+              {[
+                { label: 'Edad del padre', value: data.family.context.fatherAge },
+                { label: 'Estado del padre', value: data.family.context.fatherStatus },
+                { label: 'Edad de la madre', value: data.family.context.motherAge },
+                { label: 'Estado de la madre', value: data.family.context.motherStatus },
+                { label: 'Número de hermanos', value: data.family.context.siblingsCount },
+                { label: 'Posición entre hermanos', value: data.family.context.siblingPosition },
+                { label: 'Número de hijos', value: data.family.context.childrenCount },
+                { label: '¿Con quién vive?', value: data.family.context.livesWith },
+              ].map(({ label, value }) => (
+                <div key={label} className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">{label}</p>
+                  <p className="mt-1 text-sm text-gray-900">{displayValue(value)}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section>
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Esquema de Vacunación</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {immunizationOptions.map(({ key, label }) => (
+                <div key={key} className="flex items-center justify-between rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+                  <span className="text-sm text-gray-700">{label}</span>
+                  <span className="text-sm font-medium text-gray-900">{displayBoolean(data.immunizations[key])}</span>
+                </div>
+              ))}
+            </div>
+            <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 mt-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Otras vacunas</p>
+              <p className="mt-1 text-sm text-gray-900 whitespace-pre-wrap">{displayValue(data.immunizations.otherImmunization)}</p>
+            </div>
+          </section>
+
+          <section>
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Historia Ginecológica</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {gynecologicalFields.map(({ key, label }) => (
+                <div key={key} className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">{label}</p>
+                  <p className="mt-1 text-sm text-gray-900">{displayValue(data.gynecological[key])}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section>
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Estilo de Vida</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {lifestyleFields.map(({ key, label }) => (
+                <div key={key} className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">{label}</p>
+                  <p className="mt-1 text-sm text-gray-900">{displayValue(data.lifestyle[key])}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section>
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Antecedentes Clínicos</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {clinicalBackgroundFields.map(({ key, label }) => (
+                <div key={key} className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">{label}</p>
+                  <p className="mt-1 text-sm text-gray-900 whitespace-pre-wrap">{displayValue(data.clinicalBackground[key])}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section>
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Alteraciones</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {alterationOptions.map(({ key, label }) => (
+                <div key={key} className="flex items-center justify-between rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+                  <span className="text-sm text-gray-700">{label}</span>
+                  <span className="text-sm font-medium text-gray-900">{displayBoolean(data.alterations[key])}</span>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section>
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Enfermedades</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {diseaseOptions.map(({ key, label }) => (
+                <div key={key} className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">{label}</p>
+                  <p className="mt-1 text-sm text-gray-900 whitespace-pre-wrap">{displayValue(data.diseases[key])}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+        </>
+      )}
+        </div>
+
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={handleExportPdf}
+            disabled={isExporting || Boolean(isLoading) || Boolean(errorMessage)}
+          >
+            {isExporting ? 'Exportando...' : 'Exportar PDF'}
+          </Button>
+          <Button type="button" variant="secondary" onClick={onClose}>
+            Cerrar
+          </Button>
+        </div>
+      </div>
+    </Modal>
+  );
 };
 
 export const MedicalHistory: React.FC = () => {
@@ -810,6 +1470,64 @@ export const MedicalHistory: React.FC = () => {
   const [medicalHistoryData, setMedicalHistoryData] = useState<MedicalHistoryData>(createInitialMedicalHistory());
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
+  const [isSavingHistory, setIsSavingHistory] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
+  const [downloadingFileId, setDownloadingFileId] = useState<string | null>(null);
+  const fetchAttachments = useCallback(
+    async (abortSignal?: AbortSignal): Promise<RemotePatientMedicalHistory['attachments']> => {
+      if (!user?.id || !token) {
+        return [];
+      }
+
+      try {
+        const response = await fetch(`${apiBase}/patient/user/${user.id}/attachments`, {
+          method: 'GET',
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          signal: abortSignal,
+        });
+
+        if (response.status === 204 || response.status === 404) {
+          return [];
+        }
+
+        if (!response.ok) {
+          throw new Error(`Failed to fetch medical attachments (${response.status})`);
+        }
+
+        let payload: unknown;
+
+        try {
+          payload = await response.json();
+        } catch (parseError) {
+          throw new Error('Failed to parse medical attachments response');
+        }
+
+        if (Array.isArray(payload)) {
+          return payload as RemotePatientMedicalHistory['attachments'];
+        }
+
+        if (
+          payload &&
+          typeof payload === 'object' &&
+          Array.isArray((payload as { attachments?: unknown }).attachments)
+        ) {
+          return (payload as { attachments: RemotePatientMedicalHistory['attachments'] }).attachments;
+        }
+
+        return [];
+      } catch (error: any) {
+        if (error?.name === 'AbortError') {
+          return [];
+        }
+
+        throw error;
+      }
+    },
+    [apiBase, token, user?.id],
+  );
 
   useEffect(() => {
     if (!user?.id || !token) {
@@ -824,7 +1542,7 @@ export const MedicalHistory: React.FC = () => {
       setHistoryError(null);
 
       try {
-        const response = await fetch(`${apiBase}/patient/user/${user.id}/history`, {
+        const historyPromise = fetch(`${apiBase}/patient/user/${user.id}/history`, {
           method: 'GET',
           headers: {
             Authorization: `Bearer ${token}`,
@@ -832,10 +1550,15 @@ export const MedicalHistory: React.FC = () => {
           signal: controller.signal,
         });
 
+        const attachmentsPromise = fetchAttachments(controller.signal);
+
+        const [response, attachments] = await Promise.all([historyPromise, attachmentsPromise]);
+        const mappedAttachments = mapRemoteAttachmentsToFiles(attachments);
+
         if (response.status === 404) {
           if (!cancelled) {
             setMedicalHistoryData(createInitialMedicalHistory());
-            setFiles([]);
+            setFiles(mappedAttachments);
           }
           return;
         }
@@ -844,13 +1567,12 @@ export const MedicalHistory: React.FC = () => {
           throw new Error(`Failed to fetch medical history (${response.status})`);
         }
 
-        const payload = await response.json() as RemotePatientMedicalHistory | null;
+        const payload = (await response.json()) as RemotePatientMedicalHistory | null;
 
         if (!cancelled) {
           const mappedHistory = mapRemoteMedicalHistoryToState(payload);
-          const mappedFiles = mapRemoteAttachmentsToFiles(payload?.attachments);
           setMedicalHistoryData(mappedHistory);
-          setFiles(mappedFiles);
+          setFiles(mappedAttachments);
         }
       } catch (error: any) {
         if (cancelled) {
@@ -876,224 +1598,20 @@ export const MedicalHistory: React.FC = () => {
       cancelled = true;
       controller.abort();
     };
-  }, [apiBase, token, user?.id]);
+  }, [apiBase, fetchAttachments, token, user?.id]);
+
+  useEffect(() => {
+    if (!saveSuccess) {
+      return;
+    }
+    const timer = window.setTimeout(() => setSaveSuccess(null), 5000);
+    return () => window.clearTimeout(timer);
+  }, [saveSuccess]);
 
   const filteredFiles = files.filter(file => 
     selectedCategory === 'all' || file.category === selectedCategory
   );
 
-  const familyPathologyLabels: Record<
-    keyof MedicalHistoryData['family']['pathologies'],
-    string
-  > = {
-    cancer: 'Cáncer',
-    tuberculosis: 'Tuberculosis',
-    diabetes: 'Diabetes',
-    asthma: 'Asma',
-    highBloodPressure: 'Tensión alta',
-    epilepsy: 'Epilepsia',
-    mentalIllness: 'Enfermedad mental',
-    suicide: 'Suicidio',
-    bloodDisease: 'Enfermedad sangre',
-    vascularDisease: 'Enfermedad vasos',
-    arthritis: 'Artritis',
-    syphilis: 'Sífilis',
-    others: 'Otras',
-  };
-
-  const immunizationOptions: Array<{
-    key: Exclude<keyof MedicalHistoryData['immunizations'], 'otherImmunization'>;
-    label: string;
-  }> = [
-    { key: 'bcg', label: 'BCG' },
-    { key: 'polio', label: 'Polio' },
-    { key: 'measles', label: 'Sarampión' },
-    { key: 'typhoid', label: 'Fiebre tifoidea' },
-    { key: 'triple', label: 'Triple' },
-    { key: 'tetanus', label: 'Tétanos' },
-    { key: 'cholera', label: 'Cólera' },
-    { key: 'yellowFever', label: 'Fiebre amarilla' },
-  ];
-
-  const diseaseOptions: Array<{
-    key: DiseaseKey;
-    label: string;
-  }> = [
-    { key: 'sarampion', label: 'Sarampión' },
-    { key: 'lechina', label: 'Lechina' },
-    { key: 'escarlatina', label: 'Escarlatina' },
-    { key: 'difteria', label: 'Difteria' },
-    { key: 'tosferina', label: 'Tosferina' },
-    { key: 'paperas', label: 'Paperas' },
-    { key: 'polio', label: 'Polio' },
-    { key: 'tetano', label: 'Tétano' },
-    { key: 'disenteria', label: 'Disentería' },
-    { key: 'parasitos', label: 'Parásitos' },
-    { key: 'meningitis', label: 'Meningitis' },
-    { key: 'asma', label: 'Asma' },
-    { key: 'acne', label: 'Acné' },
-    { key: 'forunculosis', label: 'Forunculosis' },
-    { key: 'eczema', label: 'Eczema' },
-    { key: 'psoriasis', label: 'Psoriasis' },
-    { key: 'alergia', label: 'Alergia' },
-    { key: 'sinusitis', label: 'Sinusitis' },
-    { key: 'anginas', label: 'Anginas' },
-    { key: 'bronquitis', label: 'Bronquitis' },
-    { key: 'diabetes', label: 'Diabetes' },
-    { key: 'enfermedadTiroidea', label: 'Enfermedad tiroidea' },
-    { key: 'enfermedadCardiaca', label: 'Enfermedad cardiaca' },
-    { key: 'enfermedadNeurologica', label: 'Enfermedad neurológica' },
-    { key: 'enfermedadMental', label: 'Enfermedad mental' },
-    { key: 'epilepsia', label: 'Epilepsia' },
-    { key: 'litiasisRenal', label: 'Litiasis renal' },
-    { key: 'litiasisVesicular', label: 'Litiasis vesicular' },
-    { key: 'hepatitis', label: 'Hepatitis' },
-    { key: 'nefritis', label: 'Nefritis' },
-    { key: 'gastritis', label: 'Gastritis' },
-    { key: 'ulcera', label: 'Úlcera' },
-    { key: 'lepra', label: 'Lepra' },
-    { key: 'tbc', label: 'TBC' },
-    { key: 'sifilis', label: 'Sífilis' },
-    { key: 'blenorragia', label: 'Blenorragia' },
-    { key: 'otraVenerea', label: 'Otra venérea' },
-    { key: 'fiebreReumatica', label: 'Fiebre reumática' },
-    { key: 'artritis', label: 'Artritis' },
-    { key: 'enfermedadMuscular', label: 'Enfermedad muscular' },
-    { key: 'gota', label: 'Gota' },
-    { key: 'cancer', label: 'Cáncer' },
-  ];
-
-  const alterationOptions: Array<{
-    key: AlterationKey;
-    label: string;
-  }> = [
-    { key: 'perdidaDePeso', label: 'Pérdida de peso' },
-    { key: 'gananciaDePeso', label: 'Ganancia de peso' },
-    { key: 'confusion', label: 'Confusión' },
-    { key: 'nerviosismo', label: 'Nerviosismo' },
-    { key: 'descontrolEmotivo', label: 'Descontrol emotivo' },
-    { key: 'tensionMuscular', label: 'Tensión muscular' },
-    { key: 'calambreMuscular', label: 'Calambre muscular' },
-    { key: 'cambioColorPiel', label: 'Cambio de color en piel' },
-    { key: 'picazon', label: 'Picazón' },
-    { key: 'erupcionesCutaneas', label: 'Erupciones cutáneas' },
-    { key: 'furunculos', label: 'Furúnculos' },
-    { key: 'fiebres', label: 'Fiebres' },
-    { key: 'pesadillas', label: 'Pesadillas' },
-    { key: 'vertigoMareos', label: 'Vértigo o mareos' },
-    { key: 'desmayos', label: 'Desmayos' },
-    { key: 'ruidosOidos', label: 'Ruidos en los oídos' },
-    { key: 'doloresOidos', label: 'Dolores en los oídos' },
-    { key: 'secrecionesOidos', label: 'Secreciones en los oídos' },
-    { key: 'visionBorrosaDoble', label: 'Visión borrosa o doble' },
-    { key: 'secrecionesArdorOjos', label: 'Secreciones o ardor en los ojos' },
-    { key: 'congestionNasal', label: 'Congestión nasal' },
-    { key: 'hemorragiaNasal', label: 'Hemorragia nasal' },
-    { key: 'llagasBoca', label: 'Llagas en la boca' },
-    { key: 'malAliento', label: 'Mal aliento' },
-    { key: 'problemasDientesEncias', label: 'Problemas en dientes y encías' },
-    { key: 'gargantaDolorida', label: 'Garganta dolorida' },
-    { key: 'tos', label: 'Tos' },
-    { key: 'esputoConSangre', label: 'Esputo con sangre' },
-    { key: 'dificultadesRespiratorias', label: 'Dificultades respiratorias' },
-    { key: 'palpitaciones', label: 'Palpitaciones' },
-    { key: 'doloresCuello', label: 'Dolores de cuello' },
-    { key: 'doloresPecho', label: 'Dolores en el pecho' },
-    { key: 'bultosDoloresSenos', label: 'Bultos o dolores en los senos' },
-    { key: 'dolorAbdominal', label: 'Dolor abdominal' },
-    { key: 'dificultadDigestiva', label: 'Dificultad digestiva' },
-    { key: 'estrenimiento', label: 'Estreñimiento' },
-    { key: 'diarrea', label: 'Diarrea' },
-    { key: 'hecesNegrasSangre', label: 'Heces negras con sangre' },
-    { key: 'colicos', label: 'Cólicos' },
-    { key: 'acidez', label: 'Acidez' },
-    { key: 'hemorroides', label: 'Hemorroides' },
-    { key: 'orinaQuemante', label: 'Orina quemante' },
-    { key: 'despiertaOrinar', label: 'Se despierta para orinar' },
-    { key: 'sangreOrina', label: 'Sangre en la orina' },
-    { key: 'doloresEspalda', label: 'Dolores de espalda' },
-    { key: 'piernasHinchadas', label: 'Piernas hinchadas' },
-    { key: 'doloresHuesos', label: 'Dolores en los huesos' },
-    { key: 'doloresArticulaciones', label: 'Dolores en las articulaciones' },
-    { key: 'problemasBrazos', label: 'Problemas en brazos' },
-    { key: 'problemasHombros', label: 'Problemas en hombros' },
-    { key: 'problemasPiernas', label: 'Problemas en piernas' },
-    { key: 'paralisis', label: 'Parálisis' },
-    { key: 'trastornosSensibilidad', label: 'Trastornos de la sensibilidad' },
-    { key: 'dolorRectalRafagas', label: 'Dolor rectal ráfagas punzantes' },
-    { key: 'miomasQuistesOvarios', label: 'Miomas y quistes en ovarios' },
-  ];
-  const gynecologicalFields: Array<{
-    key: keyof MedicalHistoryData['gynecological'];
-    label: string;
-  }> = [
-    { key: 'developmentAge', label: 'Edad desarrollo' },
-    { key: 'menstruation', label: 'Menstruación' },
-    { key: 'menstrualCycle', label: 'Ciclo menstrual' },
-    { key: 'flow', label: 'Flujo' },
-    { key: 'birthControlMethod', label: 'Método anticonceptivo' },
-    { key: 'pregnancies', label: 'Embarazos' },
-    { key: 'labors', label: 'Partos' },
-    { key: 'cesareans', label: 'Cesáreas' },
-    { key: 'births', label: 'Nacidos vivos' },
-    { key: 'abortions', label: 'Abortos' },
-    { key: 'menopauseAge', label: 'Edad menopausia' },
-  ];
-
-  const lifestyleFields: Array<{
-    key: keyof MedicalHistoryData['lifestyle'];
-    label: string;
-  }> = [
-    { key: 'sport', label: 'Deporte que practica' },
-    { key: 'sportFrequency', label: 'Frecuencia deportiva' },
-    { key: 'workingHours', label: 'Horas de trabajo diarias' },
-    { key: 'jobSatisfaction', label: '¿Lo satisface su trabajo?' },
-    { key: 'jobStability', label: '¿La remuneración le da estabilidad?' },
-    { key: 'rest', label: '¿Descansa lo necesario?' },
-    { key: 'freeTime', label: '¿Como emplea su tiempo libre?' },
-    { key: 'workSharing', label: '¿Con quién lo comparte?' },
-    { key: 'leisure', label: 'hobbies' },
-    { key: 'pets', label: 'Mascotas' },
-    { key: 'plants', label: 'Plantas' },
-    { key: 'technology', label: 'Tecnología' },
-    { key: 'creed', label: 'Creencias' },
-    { key: 'consumption', label: 'Consumos' },
-    { key: 'friendships', label: 'Amistades' },
-    { key: 'partner', label: 'Pareja' },
-    { key: 'family', label: 'Familia' },
-    { key: 'spirituality', label: 'Espiritualidad' },
-  ];
-
-  const clinicalBackgroundFields: Array<{
-    key: keyof MedicalHistoryData['clinicalBackground'];
-    label: string;
-    type?: 'textarea';
-  }> = [
-    { key: 'otherDisease', label: 'Otras enfermedades', type: 'textarea' },
-    { key: 'surgeries', label: 'Cirugías', type: 'textarea' },
-    { key: 'injuries', label: 'Lesiones', type: 'textarea' },
-    { key: 'therapies', label: 'Terapias', type: 'textarea' },
-    { key: 'allergies', label: 'Alergias', type: 'textarea' },
-    { key: 'currentIllness', label: 'Enfermedad actual', type: 'textarea' },
-    { key: 'otherAlteration', label: 'Otras alteraciones', type: 'textarea' },
-    { key: 'breathing', label: 'Respiración' },
-    { key: 'appetite', label: 'Apetito' },
-    { key: 'aversions', label: 'Aversión' },
-    { key: 'intolerances', label: 'Intolerancias' },
-    { key: 'drinks', label: 'Bebidas' },
-    { key: 'addictions', label: 'Adicciones' },
-    { key: 'evacuation', label: 'Evacuaciones' },
-    { key: 'vitality', label: 'Vitalidad' },
-    { key: 'sleep', label: 'Sueño' },
-    { key: 'skinManifestation', label: 'Manifestaciones en piel' },
-    { key: 'sweatingTemperature', label: 'Sudoración/Temperatura' },
-    { key: 'urination', label: 'Orina' },
-    { key: 'sexuality', label: 'Sexualidad' },
-    { key: 'psychiatricCondition', label: 'Condición psiquiátrica', type: 'textarea' },
-    { key: 'physicalCondition', label: 'Condición física', type: 'textarea' },
-    { key: 'bloodGroup', label: 'Grupo sanguíneo' },
-    { key: 'biotype', label: 'Biotipo' },
-  ];
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -1101,6 +1619,82 @@ export const MedicalHistory: React.FC = () => {
       setUploadingFile(file);
       setIsModalOpen(true);
     }
+  };
+
+  const handleDownload = async (file: MedicalFile) => {
+    const fallbackToStaticAsset = () => {
+      if (!file.downloadPath) {
+        alert('El archivo aún no está disponible para descargar.');
+        return;
+      }
+      const sanitizedPath = file.downloadPath.replace(/^\/+/, '');
+      const normalizedBase = apiBase.replace(/\/+$/, '');
+      const assetUrl = `${normalizedBase}/assets/historia/${sanitizedPath}`;
+      window.open(assetUrl, '_blank', 'noopener');
+    };
+
+    if (!file.attachmentId) {
+      fallbackToStaticAsset();
+      return;
+    }
+
+    if (!token) {
+      alert('Inicia sesión nuevamente para descargar el archivo.');
+      return;
+    }
+
+    const normalizedBase = apiBase.replace(/\/+$/, '');
+    const downloadUrl = `${normalizedBase}/patient/attachments/${file.attachmentId}/download`;
+
+    setDownloadingFileId(file.id);
+    let shouldFallback = false;
+
+    try {
+      const response = await fetch(downloadUrl, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to download file (${response.status})`);
+      }
+
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = file.name;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (error) {
+      console.error('Failed to download medical attachment', error);
+      shouldFallback = Boolean(file.downloadPath);
+      if (!shouldFallback) {
+        alert('No se pudo descargar el archivo. Intenta nuevamente.');
+      }
+    } finally {
+      setDownloadingFileId(null);
+      if (shouldFallback) {
+        fallbackToStaticAsset();
+      }
+    }
+  };
+
+  const handleOpenHistoryModal = () => {
+    setSaveError(null);
+    setIsHistoryModalOpen(true);
+  };
+
+  const handleCloseHistoryModal = () => {
+    if (isSavingHistory) {
+      return;
+    }
+    setIsHistoryModalOpen(false);
+    setSaveError(null);
   };
 
   const handleUploadSubmit = () => {
@@ -1112,6 +1706,8 @@ export const MedicalHistory: React.FC = () => {
         size: uploadingFile.size,
         uploadedAt: new Date(),
         category: uploadCategory,
+        attachmentId: null,
+        downloadPath: null,
       };
       
       setFiles(prev => [...prev, newFile]);
@@ -1126,12 +1722,57 @@ export const MedicalHistory: React.FC = () => {
     }
   };
 
-  const handleHistorySubmit = (e: React.FormEvent) => {
+  const handleHistorySubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    // Here you would save the medical history data
-    console.log('Medical History Data:', medicalHistoryData);
-    setIsHistoryModalOpen(false);
-    // Show success message
+
+    if (!user?.id || !token) {
+      setSaveError('No se pudo identificar al usuario autenticado. Vuelve a iniciar sesión.');
+      return;
+    }
+
+    setIsSavingHistory(true);
+    setSaveError(null);
+
+    try {
+      const payload = buildUpdatePayload(medicalHistoryData);
+      const response = await fetch(`${apiBase}/patient/user/${user.id}/history`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to update medical history (${response.status})`);
+      }
+
+      const updated = (await response.json()) as RemotePatientMedicalHistory | null;
+      const mappedHistory = mapRemoteMedicalHistoryToState(updated);
+      let mappedFiles = mapRemoteAttachmentsToFiles(updated?.attachments);
+
+      try {
+        const refreshedAttachments = await fetchAttachments();
+        const refreshedFiles = mapRemoteAttachmentsToFiles(refreshedAttachments);
+        if (refreshedFiles.length > 0 || mappedFiles.length === 0) {
+          mappedFiles = refreshedFiles;
+        }
+      } catch (attachmentError) {
+        console.error('Failed to refresh medical attachments after saving history', attachmentError);
+      }
+
+      setMedicalHistoryData(mappedHistory);
+      setFiles(mappedFiles);
+      setSaveError(null);
+      setSaveSuccess('Historia médica guardada correctamente.');
+      setIsHistoryModalOpen(false);
+    } catch (error) {
+      console.error('Failed to save medical history', error);
+      setSaveError('No se pudo guardar la historia médica. Intenta nuevamente.');
+    } finally {
+      setIsSavingHistory(false);
+    }
   };
 
   const updatePersonalField = (
@@ -1321,6 +1962,12 @@ export const MedicalHistory: React.FC = () => {
         </div>
       )}
 
+      {saveSuccess && (
+        <div className="rounded-md bg-green-50 px-3 py-2 text-sm text-green-700">
+          {saveSuccess}
+        </div>
+      )}
+
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Medical History</h1>
@@ -1336,7 +1983,7 @@ export const MedicalHistory: React.FC = () => {
           </Button>
           <Button 
             variant="secondary"
-            onClick={() => setIsHistoryModalOpen(true)}
+            onClick={handleOpenHistoryModal}
           >
             <Edit className="w-4 h-4 mr-2" />
             Update Medical History
@@ -1413,7 +2060,20 @@ export const MedicalHistory: React.FC = () => {
               </div>
               
               <div className="flex items-center space-x-2">
-                <Button variant="outline" size="sm">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleDownload(file)}
+                  disabled={
+                    Boolean(downloadingFileId && downloadingFileId === file.id) ||
+                    (!file.attachmentId && !file.downloadPath)
+                  }
+                  title={
+                    !file.attachmentId && !file.downloadPath
+                      ? 'El archivo aún no está disponible para descargar'
+                      : 'Descargar archivo'
+                  }
+                >
                   <Download className="w-4 h-4" />
                 </Button>
                 <Button 
@@ -1495,203 +2155,27 @@ export const MedicalHistory: React.FC = () => {
         )}
       </Modal>
 
-      {/* Medical History View Modal */}
-      <Modal
+      <MedicalHistoryViewModal
         isOpen={isViewHistoryModalOpen}
         onClose={() => setIsViewHistoryModalOpen(false)}
-        title="Historia médica"
-        size="xl"
-      >
-        <div className="space-y-6 max-h-[70vh] overflow-y-auto pr-2">
-          <section>
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Identificación</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {[
-                { label: 'Lugar de nacimiento', value: medicalHistoryData.personal.birthPlace },
-                { label: 'Hora de nacimiento', value: medicalHistoryData.personal.birthTime },
-                { label: 'Fecha de nacimiento', value: medicalHistoryData.personal.birthDate },
-                { label: 'Estado civil', value: medicalHistoryData.personal.maritalStatus },
-                { label: 'Profesión', value: medicalHistoryData.personal.profession },
-                { label: 'Ocupación', value: medicalHistoryData.personal.occupation },
-              ].map(({ label, value }) => (
-                <div key={label} className="rounded-lg border border-gray-200 bg-gray-50 p-3">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">{label}</p>
-                  <p className="mt-1 text-sm text-gray-900">{displayValue(value)}</p>
-                </div>
-              ))}
-            </div>
-          </section>
-
-          <section>
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Contacto y Emergencias</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {[
-                { label: 'Teléfono', value: medicalHistoryData.contacts.phone },
-                { label: 'Familiar cercano', value: medicalHistoryData.contacts.closeFamily },
-                { label: 'Parentesco', value: medicalHistoryData.contacts.relationship },
-                { label: 'Teléfono del familiar', value: medicalHistoryData.contacts.familyPhone },
-                { label: 'Contacto de emergencia', value: medicalHistoryData.contacts.emergencyContact },
-                { label: 'Correo de emergencia', value: medicalHistoryData.contacts.emergencyEmail },
-                { label: 'Teléfono de emergencia', value: medicalHistoryData.contacts.emergencyPhone },
-              ].map(({ label, value }) => (
-                <div key={label} className="rounded-lg border border-gray-200 bg-gray-50 p-3">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">{label}</p>
-                  <p className="mt-1 text-sm text-gray-900">{displayValue(value)}</p>
-                </div>
-              ))}
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-              <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 md:col-span-2">
-                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Dirección</p>
-                <p className="mt-1 text-sm text-gray-900 whitespace-pre-wrap">{displayValue(medicalHistoryData.contacts.address)}</p>
-              </div>
-              <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 md:col-span-2">
-                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Empresa y dirección laboral</p>
-                <p className="mt-1 text-sm text-gray-900 whitespace-pre-wrap">{displayValue(medicalHistoryData.contacts.companyAddress)}</p>
-              </div>
-            </div>
-          </section>
-
-          <section>
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Médico Tratante</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {[
-                { label: 'Médico tratante', value: medicalHistoryData.treatingDoctor.treatingDoctor },
-                { label: 'Especialidad', value: medicalHistoryData.treatingDoctor.specialty },
-              ].map(({ label, value }) => (
-                <div key={label} className="rounded-lg border border-gray-200 bg-gray-50 p-3">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">{label}</p>
-                  <p className="mt-1 text-sm text-gray-900">{displayValue(value)}</p>
-                </div>
-              ))}
-            </div>
-            <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 mt-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Medicación que recibe</p>
-              <p className="mt-1 text-sm text-gray-900 whitespace-pre-wrap">{displayValue(medicalHistoryData.treatingDoctor.currentMedication)}</p>
-            </div>
-          </section>
-
-          <section>
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Antecedentes Familiares</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {(Object.keys(familyPathologyLabels) as Array<keyof MedicalHistoryData['family']['pathologies']>).map((key) => (
-                <div key={key} className="rounded-lg border border-gray-200 bg-gray-50 p-3">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">{familyPathologyLabels[key]}</p>
-                  <p className="mt-1 text-sm text-gray-900 whitespace-pre-wrap">{displayValue(medicalHistoryData.family.pathologies[key])}</p>
-                </div>
-              ))}
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-              {[
-                { label: 'Edad del padre', value: medicalHistoryData.family.context.fatherAge },
-                { label: 'Estado del padre', value: medicalHistoryData.family.context.fatherStatus },
-                { label: 'Edad de la madre', value: medicalHistoryData.family.context.motherAge },
-                { label: 'Estado de la madre', value: medicalHistoryData.family.context.motherStatus },
-                { label: 'Número de hermanos', value: medicalHistoryData.family.context.siblingsCount },
-                { label: 'Posición entre hermanos', value: medicalHistoryData.family.context.siblingPosition },
-                { label: 'Número de hijos', value: medicalHistoryData.family.context.childrenCount },
-                { label: '¿Con quién vive?', value: medicalHistoryData.family.context.livesWith },
-              ].map(({ label, value }) => (
-                <div key={label} className="rounded-lg border border-gray-200 bg-gray-50 p-3">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">{label}</p>
-                  <p className="mt-1 text-sm text-gray-900">{displayValue(value)}</p>
-                </div>
-              ))}
-            </div>
-          </section>
-
-          <section>
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Esquema de Vacunación</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {immunizationOptions.map(({ key, label }) => (
-                <div key={key} className="flex items-center justify-between rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
-                  <span className="text-sm text-gray-700">{label}</span>
-                  <span className="text-sm font-medium text-gray-900">{displayBoolean(medicalHistoryData.immunizations[key])}</span>
-                </div>
-              ))}
-            </div>
-            <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 mt-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Otras vacunas</p>
-              <p className="mt-1 text-sm text-gray-900 whitespace-pre-wrap">{displayValue(medicalHistoryData.immunizations.otherImmunization)}</p>
-            </div>
-          </section>
-
-          <section>
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Historia Ginecológica</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {gynecologicalFields.map(({ key, label }) => (
-                <div key={key} className="rounded-lg border border-gray-200 bg-gray-50 p-3">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">{label}</p>
-                  <p className="mt-1 text-sm text-gray-900">{displayValue(medicalHistoryData.gynecological[key])}</p>
-                </div>
-              ))}
-            </div>
-          </section>
-
-          <section>
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Estilo de Vida</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {lifestyleFields.map(({ key, label }) => (
-                <div key={key} className="rounded-lg border border-gray-200 bg-gray-50 p-3">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">{label}</p>
-                  <p className="mt-1 text-sm text-gray-900">{displayValue(medicalHistoryData.lifestyle[key])}</p>
-                </div>
-              ))}
-            </div>
-          </section>
-
-          <section>
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Antecedentes Clínicos</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {clinicalBackgroundFields.map(({ key, label }) => (
-                <div key={key} className="rounded-lg border border-gray-200 bg-gray-50 p-3">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">{label}</p>
-                  <p className="mt-1 text-sm text-gray-900 whitespace-pre-wrap">{displayValue(medicalHistoryData.clinicalBackground[key])}</p>
-                </div>
-              ))}
-            </div>
-          </section>
-
-          <section>
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Alteraciones</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {alterationOptions.map(({ key, label }) => (
-                <div key={key} className="flex items-center justify-between rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
-                  <span className="text-sm text-gray-700">{label}</span>
-                  <span className="text-sm font-medium text-gray-900">{displayBoolean(medicalHistoryData.alterations[key])}</span>
-                </div>
-              ))}
-            </div>
-          </section>
-
-          <section>
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Enfermedades</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {diseaseOptions.map(({ key, label }) => (
-                <div key={key} className="rounded-lg border border-gray-200 bg-gray-50 p-3">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">{label}</p>
-                  <p className="mt-1 text-sm text-gray-900 whitespace-pre-wrap">{displayValue(medicalHistoryData.diseases[key])}</p>
-                </div>
-              ))}
-            </div>
-          </section>
-
-          <div className="flex justify-end">
-            <Button type="button" variant="secondary" onClick={() => setIsViewHistoryModalOpen(false)}>
-              Cerrar
-            </Button>
-          </div>
-        </div>
-      </Modal>
+        data={medicalHistoryData}
+        isLoading={isLoadingHistory}
+        errorMessage={historyError}
+      />
 
       {/* Medical History Update Modal */}
       <Modal
         isOpen={isHistoryModalOpen}
-        onClose={() => setIsHistoryModalOpen(false)}
+        onClose={handleCloseHistoryModal}
         title="Update Medical History"
         size="xl"
       >
         <form onSubmit={handleHistorySubmit} className="space-y-6">
+          {saveError && (
+            <div className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
+              {saveError}
+            </div>
+          )}
           <div>
             <h3 className="text-lg font-medium text-gray-900 mb-4">Identificación</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -2219,12 +2703,13 @@ export const MedicalHistory: React.FC = () => {
             <Button
               type="button"
               variant="outline"
-              onClick={() => setIsHistoryModalOpen(false)}
+              onClick={handleCloseHistoryModal}
+              disabled={isSavingHistory}
             >
               Cancelar
             </Button>
-            <Button type="submit">
-              Guardar Historia Médica
+            <Button type="submit" disabled={isSavingHistory}>
+              {isSavingHistory ? 'Guardando...' : 'Guardar Historia Médica'}
             </Button>
           </div>
         </form>
