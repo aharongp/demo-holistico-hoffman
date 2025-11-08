@@ -20,7 +20,7 @@ interface ChartProps {
   title: string;
   data: any[];
   type: 'line' | 'pie' | 'bar';
-  dataKey?: string;
+  dataKey?: string | string[];
   xAxisKey?: string;
   colors?: string[];
   layout?: 'horizontal' | 'vertical';
@@ -256,11 +256,14 @@ export const Chart: React.FC<ChartProps> = ({
 
   const barCategoryGap = isVerticalLayout ? (isCompactVertical ? 28 : 18) : undefined;
   const barSize = isVerticalLayout ? (isCompactVertical ? 26 : 18) : undefined;
-  const plotRightBoundary = containerWidth ? containerWidth - chartMargin.right : undefined;
 
   const renderChart = () => {
     switch (type) {
-      case 'line':
+      case 'line': {
+        const resolvedKeys = Array.isArray(dataKey)
+          ? dataKey.filter((key): key is string => typeof key === 'string' && key.length > 0)
+          : [dataKey];
+
         return (
           <ResponsiveContainer width="100%" height={250}>
             <LineChart data={data}>
@@ -268,12 +271,24 @@ export const Chart: React.FC<ChartProps> = ({
               <XAxis dataKey={xAxisKey} fontSize={12} />
               <YAxis fontSize={12} />
               <Tooltip />
-              <Line type="monotone" dataKey={dataKey} stroke={colors[0]} strokeWidth={2} />
+              {resolvedKeys.map((key, index) => (
+                <Line
+                  key={key}
+                  type="monotone"
+                  dataKey={key}
+                  stroke={colors[index % colors.length]}
+                  strokeWidth={2}
+                />
+              ))}
             </LineChart>
           </ResponsiveContainer>
         );
+      }
       
       case 'pie':
+        const resolvedPieKey = Array.isArray(dataKey) ? dataKey[0] : dataKey;
+        const pieDataKey = typeof resolvedPieKey === 'string' && resolvedPieKey.length > 0 ? resolvedPieKey : 'value';
+
         return (
           <ResponsiveContainer width="100%" height={250}>
             <PieChart>
@@ -285,7 +300,7 @@ export const Chart: React.FC<ChartProps> = ({
                 label={({ name, percent = 0 }) => `${name} ${(percent * 100).toFixed(0)}%`}
                 outerRadius={60}
                 fill="#8884d8"
-                dataKey={dataKey}
+                dataKey={pieDataKey}
                 fontSize={10}
               >
                 {data.map((_, index) => (
@@ -298,6 +313,9 @@ export const Chart: React.FC<ChartProps> = ({
         );
       
       case 'bar': {
+        const resolvedBarKey = Array.isArray(dataKey) ? dataKey[0] : dataKey;
+        const barDataKey = typeof resolvedBarKey === 'string' && resolvedBarKey.length > 0 ? resolvedBarKey : 'value';
+
         return (
           <ResponsiveContainer width="100%" height={chartHeight}>
             <BarChart
@@ -340,7 +358,7 @@ export const Chart: React.FC<ChartProps> = ({
               )}
               <Tooltip />
               <Bar
-                dataKey={dataKey}
+                dataKey={barDataKey}
                 fill={colors[0]}
                 radius={isVerticalLayout ? [4, 4, 4, 4] : 0}
                 barSize={barSize}
@@ -360,7 +378,7 @@ export const Chart: React.FC<ChartProps> = ({
                       } = props ?? {};
 
                       const labelValue = value === undefined || value === null ? '' : String(value);
-                      const countRaw = typeof dataKey === 'string' ? payload?.[dataKey] : undefined;
+                      const countRaw = payload?.[barDataKey];
                       const parsedCount =
                         typeof countRaw === 'number'
                           ? countRaw
