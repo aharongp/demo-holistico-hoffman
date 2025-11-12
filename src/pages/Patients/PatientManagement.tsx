@@ -32,6 +32,7 @@ export const PatientManagement: React.FC = () => {
   const [historyData, setHistoryData] = useState<MedicalHistoryData>(createInitialMedicalHistory());
   const [historyError, setHistoryError] = useState<string | null>(null);
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -49,6 +50,7 @@ export const PatientManagement: React.FC = () => {
   );
 
   const handleOpenModal = (patient?: Patient) => {
+    setFormError(null);
     if (patient) {
       setEditingPatient(patient);
       setFormData({
@@ -80,10 +82,14 @@ export const PatientManagement: React.FC = () => {
     setIsAssignModalOpen(true);
   };
 
-  const handleAssignProgram = (programId: string) => {
+  const handleAssignProgram = async (programId: string) => {
     if (!selectedPatientForAssign) return;
-    updatePatient(selectedPatientForAssign.id, { programId });
-    setIsAssignModalOpen(false);
+    try {
+      await updatePatient(selectedPatientForAssign.id, { programId });
+      setIsAssignModalOpen(false);
+    } catch (error) {
+      console.error('Failed to assign program to patient', error);
+    }
   };
 
   const handleOpenHistoryModal = async (patient: Patient) => {
@@ -140,8 +146,9 @@ export const PatientManagement: React.FC = () => {
     setHistoryData(createInitialMedicalHistory());
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setFormError(null);
     
     const patientData = {
       ...formData,
@@ -150,18 +157,31 @@ export const PatientManagement: React.FC = () => {
       isActive: true,
     };
 
-    if (editingPatient) {
-      updatePatient(editingPatient.id, patientData);
-    } else {
-      addPatient(patientData);
+    try {
+      if (editingPatient) {
+        await updatePatient(editingPatient.id, patientData);
+      } else {
+        await addPatient(patientData);
+      }
+
+      setIsModalOpen(false);
+    } catch (error) {
+      console.error('Failed to save patient', error);
+      setFormError(
+        error instanceof Error
+          ? error.message
+          : 'No se pudo guardar el paciente. Intenta nuevamente.',
+      );
     }
-    
-    setIsModalOpen(false);
   };
 
-  const handleDelete = (patientId: string) => {
+  const handleDelete = async (patientId: string) => {
     if (confirm('Are you sure you want to delete this patient?')) {
-      deletePatient(patientId);
+      try {
+        await deletePatient(patientId);
+      } catch (error) {
+        console.error('Failed to delete patient', error);
+      }
     }
   };
 
@@ -305,11 +325,18 @@ export const PatientManagement: React.FC = () => {
 
       <Modal
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
+        onClose={() => {
+          setIsModalOpen(false);
+          setFormError(null);
+        }}
         title={editingPatient ? 'Edit Patient' : 'Add New Patient'}
         size="lg"
       >
         <form onSubmit={handleSubmit} className="space-y-4">
+          {formError && (
+            <p className="text-sm text-red-600">{formError}</p>
+          )}
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">

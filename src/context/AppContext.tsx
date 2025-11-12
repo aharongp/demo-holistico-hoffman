@@ -464,9 +464,9 @@ interface AppContextType {
   dashboardStats: DashboardStats;
   
   // Actions
-  addPatient: (patient: Omit<Patient, 'id' | 'createdAt'>) => void;
-  updatePatient: (id: string, patient: Partial<Patient>) => void;
-  deletePatient: (id: string) => void;
+  addPatient: (patient: Omit<Patient, 'id' | 'createdAt'>) => Promise<Patient>;
+  updatePatient: (id: string, patient: Partial<Patient>) => Promise<void>;
+  deletePatient: (id: string) => Promise<void>;
   
   addInstrument: (instrument: Omit<Instrument, 'id' | 'createdAt'>) => Promise<Instrument>;
   updateInstrument: (id: string, instrument: Partial<Instrument>) => Promise<Instrument | null>;
@@ -617,7 +617,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [dashboardStats, setDashboardStats] = useState<DashboardStats>(mockDashboardStats);
 
   const apiBase = (import.meta as any).env?.VITE_API_BASE ?? 'http://localhost:3000';
-  const { user } = useAuth();
+  const { user, token } = useAuth();
 
   useEffect(() => {
     instrumentsRef.current = instruments;
@@ -1061,79 +1061,107 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   }, [apiBase]);
 
   const addPatient = useCallback(async (patientData: Omit<Patient, 'id' | 'createdAt'>) => {
-    try {
-      const payload = {
-        nombres: patientData.firstName,
-        apellidos: patientData.lastName,
-        contacto_correo: patientData.email,
-        fecha_nacimiento: patientData.dateOfBirth?.toISOString?.() ?? null,
-        genero: patientData.gender,
-        telefono: patientData.phone,
-        direccion: patientData.address,
-        id_programa: patientData.programId ? Number(patientData.programId) : null,
-        activo: patientData.isActive ? 1 : 0,
-      };
-      const res = await fetch(`${apiBase}/patient`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      if (!res.ok) throw new Error(`Failed to create patient: ${res.status}`);
-      const created = await res.json();
-      setPatients(prev => [...prev, mapPacienteToPatient(created)]);
-    } catch (err) {
-      console.error('Create patient failed, applying locally', err);
-      // fallback local create
-      const newPatient: Patient = {
-        ...patientData,
-        id: Date.now().toString(),
-        createdAt: new Date(),
-      };
-      setPatients(prev => [...prev, newPatient]);
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
     }
-  }, [apiBase]);
+
+    const payload = {
+      nombres: patientData.firstName,
+      apellidos: patientData.lastName,
+      contacto_correo: patientData.email,
+      fecha_nacimiento: patientData.dateOfBirth?.toISOString?.() ?? null,
+      genero: patientData.gender,
+      telefono: patientData.phone,
+      direccion: patientData.address,
+      id_programa: patientData.programId ? Number(patientData.programId) : null,
+      activo: patientData.isActive ? 1 : 0,
+      user_role: 'patient',
+    };
+
+    const response = await fetch(`${apiBase}/patient`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const errorBody = await response.json().catch(() => null);
+      const message = errorBody?.message ?? errorBody?.error ?? `No se pudo crear el paciente (status ${response.status})`;
+      throw new Error(Array.isArray(message) ? message.join(', ') : message);
+    }
+
+    const created = await response.json();
+    const mapped = mapPacienteToPatient(created);
+    setPatients(prev => [...prev, mapped]);
+    return mapped;
+  }, [apiBase, token]);
 
   const updatePatient = useCallback(async (id: string, patientData: Partial<Patient>) => {
-    try {
-      const payload: any = {};
-      if (patientData.firstName) payload.nombres = patientData.firstName;
-      if (patientData.lastName) payload.apellidos = patientData.lastName;
-      if (patientData.email) payload.contacto_correo = patientData.email;
-      if (patientData.dateOfBirth) payload.fecha_nacimiento = (patientData.dateOfBirth as Date).toISOString();
-      if (patientData.gender) payload.genero = patientData.gender;
-      if (patientData.phone) payload.telefono = patientData.phone;
-      if (patientData.address) payload.direccion = patientData.address;
-      if (typeof patientData.isActive !== 'undefined') payload.activo = patientData.isActive ? 1 : 0;
-      if (patientData.programId) {
-        // If programId looks numeric, send number; otherwise send as-is (backend may accept string ids)
-        const maybeNum = Number(patientData.programId);
-        payload.id_programa = Number.isNaN(maybeNum) ? patientData.programId : maybeNum;
+    const payload: Record<string, unknown> = {};
+    if (patientData.firstName) payload.nombres = patientData.firstName;
+    if (patientData.lastName) payload.apellidos = patientData.lastName;
+    if (patientData.email) payload.contacto_correo = patientData.email;
+    if (patientData.dateOfBirth) {
+      const date = patientData.dateOfBirth instanceof Date ? patientData.dateOfBirth : new Date(patientData.dateOfBirth);
+      if (!Number.isNaN(date.getTime())) {
+        payload.fecha_nacimiento = date.toISOString();
       }
-
-      const res = await fetch(`${apiBase}/patient/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      if (!res.ok) throw new Error(`Failed to update patient: ${res.status}`);
-      const updated = await res.json();
-      setPatients(prev => prev.map(p => p.id === id ? mapPacienteToPatient(updated) : p));
-    } catch (err) {
-      console.error('Update patient failed, applying locally', err);
-      setPatients(prev => prev.map(p => p.id === id ? { ...p, ...patientData } as Patient : p));
     }
-  }, [apiBase]);
+    if (patientData.gender) payload.genero = patientData.gender;
+    if (patientData.phone) payload.telefono = patientData.phone;
+    if (patientData.address) payload.direccion = patientData.address;
+    if (typeof patientData.isActive !== 'undefined') payload.activo = patientData.isActive ? 1 : 0;
+    if (Object.prototype.hasOwnProperty.call(patientData, 'programId')) {
+      const programValue = patientData.programId;
+      if (programValue === null) {
+        payload.id_programa = null;
+      } else if (typeof programValue !== 'undefined') {
+        const maybeNum = Number(programValue);
+        payload.id_programa = Number.isNaN(maybeNum) ? programValue : maybeNum;
+      }
+    }
+
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+
+    const res = await fetch(`${apiBase}/patient/${id}`, {
+      method: 'PATCH',
+      headers,
+      body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) {
+      const errorBody = await res.json().catch(() => null);
+      const message = errorBody?.message ?? errorBody?.error ?? `No se pudo actualizar el paciente (status ${res.status})`;
+      throw new Error(Array.isArray(message) ? message.join(', ') : message);
+    }
+
+    const updated = await res.json();
+    setPatients(prev => prev.map(p => (p.id === id ? mapPacienteToPatient(updated) : p)));
+  }, [apiBase, token]);
 
   const deletePatient = useCallback(async (id: string) => {
-    try {
-      const res = await fetch(`${apiBase}/patient/${id}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error(`Failed to delete patient: ${res.status}`);
-      setPatients(prev => prev.filter(p => p.id !== id));
-    } catch (err) {
-      console.error('Delete patient failed, removing locally', err);
-      setPatients(prev => prev.filter(p => p.id !== id));
+    const headers: Record<string, string> = {};
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
     }
-  }, [apiBase]);
+
+    const res = await fetch(`${apiBase}/patient/${id}`, { method: 'DELETE', headers });
+
+    if (!res.ok) {
+      const errorBody = await res.json().catch(() => null);
+      const message = errorBody?.message ?? errorBody?.error ?? `No se pudo eliminar el paciente (status ${res.status})`;
+      throw new Error(Array.isArray(message) ? message.join(', ') : message);
+    }
+
+    setPatients(prev => prev.filter(p => p.id !== id));
+  }, [apiBase, token]);
 
   const addInstrument = useCallback(async (instrumentData: Omit<Instrument, 'id' | 'createdAt'>): Promise<Instrument> => {
     const normalizeNumber = (value: unknown): number | null => {
