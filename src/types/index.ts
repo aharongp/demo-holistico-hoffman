@@ -140,7 +140,14 @@ export interface EvolutionEntry {
   attachments?: FileAttachment[];
 }
 
-export type VitalSource = 'consultation' | 'pulse' | 'glycemia' | 'heart_rate';
+export type VitalSource =
+  | 'consultation'
+  | 'pulse'
+  | 'glycemia'
+  | 'heart_rate'
+  | 'weight'
+  | 'body_mass'
+  | 'blood_pressure';
 
 export interface BaseVitalRecord {
   id: number;
