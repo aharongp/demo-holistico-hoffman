@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import { Plus, Edit, Trash2, Search, Eye } from 'lucide-react';
 import { Card } from '../../components/UI/Card';
 import { Button } from '../../components/UI/Button';
@@ -21,7 +21,7 @@ export const PatientManagement: React.FC = () => {
   const { patients, addPatient, updatePatient, deletePatient, programs } = useApp();
   const { token } = useAuth();
   const { isAdmin } = usePermissions();
-  const apiBase = useMemo(() => (import.meta as any).env?.VITE_API_BASE ?? 'http://localhost:3000', []);
+  const apiBase = (import.meta as any).env?.VITE_API_BASE ?? 'http://localhost:3000';
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
@@ -63,7 +63,6 @@ export const PatientManagement: React.FC = () => {
         address: patient.address || '',
       });
     } else {
-      setEditingPatient(null);
       setFormData({
         firstName: '',
         lastName: '',
@@ -111,23 +110,22 @@ export const PatientManagement: React.FC = () => {
     setIsHistoryLoading(true);
 
     try {
-      const response = await fetch(`${apiBase}/patient/user/${patient.userId}/history`, {
+      const res = await fetch(`${apiBase}/patient/user/${patient.userId}/history`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
       });
-      
 
-      if (response.status === 404) {
+      if (res.status === 404) {
         setHistoryError('El paciente aún no registra una historia médica.');
         return;
       }
 
-      if (!response.ok) {
-        throw new Error(`Failed to fetch medical history (${response.status})`);
+      if (!res.ok) {
+        throw new Error(`Failed to fetch medical history (${res.status})`);
       }
 
-      const payload = await response.json() as RemotePatientMedicalHistory | null;
+      const payload = await res.json() as RemotePatientMedicalHistory | null;
       const mappedHistory = mapRemoteMedicalHistoryToState(payload);
       setHistoryData(mappedHistory);
     } catch (error) {
@@ -149,7 +147,7 @@ export const PatientManagement: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError(null);
-    
+
     const patientData = {
       ...formData,
       dateOfBirth: new Date(formData.dateOfBirth),

@@ -39,13 +39,7 @@ const PROGRESS_DATA = [
   { name: 'Week 6', value: 85 },
 ];
 
-const sanitizeApiBase = (value: unknown): string => {
-  if (typeof value !== 'string' || !value.trim()) {
-    return 'http://localhost:3000';
-  }
-
-  return value.replace(/\/+$/, '');
-};
+const sanitizeApiBase = (value: string): string => value.replace(/\/+$/, '');
 
 const parseNumericId = (value: unknown): number | null => {
   if (value === null || typeof value === 'undefined') {
@@ -110,7 +104,8 @@ export const PatientDashboard: React.FC = () => {
   const [instrumentsError, setInstrumentsError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
 
-  const apiBase = useMemo(() => sanitizeApiBase((import.meta as any)?.env?.VITE_API_BASE), []);
+  const apiBase = (import.meta as any).env?.VITE_API_BASE ?? 'http://localhost:3000';
+  const normalizedApiBase = useMemo(() => sanitizeApiBase(apiBase), [apiBase]);
   const storedUserId = useMemo(() => readStoredUserId(), []);
   const resolvedUserId = useMemo(() => {
     const contextId = parseNumericId(user?.id ?? (user as { userId?: number } | null)?.userId);
@@ -186,18 +181,18 @@ export const PatientDashboard: React.FC = () => {
     setInstrumentsError(null);
 
     try {
-      const response = await fetch(`${apiBase}/patient-instruments/user/${resolvedUserId}`, {
+      const res = await fetch(`${normalizedApiBase}/patient-instruments/user/${resolvedUserId}`, {
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
       });
 
-      if (!response.ok) {
-        throw new Error(`Error al obtener instrumentos (${response.status})`);
+      if (!res.ok) {
+        throw new Error(`Error al obtener instrumentos (${res.status})`);
       }
 
-      const payload: BackendPatientInstrumentAssignment[] = await response.json();
+      const payload: BackendPatientInstrumentAssignment[] = await res.json();
       setAssignments(payload);
       setLastUpdated(new Date().toISOString());
     } catch (error) {
@@ -208,7 +203,7 @@ export const PatientDashboard: React.FC = () => {
     } finally {
       setIsLoadingInstruments(false);
     }
-  }, [apiBase, resolvedUserId, token]);
+  }, [normalizedApiBase, resolvedUserId, token]);
 
   useEffect(() => {
     if (!token) {

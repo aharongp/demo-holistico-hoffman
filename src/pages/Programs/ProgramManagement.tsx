@@ -21,6 +21,7 @@ export const ProgramManagement: React.FC = () => {
     instruments: [] as string[],
   });
   const navigate = useNavigate();
+  const apiBase = (import.meta as any).env?.VITE_API_BASE ?? 'http://localhost:3000';
 
   const filteredPrograms = programs.filter(program =>
     (program.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -101,11 +102,14 @@ export const ProgramManagement: React.FC = () => {
   };
 
   useEffect(() => {
-    const base = import.meta.env.VITE_API_BASE ?? 'http://localhost:3000';
-    fetch(`${base}/programs`)
-      .then(res => res.json())
-      .then((data) => {
-        // map backend shape to frontend Program type if necessary
+    const loadPrograms = async () => {
+      try {
+        const res = await fetch(`${apiBase}/programs`);
+        if (!res.ok) {
+          throw new Error(`Failed to fetch programs (${res.status})`);
+        }
+
+        const data = await res.json();
         const mapped: Program[] = (data || []).map((p: any) => {
           const createdAt = p.created_at ? new Date(p.created_at) : new Date();
           const updatedAt = p.updated_at ? new Date(p.updated_at) : (p.updatedAt ? new Date(p.updatedAt) : createdAt);
@@ -121,12 +125,14 @@ export const ProgramManagement: React.FC = () => {
           };
         });
         setPrograms(mapped);
-      })
-      .catch(() => {
-        // keep context programs as fallback
+      } catch (error) {
+        console.error('Failed to load programs from API, using context fallback.', error);
         setPrograms(ctxPrograms);
-      });
-  }, [ctxPrograms]);
+      }
+    };
+
+    void loadPrograms();
+  }, [apiBase, ctxPrograms]);
 
   const columns = [
     {

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Upload, File, Download, Trash2, Plus, Edit, Eye } from 'lucide-react';
 import { Card } from '../../components/UI/Card';
 import { Button } from '../../components/UI/Button';
@@ -1459,7 +1459,7 @@ export const MedicalHistoryViewModal: React.FC<MedicalHistoryViewModalProps> = (
 
 export const MedicalHistory: React.FC = () => {
   const { user, token } = useAuth();
-  const apiBase = useMemo(() => (import.meta as any).env?.VITE_API_BASE ?? 'http://localhost:3000', []);
+  const apiBase = (import.meta as any).env?.VITE_API_BASE ?? 'http://localhost:3000';
   const [files, setFiles] = useState<MedicalFile[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
@@ -1481,7 +1481,7 @@ export const MedicalHistory: React.FC = () => {
       }
 
       try {
-        const response = await fetch(`${apiBase}/patient/user/${user.id}/attachments`, {
+        const res = await fetch(`${apiBase}/patient/user/${user.id}/attachments`, {
           method: 'GET',
           headers: {
             Authorization: `Bearer ${token}`,
@@ -1489,18 +1489,18 @@ export const MedicalHistory: React.FC = () => {
           signal: abortSignal,
         });
 
-        if (response.status === 204 || response.status === 404) {
+        if (res.status === 204 || res.status === 404) {
           return [];
         }
 
-        if (!response.ok) {
-          throw new Error(`Failed to fetch medical attachments (${response.status})`);
+        if (!res.ok) {
+          throw new Error(`Failed to fetch medical attachments (${res.status})`);
         }
 
         let payload: unknown;
 
         try {
-          payload = await response.json();
+          payload = await res.json();
         } catch (parseError) {
           throw new Error('Failed to parse medical attachments response');
         }
@@ -1542,7 +1542,7 @@ export const MedicalHistory: React.FC = () => {
       setHistoryError(null);
 
       try {
-        const historyPromise = fetch(`${apiBase}/patient/user/${user.id}/history`, {
+        const res = await fetch(`${apiBase}/patient/user/${user.id}/history`, {
           method: 'GET',
           headers: {
             Authorization: `Bearer ${token}`,
@@ -1550,12 +1550,10 @@ export const MedicalHistory: React.FC = () => {
           signal: controller.signal,
         });
 
-        const attachmentsPromise = fetchAttachments(controller.signal);
-
-        const [response, attachments] = await Promise.all([historyPromise, attachmentsPromise]);
+        const attachments = await fetchAttachments(controller.signal);
         const mappedAttachments = mapRemoteAttachmentsToFiles(attachments);
 
-        if (response.status === 404) {
+        if (res.status === 404) {
           if (!cancelled) {
             setMedicalHistoryData(createInitialMedicalHistory());
             setFiles(mappedAttachments);
@@ -1563,11 +1561,11 @@ export const MedicalHistory: React.FC = () => {
           return;
         }
 
-        if (!response.ok) {
-          throw new Error(`Failed to fetch medical history (${response.status})`);
+        if (!res.ok) {
+          throw new Error(`Failed to fetch medical history (${res.status})`);
         }
 
-        const payload = (await response.json()) as RemotePatientMedicalHistory | null;
+        const payload = (await res.json()) as RemotePatientMedicalHistory | null;
 
         if (!cancelled) {
           const mappedHistory = mapRemoteMedicalHistoryToState(payload);
@@ -1650,18 +1648,18 @@ export const MedicalHistory: React.FC = () => {
     let shouldFallback = false;
 
     try {
-      const response = await fetch(downloadUrl, {
+      const res = await fetch(downloadUrl, {
         method: 'GET',
         headers: {
           Authorization: `Bearer ${token}`,
         },
       });
 
-      if (!response.ok) {
-        throw new Error(`Failed to download file (${response.status})`);
+      if (!res.ok) {
+        throw new Error(`Failed to download file (${res.status})`);
       }
 
-      const blob = await response.blob();
+      const blob = await res.blob();
       const blobUrl = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = blobUrl;
@@ -1735,7 +1733,7 @@ export const MedicalHistory: React.FC = () => {
 
     try {
       const payload = buildUpdatePayload(medicalHistoryData);
-      const response = await fetch(`${apiBase}/patient/user/${user.id}/history`, {
+      const res = await fetch(`${apiBase}/patient/user/${user.id}/history`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -1744,11 +1742,11 @@ export const MedicalHistory: React.FC = () => {
         body: JSON.stringify(payload),
       });
 
-      if (!response.ok) {
-        throw new Error(`Failed to update medical history (${response.status})`);
+      if (!res.ok) {
+        throw new Error(`Failed to update medical history (${res.status})`);
       }
 
-      const updated = (await response.json()) as RemotePatientMedicalHistory | null;
+      const updated = (await res.json()) as RemotePatientMedicalHistory | null;
       const mappedHistory = mapRemoteMedicalHistoryToState(updated);
       let mappedFiles = mapRemoteAttachmentsToFiles(updated?.attachments);
 

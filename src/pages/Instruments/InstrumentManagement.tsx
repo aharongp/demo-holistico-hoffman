@@ -132,7 +132,7 @@ export const InstrumentManagement: React.FC = () => {
     type.name.toLowerCase().includes(typeSearch.toLowerCase()),
   );
 
-  const apiBase = useMemo(() => (import.meta as any).env?.VITE_API_BASE ?? 'http://localhost:3000', []);
+  const apiBase = (import.meta as any).env?.VITE_API_BASE ?? 'http://localhost:3000';
 
   const resourceAuthor = useMemo(() => {
     if (!currentUser) return null;
@@ -196,13 +196,13 @@ export const InstrumentManagement: React.FC = () => {
       setSubjectsLoading(true);
       setSubjectsError(null);
       try {
-        const response = await fetch(`${apiBase}/subjects`);
-        if (!response.ok) {
-          const message = `Failed to fetch subjects (status ${response.status})`;
+        const res = await fetch(`${apiBase}/subjects`);
+        if (!res.ok) {
+          const message = `Failed to fetch subjects (status ${res.status})`;
           throw new Error(message);
         }
 
-        const payload = await response.json();
+        const payload = await res.json();
         if (cancelled) return;
 
         const parsed = Array.isArray(payload)
@@ -233,13 +233,13 @@ export const InstrumentManagement: React.FC = () => {
       setCriteriaLoading(true);
       setCriteriaError(null);
       try {
-        const response = await fetch(`${apiBase}/criteria`);
-        if (!response.ok) {
-          const message = `Failed to fetch criteria (status ${response.status})`;
+        const res = await fetch(`${apiBase}/criteria`);
+        if (!res.ok) {
+          const message = `Failed to fetch criteria (status ${res.status})`;
           throw new Error(message);
         }
 
-        const payload = await response.json();
+        const payload = await res.json();
         if (cancelled) return;
 
         const parsed = Array.isArray(payload)
@@ -445,19 +445,19 @@ export const InstrumentManagement: React.FC = () => {
 
     try {
       const endpoint = editingSubject ? `${apiBase}/subjects/${editingSubject.id}` : `${apiBase}/subjects`;
-      const response = await fetch(endpoint, {
+      const res = await fetch(endpoint, {
         method: editingSubject ? 'PATCH' : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
 
-      if (!response.ok) {
-        const errorBody = await response.json().catch(() => null);
-        const message = errorBody?.message ?? `No se pudo ${editingSubject ? 'actualizar' : 'crear'} el tema (status ${response.status})`;
+      if (!res.ok) {
+        const errorBody = await res.json().catch(() => null);
+        const message = errorBody?.message ?? `No se pudo ${editingSubject ? 'actualizar' : 'crear'} el tema (status ${res.status})`;
         throw new Error(Array.isArray(message) ? message.join(', ') : message);
       }
 
-      const result = await response.json();
+      const result = await res.json();
       const mapped = mapSubjectFromApi(result);
 
       setSubjects((prev) => {
@@ -500,19 +500,19 @@ export const InstrumentManagement: React.FC = () => {
 
     try {
       const endpoint = editingCriterion ? `${apiBase}/criteria/${editingCriterion.id}` : `${apiBase}/criteria`;
-      const response = await fetch(endpoint, {
+      const res = await fetch(endpoint, {
         method: editingCriterion ? 'PATCH' : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
 
-      if (!response.ok) {
-        const errorBody = await response.json().catch(() => null);
-        const message = errorBody?.message ?? `No se pudo ${editingCriterion ? 'actualizar' : 'crear'} el criterio (status ${response.status})`;
+      if (!res.ok) {
+        const errorBody = await res.json().catch(() => null);
+        const message = errorBody?.message ?? `No se pudo ${editingCriterion ? 'actualizar' : 'crear'} el criterio (status ${res.status})`;
         throw new Error(Array.isArray(message) ? message.join(', ') : message);
       }
 
-      const result = await response.json();
+      const result = await res.json();
       const mapped = mapCriterionFromApi(result);
 
       setCriteria((prev) => {
@@ -538,13 +538,13 @@ export const InstrumentManagement: React.FC = () => {
 
     setSubjectsError(null);
     try {
-      const response = await fetch(`${apiBase}/subjects/${subject.id}`, {
+      const res = await fetch(`${apiBase}/subjects/${subject.id}`, {
         method: 'DELETE',
       });
 
-      if (!response.ok) {
-        const errorBody = await response.json().catch(() => null);
-        const message = errorBody?.message ?? `No se pudo eliminar el tema (status ${response.status})`;
+      if (!res.ok) {
+        const errorBody = await res.json().catch(() => null);
+        const message = errorBody?.message ?? `No se pudo eliminar el tema (status ${res.status})`;
         throw new Error(Array.isArray(message) ? message.join(', ') : message);
       }
 
@@ -561,13 +561,13 @@ export const InstrumentManagement: React.FC = () => {
 
     setCriteriaError(null);
     try {
-      const response = await fetch(`${apiBase}/criteria/${criterion.id}`, {
+      const res = await fetch(`${apiBase}/criteria/${criterion.id}`, {
         method: 'DELETE',
       });
 
-      if (!response.ok) {
-        const errorBody = await response.json().catch(() => null);
-        const message = errorBody?.message ?? `No se pudo eliminar el criterio (status ${response.status})`;
+      if (!res.ok) {
+        const errorBody = await res.json().catch(() => null);
+        const message = errorBody?.message ?? `No se pudo eliminar el criterio (status ${res.status})`;
         throw new Error(Array.isArray(message) ? message.join(', ') : message);
       }
 

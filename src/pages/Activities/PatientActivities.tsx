@@ -156,13 +156,7 @@ const readStoredUserId = (): number | null => {
   }
 };
 
-const sanitizeApiBase = (value: unknown): string => {
-  if (typeof value !== 'string' || !value.trim()) {
-    return 'http://localhost:3000';
-  }
-
-  return value.replace(/\/+$/, '');
-};
+const sanitizeApiBase = (value: string): string => value.replace(/\/+$/, '');
 
 const getStatusIcon = (status: ActivityStatus) => {
   switch (status) {
@@ -185,7 +179,8 @@ export const PatientActivities: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
 
-  const apiBase = useMemo(() => sanitizeApiBase((import.meta as any)?.env?.VITE_API_BASE), []);
+  const apiBase = (import.meta as any).env?.VITE_API_BASE ?? 'http://localhost:3000';
+  const normalizedApiBase = useMemo(() => sanitizeApiBase(apiBase), [apiBase]);
   const storedUserId = useMemo(() => readStoredUserId(), []);
   const resolvedUserId = useMemo(() => {
     const contextId = parseNumericId(user?.id ?? (user as { userId?: number } | null)?.userId);
@@ -247,18 +242,18 @@ export const PatientActivities: React.FC = () => {
     setError(null);
 
     try {
-      const response = await fetch(`${apiBase}/patient-instruments/user/${resolvedUserId}`, {
+      const res = await fetch(`${normalizedApiBase}/patient-instruments/user/${resolvedUserId}`, {
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
       });
 
-      if (!response.ok) {
-  throw new Error(`Error al obtener instrumentos (${response.status})`);
+      if (!res.ok) {
+        throw new Error(`Error al obtener instrumentos (${res.status})`);
       }
 
-      const payload: BackendPatientInstrumentAssignment[] = await response.json();
+      const payload: BackendPatientInstrumentAssignment[] = await res.json();
   const mapped = payload.map(mapAssignmentToActivity);
   mapped.sort((a, b) => resolveTimestamp(b.createdAt) - resolveTimestamp(a.createdAt));
   setActivities(mapped);
@@ -269,7 +264,7 @@ export const PatientActivities: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [apiBase, resolvedUserId, token]);
+  }, [normalizedApiBase, resolvedUserId, token]);
 
   useEffect(() => {
     if (hasAuthContext) {
