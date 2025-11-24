@@ -55,7 +55,7 @@ const navigation: NavItem[] = [
   {
     to: '/activities',
     icon: Activity,
-    label: 'Activities',
+    label: 'Instrumentos',
     roles: ['patient', 'student'],
   },
   {

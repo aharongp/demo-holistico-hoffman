@@ -1,25 +1,269 @@
-import React from 'react';
-import { Activity, Clock, TrendingUp, Calendar } from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { Activity, Clock, TrendingUp, Calendar, AlertTriangle, RefreshCw } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { StatsCard } from '../../components/Dashboard/StatsCard';
 import { Chart } from '../../components/Dashboard/Chart';
 import { Card } from '../../components/UI/Card';
 import { Button } from '../../components/UI/Button';
+import { useAuth } from '../../context/AuthContext';
+
+type BackendPatientInstrumentAssignment = {
+  id: number;
+  patientId: number | null;
+  instrumentTypeId: number | null;
+  instrumentTypeName: string | null;
+  instrumentTypeDescription: string | null;
+  assignedAt: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+  validUntil: string | null;
+  completed: boolean;
+  evaluated: boolean;
+  available: boolean;
+  availabilityRaw: string | null;
+  origin: string | null;
+  ribbonId: number | null;
+  topics: string[];
+};
+
+type InstrumentStatus = 'pending' | 'in_progress' | 'completed';
+
+const MS_IN_DAY = 1000 * 60 * 60 * 24;
+
+const PROGRESS_DATA = [
+  { name: 'Week 1', value: 65 },
+  { name: 'Week 2', value: 70 },
+  { name: 'Week 3', value: 75 },
+  { name: 'Week 4', value: 82 },
+  { name: 'Week 5', value: 78 },
+  { name: 'Week 6', value: 85 },
+];
+
+const sanitizeApiBase = (value: unknown): string => {
+  if (typeof value !== 'string' || !value.trim()) {
+    return 'http://localhost:3000';
+  }
+
+  return value.replace(/\/+$/, '');
+};
+
+const parseNumericId = (value: unknown): number | null => {
+  if (value === null || typeof value === 'undefined') {
+    return null;
+  }
+
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : null;
+};
+
+const readStoredUserId = (): number | null => {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  try {
+    const raw = window.localStorage.getItem('hoffman_user');
+    if (!raw) {
+      return null;
+    }
+
+    const parsed = JSON.parse(raw);
+    return parseNumericId(parsed?.id ?? parsed?.userId ?? null);
+  } catch (error) {
+    console.warn('No fue posible obtener el usuario almacenado', error);
+    return null;
+  }
+};
+
+const resolveTimestamp = (value: string | null): number => {
+  if (!value) {
+    return Number.NEGATIVE_INFINITY;
+  }
+
+  const parsed = new Date(value);
+  const timestamp = parsed.getTime();
+  return Number.isNaN(timestamp) ? Number.NEGATIVE_INFINITY : timestamp;
+};
+
+const resolveStatus = (assignment: BackendPatientInstrumentAssignment): InstrumentStatus => {
+  if (assignment.completed || assignment.evaluated) {
+    return 'completed';
+  }
+
+  const availability = assignment.availabilityRaw?.toLowerCase() ?? '';
+  if (availability.includes('progreso') || availability.includes('progress') || availability.includes('curso')) {
+    return 'in_progress';
+  }
+
+  if (assignment.available) {
+    return 'pending';
+  }
+
+  return 'pending';
+};
 
 export const PatientDashboard: React.FC = () => {
-  const progressData = [
-    { name: 'Week 1', value: 65 },
-    { name: 'Week 2', value: 70 },
-    { name: 'Week 3', value: 75 },
-    { name: 'Week 4', value: 82 },
-    { name: 'Week 5', value: 78 },
-    { name: 'Week 6', value: 85 },
-  ];
+  const navigate = useNavigate();
+  const { user, token } = useAuth();
+  const [assignments, setAssignments] = useState<BackendPatientInstrumentAssignment[]>([]);
+  const [isLoadingInstruments, setIsLoadingInstruments] = useState(false);
+  const [instrumentsError, setInstrumentsError] = useState<string | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<string | null>(null);
 
-  const upcomingActivities = [
-    { id: '1', name: 'Anxiety Assessment', dueDate: 'Tomorrow', type: 'psychological' },
-    { id: '2', name: 'Daily Mood Check', dueDate: 'Today', type: 'health' },
-    { id: '3', name: 'Stress Management', dueDate: 'In 3 days', type: 'attitudinal' },
-  ];
+  const apiBase = useMemo(() => sanitizeApiBase((import.meta as any)?.env?.VITE_API_BASE), []);
+  const storedUserId = useMemo(() => readStoredUserId(), []);
+  const resolvedUserId = useMemo(() => {
+    const contextId = parseNumericId(user?.id ?? (user as { userId?: number } | null)?.userId);
+    if (contextId !== null) {
+      return contextId;
+    }
+    return storedUserId;
+  }, [storedUserId, user?.id]);
+
+  const shortDateFormatter = useMemo(() => new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium' }), []);
+  const dateTimeFormatter = useMemo(
+    () => new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium', timeStyle: 'short' }),
+    [],
+  );
+
+  const formatAbsoluteDueDate = useCallback(
+    (value: string) => {
+      const parsed = new Date(value);
+      if (Number.isNaN(parsed.getTime())) {
+        return 'Fecha inválida';
+      }
+      return shortDateFormatter.format(parsed);
+    },
+    [shortDateFormatter],
+  );
+
+  const formatRelativeDueDate = useCallback((value: string) => {
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) {
+      return 'Fecha inválida';
+    }
+
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const dueStart = new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
+    const diffDays = Math.round((dueStart.getTime() - todayStart.getTime()) / MS_IN_DAY);
+
+    if (diffDays === 0) {
+      return 'Vence hoy';
+    }
+    if (diffDays === 1) {
+      return 'Vence mañana';
+    }
+    if (diffDays > 1) {
+      return `En ${diffDays} días`;
+    }
+    if (diffDays === -1) {
+      return 'Venció ayer';
+    }
+    return `Venció hace ${Math.abs(diffDays)} días`;
+  }, []);
+
+  const formatUpdatedAt = useCallback(
+    (value: string | null) => {
+      if (!value) {
+        return null;
+      }
+      const parsed = new Date(value);
+      if (Number.isNaN(parsed.getTime())) {
+        return null;
+      }
+      return dateTimeFormatter.format(parsed);
+    },
+    [dateTimeFormatter],
+  );
+
+  const loadInstruments = useCallback(async () => {
+    if (!token || resolvedUserId === null) {
+      return;
+    }
+
+    setIsLoadingInstruments(true);
+    setInstrumentsError(null);
+
+    try {
+      const response = await fetch(`${apiBase}/patient-instruments/user/${resolvedUserId}`, {
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Error al obtener instrumentos (${response.status})`);
+      }
+
+      const payload: BackendPatientInstrumentAssignment[] = await response.json();
+      setAssignments(payload);
+      setLastUpdated(new Date().toISOString());
+    } catch (error) {
+      console.error('Error fetching patient instruments for dashboard', error);
+      setAssignments([]);
+      setLastUpdated(null);
+      setInstrumentsError('No fue posible cargar los instrumentos. Intenta nuevamente más tarde.');
+    } finally {
+      setIsLoadingInstruments(false);
+    }
+  }, [apiBase, resolvedUserId, token]);
+
+  useEffect(() => {
+    if (!token) {
+      setAssignments([]);
+      setLastUpdated(null);
+      setInstrumentsError('No hay una sesión activa.');
+      return;
+    }
+
+    if (resolvedUserId === null) {
+      setAssignments([]);
+      setLastUpdated(null);
+      setInstrumentsError('No se encontró un paciente asociado al usuario actual.');
+      return;
+    }
+
+    void loadInstruments();
+  }, [token, resolvedUserId, loadInstruments]);
+
+  const pendingInstrumentCount = useMemo(
+    () => assignments.filter((assignment) => !assignment.completed && !assignment.evaluated).length,
+    [assignments],
+  );
+
+  const expiringInstruments = useMemo(() => {
+    const now = Date.now();
+
+    return assignments
+      .filter((assignment) => !assignment.completed && !assignment.evaluated && Boolean(assignment.validUntil))
+      .map((assignment) => {
+        const due = assignment.validUntil as string;
+        const dueTimestamp = resolveTimestamp(due);
+        const status = resolveStatus(assignment);
+
+        return {
+          id: assignment.id,
+          name: assignment.instrumentTypeName ?? `Instrumento #${assignment.instrumentTypeId ?? assignment.id}`,
+          description: assignment.instrumentTypeDescription ?? assignment.origin ?? null,
+          dueTimestamp,
+          dueDate: due,
+          dueLabel: formatAbsoluteDueDate(due),
+          relativeLabel: formatRelativeDueDate(due),
+          available: assignment.available,
+          status,
+          isOverdue: dueTimestamp !== Number.NEGATIVE_INFINITY && dueTimestamp < now,
+        };
+      })
+      .filter((instrument) => instrument.dueTimestamp !== Number.NEGATIVE_INFINITY)
+      .sort((a, b) => a.dueTimestamp - b.dueTimestamp)
+      .slice(0, 3);
+  }, [assignments, formatAbsoluteDueDate, formatRelativeDueDate]);
+
+  const handleRefresh = useCallback(() => {
+    void loadInstruments();
+  }, [loadInstruments]);
 
   return (
     <div className="space-y-6">
@@ -38,8 +282,8 @@ export const PatientDashboard: React.FC = () => {
           color="green"
         />
         <StatsCard
-          title="Pending Activities"
-          value={3}
+          title="Instrumentos pendientes"
+          value={pendingInstrumentCount}
           icon={Clock}
           color="yellow"
         />
@@ -61,7 +305,7 @@ export const PatientDashboard: React.FC = () => {
         {/* Progress Chart */}
         <Chart
           title="Your Progress Over Time"
-          data={progressData}
+          data={PROGRESS_DATA}
           type="line"
           dataKey="value"
           xAxisKey="name"
@@ -69,22 +313,84 @@ export const PatientDashboard: React.FC = () => {
 
         {/* Upcoming Activities */}
         <Card>
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-base sm:text-lg font-medium text-gray-900">Upcoming Activities</h3>
-            <Button variant="outline" size="sm">View All</Button>
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 mb-4">
+            <div>
+              <h3 className="text-base sm:text-lg font-medium text-gray-900">Instrumentos por vencer</h3>
+              {formatUpdatedAt(lastUpdated) && (
+                <p className="text-xs text-gray-500 mt-1">Actualizado {formatUpdatedAt(lastUpdated)}</p>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleRefresh}
+                disabled={isLoadingInstruments}
+                aria-label="Actualizar instrumentos"
+              >
+                <RefreshCw className={`w-4 h-4 ${isLoadingInstruments ? 'animate-spin' : ''}`} />
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => navigate('/activities')}>
+                Ver todos
+              </Button>
+            </div>
           </div>
-          <div className="space-y-2 sm:space-y-3">
-            {upcomingActivities.map((activity) => (
-              <div key={activity.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 bg-blue-50 rounded-lg border border-blue-200 space-y-2 sm:space-y-0">
-                <div>
-                  <p className="font-medium text-gray-900 text-sm sm:text-base">{activity.name}</p>
-                  <p className="text-xs sm:text-sm text-blue-600">{activity.type}</p>
-                  <p className="text-xs text-gray-500">Due: {activity.dueDate}</p>
+          {isLoadingInstruments && (
+            <div className="space-y-2 sm:space-y-3">
+              {Array.from({ length: 3 }).map((_, index) => (
+                <div
+                  key={index}
+                  className="animate-pulse p-3 border border-gray-200 rounded-lg bg-gray-50"
+                >
+                  <div className="h-4 bg-gray-200 rounded w-3/4 mb-2" />
+                  <div className="h-3 bg-gray-200 rounded w-1/2" />
                 </div>
-                <Button variant="primary" size="sm" className="w-full sm:w-auto">Start</Button>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
+
+          {!isLoadingInstruments && instrumentsError && (
+            <div className="text-sm text-red-600">{instrumentsError}</div>
+          )}
+
+          {!isLoadingInstruments && !instrumentsError && expiringInstruments.length === 0 && (
+            <div className="text-sm text-gray-600">No hay instrumentos próximos a vencer.</div>
+          )}
+
+          {!isLoadingInstruments && !instrumentsError && expiringInstruments.length > 0 && (
+            <div className="space-y-2 sm:space-y-3">
+              {expiringInstruments.map((instrument) => (
+                <div
+                  key={instrument.id}
+                  className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 border rounded-lg ${instrument.isOverdue ? 'bg-red-50 border-red-200' : 'bg-yellow-50 border-yellow-200'}`}
+                >
+                  <div className="flex items-start gap-3">
+                    <AlertTriangle
+                      className={`w-5 h-5 ${instrument.isOverdue ? 'text-red-500' : 'text-yellow-500'}`}
+                    />
+                    <div>
+                      <p className="font-medium text-gray-900 text-sm sm:text-base">{instrument.name}</p>
+                      {instrument.description && (
+                        <p className="text-xs text-gray-600 mt-1">{instrument.description}</p>
+                      )}
+                      <p className="text-xs text-gray-500 mt-1">
+                        {instrument.dueLabel} · {instrument.relativeLabel}
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    variant={instrument.isOverdue ? 'danger' : 'secondary'}
+                    size="sm"
+                    className="w-full sm:w-auto"
+                    onClick={() => navigate('/activities')}
+                    disabled={!instrument.available}
+                  >
+                    {instrument.available ? 'Ver instrumento' : 'No disponible'}
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
         </Card>
       </div>
 
