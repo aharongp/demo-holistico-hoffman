@@ -1,20 +1,48 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { 
-  LineChart, 
-  Line, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
+import React, { useEffect, useMemo, useRef, useState, useId } from 'react';
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
   ResponsiveContainer,
   PieChart,
   Pie,
   Cell,
   BarChart,
   Bar,
-  LabelList
+  LabelList,
+  Sector,
 } from 'recharts';
 import { Card } from '../UI/Card';
+
+const DEFAULT_COLORS = ['#0ea5e9', '#14b8a6', '#f97316', '#a855f7', '#ef4444', '#22d3ee'];
+
+type TooltipPayload = {
+  value: number;
+  name: string;
+  color?: string;
+};
+
+const ChartTooltip: React.FC<{ active?: boolean; payload?: TooltipPayload[]; label?: string }> = ({ active, payload, label }) => {
+  if (!active || !payload || !payload.length) {
+    return null;
+  }
+
+  const item = payload[0];
+
+  return (
+    <div className="rounded-2xl border border-slate-100 bg-white/95 px-4 py-3 text-sm shadow-xl">
+      {label && <p className="mb-1 text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">{label}</p>}
+      <div className="flex items-center gap-2">
+        <span className="inline-flex h-2.5 w-2.5 rounded-full" style={{ backgroundColor: item.color ?? '#0ea5e9' }} />
+        <span className="text-slate-600">{item.name}</span>
+        <span className="font-semibold text-slate-900">{item.value?.toLocaleString?.('es-ES') ?? item.value}</span>
+      </div>
+    </div>
+  );
+};
 
 interface ChartProps {
   title: string;
@@ -144,12 +172,18 @@ export const Chart: React.FC<ChartProps> = ({
   type,
   dataKey = 'value',
   xAxisKey = 'name',
-  colors = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6'],
+  colors = DEFAULT_COLORS,
   layout = 'horizontal'
 }) => {
   const isVerticalLayout = layout === 'vertical';
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState<number>(0);
+  const [activeSlice, setActiveSlice] = useState<number | null>(null);
+  const chartId = useId();
+  const gradientPrimaryId = `${chartId}-gradient-primary`;
+  const gradientAccentId = `${chartId}-gradient-accent`;
+
+  const chartColors = (Array.isArray(colors) && colors.length ? colors : DEFAULT_COLORS).map(color => color ?? '#0ea5e9');
 
   useEffect(() => {
     const node = chartContainerRef.current;
@@ -267,19 +301,34 @@ export const Chart: React.FC<ChartProps> = ({
         return (
           <ResponsiveContainer width="100%" height={250}>
             <LineChart data={data}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey={xAxisKey} fontSize={12} />
-              <YAxis fontSize={12} />
-              <Tooltip />
-              {resolvedKeys.map((key, index) => (
+              <defs>
+                <linearGradient id={gradientPrimaryId} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor={chartColors[0]} stopOpacity={0.9} />
+                  <stop offset="95%" stopColor={chartColors[chartColors.length - 1]} stopOpacity={0.4} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="4 4" stroke="#e2e8f0" />
+              <XAxis dataKey={xAxisKey} fontSize={12} tickLine={false} axisLine={false} tick={{ fill: '#94a3b8' }} />
+              <YAxis fontSize={12} tickLine={false} axisLine={false} tick={{ fill: '#94a3b8' }} />
+              <Tooltip content={<ChartTooltip />} cursor={{ stroke: '#94a3b8', strokeDasharray: '4 4' }} />
+              {resolvedKeys.map((key, index) => {
+                const strokeColor = resolvedKeys.length === 1 && index === 0
+                  ? `url(#${gradientPrimaryId})`
+                  : chartColors[index % chartColors.length];
+
+                return (
                 <Line
                   key={key}
                   type="monotone"
                   dataKey={key}
-                  stroke={colors[index % colors.length]}
-                  strokeWidth={2}
+                  stroke={strokeColor}
+                  strokeWidth={3}
+                  dot={{ r: 4, strokeWidth: 2, fill: '#fff' }}
+                  activeDot={{ r: 6 }}
+                  animationDuration={900}
                 />
-              ))}
+                );
+              })}
             </LineChart>
           </ResponsiveContainer>
         );
@@ -292,26 +341,43 @@ export const Chart: React.FC<ChartProps> = ({
         return (
           <ResponsiveContainer width="100%" height={250}>
             <PieChart>
+              <defs>
+                <filter id={`${chartId}-shadow`} x="-20%" y="-20%" width="160%" height="160%">
+                  <feDropShadow dx="0" dy="8" stdDeviation="12" floodColor="#94a3b8" floodOpacity="0.25" />
+                </filter>
+              </defs>
               <Pie
                 data={data}
                 cx="50%"
                 cy="50%"
                 labelLine={false}
-                label={({ name, percent = 0 }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                outerRadius={60}
-                fill="#8884d8"
+                outerRadius={70}
                 dataKey={pieDataKey}
-                fontSize={10}
+                fontSize={11}
+                onMouseEnter={(_, index) => setActiveSlice(index)}
+                onMouseLeave={() => setActiveSlice(null)}
+                {...({
+                  // cast to any to bypass missing/strict Pie prop typings in this Recharts version
+                  activeIndex: activeSlice ?? undefined,
+                  activeShape: (props: any) => (
+                    <Sector {...props} outerRadius={(props.outerRadius ?? 70) + 6} filter={`url(#${chartId}-shadow)`} />
+                  ),
+                } as any)}
               >
                 {data.map((_, index) => (
-                  <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />
+                  <Cell
+                    key={`cell-${index}`}
+                    fill={chartColors[index % chartColors.length]}
+                    stroke="#fff"
+                    strokeWidth={1.5}
+                  />
                 ))}
               </Pie>
-              <Tooltip />
+              <Tooltip content={<ChartTooltip />} />
             </PieChart>
           </ResponsiveContainer>
         );
-      
+
       case 'bar': {
         const resolvedBarKey = Array.isArray(dataKey) ? dataKey[0] : dataKey;
         const barDataKey = typeof resolvedBarKey === 'string' && resolvedBarKey.length > 0 ? resolvedBarKey : 'value';
@@ -324,7 +390,13 @@ export const Chart: React.FC<ChartProps> = ({
               margin={chartMargin}
               barCategoryGap={barCategoryGap}
             >
-              <CartesianGrid strokeDasharray="3 3" horizontal={!isVerticalLayout} vertical={isVerticalLayout} />
+              <defs>
+                <linearGradient id={gradientAccentId} x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0%" stopColor={chartColors[0]} stopOpacity={0.9} />
+                  <stop offset="100%" stopColor={chartColors[1] ?? chartColors[0]} stopOpacity={0.6} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" horizontal={!isVerticalLayout} vertical={isVerticalLayout} />
               {isVerticalLayout ? (
                 <XAxis
                   type="number"
@@ -334,6 +406,7 @@ export const Chart: React.FC<ChartProps> = ({
                   allowDecimals={false}
                   domain={xAxisDomain}
                   tickCount={xAxisTickCount}
+                  tick={{ fill: '#94a3b8' }}
                 />
               ) : (
                 <XAxis
@@ -354,14 +427,15 @@ export const Chart: React.FC<ChartProps> = ({
                   width={0}
                 />
               ) : (
-                <YAxis fontSize={12} />
+                <YAxis fontSize={12} tickLine={false} axisLine={false} tick={{ fill: '#94a3b8' }} />
               )}
-              <Tooltip />
+              <Tooltip content={<ChartTooltip />} cursor={{ fill: '#cbd5f533' }} />
               <Bar
                 dataKey={barDataKey}
-                fill={colors[0]}
-                radius={isVerticalLayout ? [4, 4, 4, 4] : 0}
+                fill={`url(#${gradientAccentId})`}
+                radius={isVerticalLayout ? [6, 6, 6, 6] : 6}
                 barSize={barSize}
+                animationDuration={900}
               >
                 {isVerticalLayout && (
                   <LabelList
@@ -371,8 +445,8 @@ export const Chart: React.FC<ChartProps> = ({
                       const {
                         x = 0,
                         y = 0,
-                        width = 0,
-                        height = 0,
+                        width: labelWidth = 0,
+                        height: labelHeight = 0,
                         value,
                         payload,
                       } = props ?? {};
@@ -391,8 +465,8 @@ export const Chart: React.FC<ChartProps> = ({
                         <VerticalBarLabel
                           x={typeof x === 'number' ? x : Number(x) || 0}
                           y={typeof y === 'number' ? y : Number(y) || 0}
-                          width={typeof width === 'number' ? width : Number(width) || 0}
-                          height={typeof height === 'number' ? height : Number(height) || 0}
+                          width={typeof labelWidth === 'number' ? labelWidth : Number(labelWidth) || 0}
+                          height={typeof labelHeight === 'number' ? labelHeight : Number(labelHeight) || 0}
                           label={labelValue}
                           count={countValue}
                           containerWidth={containerWidth}

@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Plus, Edit, Trash2, Search, Eye } from 'lucide-react';
+import { Plus, Edit, Trash2, Search, Eye, Stethoscope, HeartPulse, Activity, ClipboardList } from 'lucide-react';
 import { Card } from '../../components/UI/Card';
 import { Button } from '../../components/UI/Button';
 import { Table } from '../../components/UI/Table';
@@ -49,6 +49,12 @@ export const PatientManagement: React.FC = () => {
     patient.email.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  const totalPatients = patients.length;
+  const filteredPatientCount = filteredPatients.length;
+  const activePatients = patients.filter(patient => patient.isActive).length;
+  const assignedProgramCount = patients.filter(patient => Boolean(patient.programId)).length;
+  const awaitingAssignmentCount = Math.max(totalPatients - assignedProgramCount, 0);
+
   const handleOpenModal = (patient?: Patient) => {
     setFormError(null);
     if (patient) {
@@ -88,7 +94,7 @@ export const PatientManagement: React.FC = () => {
       await updatePatient(selectedPatientForAssign.id, { programId });
       setIsAssignModalOpen(false);
     } catch (error) {
-      console.error('Failed to assign program to patient', error);
+      console.error('No se pudo asignar el programa al paciente', error);
     }
   };
 
@@ -124,14 +130,14 @@ export const PatientManagement: React.FC = () => {
       }
 
       if (!response.ok) {
-        throw new Error(`Failed to fetch medical history (${response.status})`);
+        throw new Error(`No se pudo obtener la historia médica (${response.status})`);
       }
 
       const payload = await response.json() as RemotePatientMedicalHistory | null;
       const mappedHistory = mapRemoteMedicalHistoryToState(payload);
       setHistoryData(mappedHistory);
     } catch (error) {
-      console.error('Failed to load medical history for patient', error);
+      console.error('No se pudo cargar la historia médica del paciente', error);
       setHistoryError('No se pudo cargar la historia médica. Intenta nuevamente.');
     } finally {
       setIsHistoryLoading(false);
@@ -166,7 +172,7 @@ export const PatientManagement: React.FC = () => {
 
       setIsModalOpen(false);
     } catch (error) {
-      console.error('Failed to save patient', error);
+      console.error('No se pudo guardar el paciente', error);
       setFormError(
         error instanceof Error
           ? error.message
@@ -176,11 +182,11 @@ export const PatientManagement: React.FC = () => {
   };
 
   const handleDelete = async (patientId: string) => {
-    if (confirm('Are you sure you want to delete this patient?')) {
+    if (confirm('¿Estás seguro de eliminar a este paciente?')) {
       try {
         await deletePatient(patientId);
       } catch (error) {
-        console.error('Failed to delete patient', error);
+        console.error('No se pudo eliminar al paciente', error);
       }
     }
   };
@@ -188,52 +194,54 @@ export const PatientManagement: React.FC = () => {
   const columns = [
     {
       key: 'firstName',
-      header: 'Name',
+      header: 'Nombre completo',
       render: (patient: Patient) => `${patient.firstName} ${patient.lastName}`,
     },
     {
-      key: 'email',
-      header: 'Email',
-    },
-    {
       key: 'dateOfBirth',
-      header: 'Age',
+      header: 'Edad',
       render: (patient: Patient) => {
         const age = Math.floor((Date.now() - patient.dateOfBirth.getTime()) / (365.25 * 24 * 60 * 60 * 1000));
-        return `${age} years`;
+        return `${age} años`;
       },
     },
     {
       key: 'gender',
-      header: 'Gender',
-      render: (patient: Patient) => (
-        <span className="capitalize">{patient.gender}</span>
-      ),
+      header: 'Género',
+      render: (patient: Patient) => {
+        const genderMap: Record<string, string> = {
+          male: 'Masculino',
+          female: 'Femenino',
+          other: 'Otro',
+        };
+        return <span className="capitalize">{genderMap[patient.gender] ?? 'Sin registrar'}</span>;
+      },
     },
     {
       key: 'phone',
-      header: 'Phone',
-      render: (patient: Patient) => patient.phone || 'N/A',
+      header: 'Teléfono',
+      render: (patient: Patient) => patient.phone || 'Sin registro',
     },
     {
       key: 'actions',
-      header: 'Actions',
+      header: 'Acciones',
+      className: 'whitespace-normal',
       render: (patient: Patient) => (
-        <div className="flex space-x-2">
+        <div className="flex flex-wrap gap-2">
           {isAdmin && (
             <Button
               variant="outline"
               size="sm"
               onClick={() => handleOpenAssignModal(patient)}
-              title={patient.programId ? 'Change program' : 'Assign program'}
+              title={patient.programId ? 'Cambiar programa' : 'Asignar programa'}
             >
               {patient.programId ? (
                 <span className="inline-flex items-center px-2 py-1 bg-blue-100 text-blue-800 rounded">
-                  Change
+                  Cambiar
                 </span>
               ) : (
                 <span className="inline-flex items-center px-2 py-1 bg-yellow-100 text-yellow-800 rounded">
-                  Assign
+                  Asignar
                 </span>
               )}
             </Button>
@@ -266,30 +274,91 @@ export const PatientManagement: React.FC = () => {
   ];
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Patient Management</h1>
-          <p className="text-gray-600">Manage patient records and information</p>
+    <section className="space-y-8 bg-gradient-to-b from-slate-50 via-white to-violet-50/20 px-4 py-8 sm:px-6">
+      <div className="overflow-hidden rounded-3xl border border-white/60 bg-gradient-to-br from-white via-violet-50 to-white shadow-2xl">
+        <div className="p-6 sm:p-8">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div>
+              <div className="inline-flex items-center gap-2 rounded-full border border-white/70 bg-white/80 px-3 py-1 text-xs font-semibold uppercase tracking-[0.5em] text-violet-500">
+                <Stethoscope className="h-3.5 w-3.5" /> Pacientes
+              </div>
+              <h1 className="mt-3 text-3xl font-semibold tracking-tight text-slate-900 sm:text-4xl">
+                Seguimiento integral de expedientes
+              </h1>
+              <p className="mt-2 max-w-2xl text-sm text-slate-500">
+                Observa la evolución clínica, asigna programas y mantén cada registro actualizado desde un ambiente claro y confiable.
+              </p>
+            </div>
+            <Button onClick={() => handleOpenModal()} className="whitespace-nowrap">
+              <Plus className="w-4 h-4 mr-2" /> Nuevo paciente
+            </Button>
+          </div>
+          <div className="mt-6 grid gap-3 text-xs uppercase tracking-[0.3em] text-slate-500 sm:grid-cols-3">
+            <span className="rounded-2xl border border-white/70 bg-white/80 px-3 py-2 text-center">
+              {totalPatients.toLocaleString()} pacientes en seguimiento
+            </span>
+            <span className="rounded-2xl border border-white/70 bg-white/80 px-3 py-2 text-center">
+              {filteredPatientCount.toLocaleString()} coinciden con la búsqueda
+            </span>
+            <span className="rounded-2xl border border-white/70 bg-white/80 px-3 py-2 text-center">
+              {assignedProgramCount.toLocaleString()} con programa activo
+            </span>
+          </div>
         </div>
-        <Button onClick={() => handleOpenModal()}>
-          <Plus className="w-4 h-4 mr-2" />
-          Add Patient
-        </Button>
       </div>
 
-      <Card>
-        <div className="flex items-center justify-between mb-6">
-          <div className="relative">
-            <Search className="w-5 h-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card className="border border-slate-100 bg-white/90 shadow-lg">
+          <div className="flex items-start gap-4">
+            <div className="rounded-2xl bg-slate-50 p-3 text-violet-500">
+              <HeartPulse className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.4em] text-slate-400">Pacientes activos</p>
+              <p className="text-2xl font-semibold text-slate-900">{activePatients.toLocaleString()}</p>
+              <p className="text-xs text-slate-500">Con seguimiento vigente</p>
+            </div>
+          </div>
+        </Card>
+        <Card className="border border-slate-100 bg-white/90 shadow-lg">
+          <div className="flex items-start gap-4">
+            <div className="rounded-2xl bg-slate-50 p-3 text-purple-500">
+              <Activity className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.4em] text-slate-400">Con programa asignado</p>
+              <p className="text-2xl font-semibold text-slate-900">{assignedProgramCount.toLocaleString()}</p>
+              <p className="text-xs text-slate-500">Participando en protocolos</p>
+            </div>
+          </div>
+        </Card>
+        <Card className="border border-slate-100 bg-white/90 shadow-lg">
+          <div className="flex items-start gap-4">
+            <div className="rounded-2xl bg-slate-50 p-3 text-fuchsia-500">
+              <ClipboardList className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.4em] text-slate-400">Pendientes por asignar</p>
+              <p className="text-2xl font-semibold text-slate-900">{awaitingAssignmentCount.toLocaleString()}</p>
+              <p className="text-xs text-slate-500">Listos para plan personalizado</p>
+            </div>
+          </div>
+        </Card>
+      </div>
+
+      <Card className="border border-slate-200 bg-white shadow-xl">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6">
+          <div className="relative w-full sm:max-w-xs">
+            <Search className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
-              placeholder="Search patients..."
+              placeholder="Filtra por nombre, correo o programa"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full rounded-2xl border border-slate-200 bg-slate-50/70 pl-10 pr-4 py-2 text-sm focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/10"
             />
           </div>
+          <p className="text-xs uppercase tracking-[0.4em] text-slate-400">{filteredPatientCount.toLocaleString()} resultados</p>
         </div>
 
         <Table data={filteredPatients} columns={columns} />
@@ -299,23 +368,20 @@ export const PatientManagement: React.FC = () => {
       <Modal
         isOpen={isAssignModalOpen}
         onClose={() => setIsAssignModalOpen(false)}
-        title={selectedPatientForAssign ? `Assign Program to ${selectedPatientForAssign.firstName}` : 'Assign Program'}
+        title={selectedPatientForAssign ? `Asignar programa a ${selectedPatientForAssign.firstName}` : 'Asignar programa'}
         size="md"
       >
         {selectedPatientForAssign && (
           <div className="space-y-4">
-            <p className="text-sm text-gray-700">Select a program to assign to the patient.</p>
-            <div className="space-y-2">
-              {/** using programs from context */}
+            <p className="text-sm text-slate-600">Selecciona el protocolo más adecuado para {selectedPatientForAssign.firstName}.</p>
+            <div className="space-y-3">
               {programs.map((program) => (
-                <div key={program.id} className="flex items-center justify-between border p-2 rounded">
-                  <div>
-                    <div className="font-medium">{program.name}</div>
-                    <div className="text-sm text-gray-500">{program.description}</div>
+                <div key={program.id} className="flex items-start justify-between rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+                  <div className="pr-3">
+                    <div className="text-sm font-semibold text-slate-900">{program.name}</div>
+                    <div className="text-xs text-slate-500">{program.description}</div>
                   </div>
-                  <div>
-                    <Button onClick={() => handleAssignProgram(program.id)}>Assign</Button>
-                  </div>
+                  <Button size="sm" onClick={() => handleAssignProgram(program.id)}>Asignar</Button>
                 </div>
               ))}
             </div>
@@ -329,7 +395,7 @@ export const PatientManagement: React.FC = () => {
           setIsModalOpen(false);
           setFormError(null);
         }}
-        title={editingPatient ? 'Edit Patient' : 'Add New Patient'}
+        title={editingPatient ? 'Editar paciente' : 'Registrar paciente'}
         size="lg"
       >
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -340,93 +406,93 @@ export const PatientManagement: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                First Name
+                Nombre
               </label>
               <input
                 type="text"
                 required
                 value={formData.firstName}
                 onChange={(e) => setFormData(prev => ({ ...prev, firstName: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full rounded-2xl border border-slate-200 bg-slate-50/70 px-3 py-2 focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/10"
               />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Last Name
+                Apellido
               </label>
               <input
                 type="text"
                 required
                 value={formData.lastName}
                 onChange={(e) => setFormData(prev => ({ ...prev, lastName: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full rounded-2xl border border-slate-200 bg-slate-50/70 px-3 py-2 focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/10"
               />
             </div>
           </div>
           
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Email
+              Correo electrónico
             </label>
             <input
               type="email"
               required
               value={formData.email}
               onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full rounded-2xl border border-slate-200 bg-slate-50/70 px-3 py-2 focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/10"
             />
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Date of Birth
+                Fecha de nacimiento
               </label>
               <input
                 type="date"
                 required
                 value={formData.dateOfBirth}
                 onChange={(e) => setFormData(prev => ({ ...prev, dateOfBirth: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full rounded-2xl border border-slate-200 bg-slate-50/70 px-3 py-2 focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/10"
               />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Gender
+                Género
               </label>
               <select
                 value={formData.gender}
                 onChange={(e) => setFormData(prev => ({ ...prev, gender: e.target.value as 'male' | 'female' | 'other' }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full rounded-2xl border border-slate-200 bg-slate-50/70 px-3 py-2 focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/10"
               >
-                <option value="female">Female</option>
-                <option value="male">Male</option>
-                <option value="other">Other</option>
+                <option value="female">Femenino</option>
+                <option value="male">Masculino</option>
+                <option value="other">Otro</option>
               </select>
             </div>
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Phone
+              Teléfono
             </label>
             <input
               type="tel"
               value={formData.phone}
               onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full rounded-2xl border border-slate-200 bg-slate-50/70 px-3 py-2 focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/10"
             />
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Address
+              Dirección
             </label>
             <textarea
               value={formData.address}
               onChange={(e) => setFormData(prev => ({ ...prev, address: e.target.value }))}
               rows={3}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full rounded-2xl border border-slate-200 bg-slate-50/70 px-3 py-2 focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/10"
             />
           </div>
 
@@ -436,10 +502,10 @@ export const PatientManagement: React.FC = () => {
               variant="outline"
               onClick={() => setIsModalOpen(false)}
             >
-              Cancel
+              Cancelar
             </Button>
             <Button type="submit">
-              {editingPatient ? 'Update Patient' : 'Create Patient'}
+              {editingPatient ? 'Actualizar paciente' : 'Crear paciente'}
             </Button>
           </div>
         </form>
@@ -453,6 +519,6 @@ export const PatientManagement: React.FC = () => {
         errorMessage={historyError}
         title={selectedPatientForHistory ? `Historia médica de ${selectedPatientForHistory.firstName} ${selectedPatientForHistory.lastName}` : 'Historia médica'}
       />
-    </div>
+    </section>
   );
 };

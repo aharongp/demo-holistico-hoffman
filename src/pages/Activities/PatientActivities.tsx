@@ -74,7 +74,7 @@ export const PatientActivities: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6">
+    <section className="space-y-6 px-4 py-8 sm:px-6">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">My Activities</h1>
         <p className="text-gray-600">Complete your assigned instruments and assessments</p>
@@ -163,6 +163,6 @@ export const PatientActivities: React.FC = () => {
           </div>
         </Card>
       )}
-    </div>
+    </section>
   );
 };

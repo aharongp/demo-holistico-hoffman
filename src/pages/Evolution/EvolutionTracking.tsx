@@ -16,12 +16,12 @@ import {
   HeartRateRecoveryRecord,
 } from '../../types';
 
-const EMPTY_VALUE = 'N/A';
+const EMPTY_VALUE = 'N/D';
 
 const SOURCE_LABELS: Record<VitalSource, string> = {
   consultation: 'Consulta',
   pulse: 'Pulso',
-  glycemia: 'Glucemia',
+  glycemia: 'Glicemia',
   heart_rate: 'Frecuencia cardiaca',
   weight: 'Peso',
   body_mass: 'Masa corporal',
@@ -43,9 +43,38 @@ const VITAL_ENDPOINTS: Record<EditableVitalType, string> = {
 const VITAL_LABELS: Record<EditableVitalType, string> = {
   weight: 'Peso',
   pulse: 'Pulso',
-  glycemia: 'Glucemia',
+  glycemia: 'Glicemia',
   blood_pressure: 'Presion arterial',
   heart_rate: 'Frecuencia cardiaca',
+};
+
+const GENDER_LABELS: Record<Patient['gender'], string> = {
+  male: 'Masculino',
+  female: 'Femenino',
+  other: 'Otro',
+};
+
+const formatAge = (dateOfBirth?: Date | string | null): string => {
+  if (!dateOfBirth) {
+    return '—';
+  }
+
+  const birthDate = new Date(dateOfBirth);
+  if (Number.isNaN(birthDate.getTime())) {
+    return '—';
+  }
+
+  const today = new Date();
+  let age = today.getFullYear() - birthDate.getFullYear();
+  const hasHadBirthdayThisYear =
+    today.getMonth() > birthDate.getMonth() ||
+    (today.getMonth() === birthDate.getMonth() && today.getDate() >= birthDate.getDate());
+
+  if (!hasHadBirthdayThisYear) {
+    age -= 1;
+  }
+
+  return age >= 0 ? `${age} años` : '—';
 };
 
 const parseNumericId = (value: unknown): number | null => {
@@ -486,7 +515,7 @@ export const EvolutionTracking: React.FC = () => {
         if (signal?.aborted) {
           return;
         }
-        console.error('Failed to fetch vitals', error);
+        console.error('No se pudieron obtener los signos vitales', error);
         setVitalsError(
           error instanceof Error
             ? error.message
@@ -842,7 +871,7 @@ export const EvolutionTracking: React.FC = () => {
       if (error?.name === 'AbortError') {
         return;
       }
-      console.error('Unexpected error fetching vitals', error);
+      console.error('Error inesperado al obtener los signos vitales', error);
     });
 
     return () => {
@@ -1100,6 +1129,61 @@ export const EvolutionTracking: React.FC = () => {
     }));
   }, [filteredHeartRateRecords, formatRecordedAt]);
 
+  const totalRecords = useMemo(() => {
+    return (
+      weightRows.length +
+      pulseRows.length +
+      glycemiaRows.length +
+      bloodPressureRows.length +
+      bmiRows.length +
+      heartRateRows.length
+    );
+  }, [weightRows, pulseRows, glycemiaRows, bloodPressureRows, bmiRows, heartRateRows]);
+
+  const trackedMetricsCount = useMemo(() => {
+    return [weightRows, pulseRows, glycemiaRows, bloodPressureRows, bmiRows, heartRateRows]
+      .filter(rows => rows.length > 0)
+      .length;
+  }, [weightRows, pulseRows, glycemiaRows, bloodPressureRows, bmiRows, heartRateRows]);
+
+  const lastRecordedLabel = useMemo(() => {
+    let latest = Number.NEGATIVE_INFINITY;
+
+    const captureLatest = (records?: Array<{ recordedAt: string | null }>) => {
+      records?.forEach(record => {
+        const timestamp = resolveRecordedAt(record.recordedAt);
+        if (timestamp > latest) {
+          latest = timestamp;
+        }
+      });
+    };
+
+    captureLatest(filteredWeightRecords);
+    captureLatest(filteredPulseRecords);
+    captureLatest(filteredGlycemiaRecords);
+    captureLatest(filteredBloodPressureRecords);
+    captureLatest(filteredBmiRecords);
+    captureLatest(filteredHeartRateRecords);
+
+    if (!Number.isFinite(latest) || latest === Number.NEGATIVE_INFINITY) {
+      return 'Sin registros';
+    }
+
+    try {
+      return dateFormatter.format(new Date(latest));
+    } catch {
+      return 'Sin registros';
+    }
+  }, [
+    dateFormatter,
+    filteredWeightRecords,
+    filteredPulseRecords,
+    filteredGlycemiaRecords,
+    filteredBloodPressureRecords,
+    filteredBmiRecords,
+    filteredHeartRateRecords,
+  ]);
+
   const weightColumns = useMemo(() => {
     const columns: Array<{
       key: string;
@@ -1225,7 +1309,7 @@ export const EvolutionTracking: React.FC = () => {
       { key: 'label', header: 'Fecha' },
       {
         key: 'value',
-        header: 'Glucemia (mg/dL)',
+        header: 'Glicemia (mg/dL)',
         render: (row: GlycemiaRow): React.ReactNode => formatDecimal(row.value, 0),
       },
       {
@@ -1571,94 +1655,176 @@ export const EvolutionTracking: React.FC = () => {
   const patientColumns = [
     {
       key: 'firstName',
-      header: 'Patient Name',
+      header: 'Nombre del paciente',
       render: (patient: Patient) => `${patient.firstName} ${patient.lastName}`,
     },
     {
-      key: 'email',
-      header: 'Email',
+      key: 'ageGender',
+      header: 'Edad y género',
+      render: (patient: Patient) => (
+        <span className="text-sm text-slate-700">
+          {formatAge(patient.dateOfBirth)} · {GENDER_LABELS[patient.gender] ?? '—'}
+        </span>
+      ),
     },
     {
       key: 'lastEntry',
-      header: 'Last Entry',
-      render: () => '2024-01-15', // Mock data
+      header: 'Último registro',
+      render: () => '2024-01-15', // Datos simulados
     },
     {
       key: 'actions',
-      header: 'Actions',
+      header: 'Acciones',
       render: (patient: Patient) => (
         <Button
           variant="primary"
           size="sm"
           onClick={() => setSelectedPatient(patient)}
         >
-          View Evolution
+          Ver evolución
         </Button>
       ),
     },
   ];
 
   const healthTabs = [
-    { id: 'mood', label: 'Mood & Energy', icon: TrendingUp },
-    { id: 'weight', label: 'Weight', icon: Scale },
-    { id: 'blood', label: 'Blood Metrics', icon: Droplets },
-    { id: 'vitals', label: 'Vital Signs', icon: Heart },
+    { id: 'mood', label: 'Estado y energía', icon: TrendingUp },
+    { id: 'weight', label: 'Peso', icon: Scale },
+    { id: 'blood', label: 'Biomarcadores', icon: Droplets },
+    { id: 'vitals', label: 'Signos vitales', icon: Heart },
   ];
 
   if (isTherapist && !selectedPatient) {
     return (
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Patient Evolution Tracking</h1>
-            <p className="text-sm sm:text-base text-gray-600">Monitor patient progress and evolution</p>
+      <section className="space-y-6 px-4 py-8 sm:px-6">
+        <div className="overflow-hidden rounded-3xl border border-rose-100 bg-gradient-to-br from-[#fff1f2] via-white to-[#ffe4e6] shadow-xl">
+          <div className="px-6 py-8 space-y-4">
+            <span className="text-xs font-semibold uppercase tracking-[0.4em] text-rose-500">Evolución</span>
+            <h1 className="text-3xl font-bold text-slate-900">Explora la evolución clínica de tu equipo</h1>
+            <p className="text-sm text-slate-700 sm:text-base max-w-2xl">
+              Selecciona un paciente para revisar sus signos vitales, curvas de progreso y registros detallados.
+              Esta vista centraliza toda la información longitudinal para tomar mejores decisiones terapéuticas.
+            </p>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="rounded-2xl border border-white/60 bg-white/80 px-4 py-3 shadow-inner">
+                <p className="text-xs uppercase tracking-wide text-rose-500/80">Pacientes registrados</p>
+                <p className="text-3xl font-semibold text-slate-900">{patients.length}</p>
+              </div>
+              <div className="rounded-2xl border border-white/60 bg-white/80 px-4 py-3 shadow-inner">
+                <p className="text-xs uppercase tracking-wide text-rose-500/80">Métricas monitoreadas</p>
+                <p className="text-3xl font-semibold text-slate-900">{trackedMetricsCount}</p>
+              </div>
+              <div className="rounded-2xl border border-white/60 bg-white/80 px-4 py-3 shadow-inner">
+                <p className="text-xs uppercase tracking-wide text-rose-500/80">Última actualización</p>
+                <p className="text-2xl font-semibold text-slate-900">{lastRecordedLabel}</p>
+              </div>
+            </div>
           </div>
         </div>
 
-        <Card>
-          <div className="flex items-center mb-4">
-            <User className="w-5 h-5 text-blue-500 mr-2" />
-            <h3 className="text-base sm:text-lg font-medium text-gray-900">Select Patient</h3>
+        <Card className="rounded-3xl border-rose-100/70 bg-white/95 shadow-xl ring-1 ring-rose-100/80" padding="lg">
+          <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-3">
+              <span className="flex h-10 w-10 items-center justify-center rounded-full bg-rose-50 text-rose-500">
+                <User className="w-5 h-5" />
+              </span>
+              <div>
+                <h3 className="text-lg font-semibold text-slate-900">Selecciona un paciente</h3>
+                <p className="text-sm text-slate-600">Accede al histórico completo de evolución y signos vitales.</p>
+              </div>
+            </div>
+            <span className="rounded-full bg-rose-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-rose-500">
+              Listado maestro
+            </span>
           </div>
-          <Table data={patients} columns={patientColumns} />
+          <div className="overflow-hidden rounded-2xl border border-rose-100/60">
+            <Table data={patients} columns={patientColumns} />
+          </div>
         </Card>
-      </div>
+      </section>
     );
   }
 
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between space-y-4 sm:space-y-0">
-        <div>
-          <div className="flex items-center space-x-2">
-            {selectedPatient && (
+    <section className="space-y-6 px-4 py-8 sm:px-6">
+      <div className="overflow-hidden rounded-3xl border border-rose-100 bg-gradient-to-br from-[#fff1f2] via-white to-[#ffe4e6] shadow-xl">
+        <div className="flex flex-col gap-6 px-6 py-6">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center gap-3">
+                {selectedPatient && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setSelectedPatient(null)}
+                    className="border-rose-200 text-rose-600 hover:bg-rose-50 focus:ring-rose-400"
+                  >
+                    ← Volver a pacientes
+                  </Button>
+                )}
+                <span className="rounded-full bg-white/70 px-3 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-rose-500">
+                  Evolución
+                </span>
+              </div>
+              <h1 className="text-3xl font-bold text-slate-900">
+                {selectedPatient
+                  ? `${selectedPatient.firstName} ${selectedPatient.lastName}`
+                  : 'Seguimiento de evolución'}
+              </h1>
+              <p className="text-sm text-slate-700 sm:text-base">
+                {isPatient
+                  ? 'Revisa tu progreso diario, energía y signos vitales en un panel integrado.'
+                  : selectedPatient
+                    ? `Monitorea la evolución completa de ${selectedPatient.firstName} con métricas longitudinales.`
+                    : 'Selecciona un paciente para revisar su evolución clínica y tomar decisiones informadas.'}
+              </p>
+            </div>
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => setSelectedPatient(null)}
+                onClick={() => fetchVitals()}
+                disabled={!vitalsUrl || isLoadingVitals}
+                className="border-rose-200 text-rose-600 hover:bg-rose-50 focus:ring-rose-400"
               >
-                ← Back to Patients
+                <RefreshCw className="w-4 h-4 mr-2" />
+                {isLoadingVitals ? 'Actualizando' : 'Actualizar'}
               </Button>
-            )}
-            <h1 className="text-xl sm:text-2xl font-bold text-gray-900">
-              {selectedPatient 
-                ? `${selectedPatient.firstName} ${selectedPatient.lastName} - Evolution`
-                : 'Evolution Tracking'
-              }
-            </h1>
+              {isPatient && (
+                <Button
+                  onClick={() => {
+                    setSaveError(null);
+                    setFormData({ ...INITIAL_FORM_DATA });
+                    setIsModalOpen(true);
+                  }}
+                  className="bg-gradient-to-r from-rose-500 to-red-500 text-white shadow-lg shadow-rose-200/60 hover:from-rose-600 hover:to-red-600 focus:ring-rose-500"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Registrar datos
+                </Button>
+              )}
+            </div>
           </div>
-          <p className="text-sm sm:text-base text-gray-600">
-            {isPatient 
-              ? 'Track your daily progress and wellbeing'
-              : `Monitor ${selectedPatient?.firstName}'s progress and evolution`
-            }
-          </p>
-        </div>
-        <div className="flex flex-col items-stretch sm:items-end space-y-3">
-          <div className="flex flex-col sm:flex-row sm:space-x-3 space-y-2 sm:space-y-0">
+
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="rounded-2xl border border-white/60 bg-white/80 px-4 py-3 shadow-inner">
+              <p className="text-xs uppercase tracking-wide text-rose-500/80">Registros acumulados</p>
+              <p className="text-3xl font-semibold text-slate-900">{totalRecords}</p>
+            </div>
+            <div className="rounded-2xl border border-white/60 bg-white/80 px-4 py-3 shadow-inner">
+              <p className="text-xs uppercase tracking-wide text-rose-500/80">Métricas activas</p>
+              <p className="text-3xl font-semibold text-slate-900">{trackedMetricsCount}</p>
+            </div>
+            <div className="rounded-2xl border border-white/60 bg-white/80 px-4 py-3 shadow-inner">
+              <p className="text-xs uppercase tracking-wide text-rose-500/80">Último registro</p>
+              <p className="text-2xl font-semibold text-slate-900">{lastRecordedLabel}</p>
+            </div>
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-[repeat(3,minmax(0,1fr))]">
             <div className="flex flex-col">
-              <label className="text-xs font-medium text-gray-600" htmlFor="evolution-date-from">
+              <label className="text-xs font-medium text-rose-500" htmlFor="evolution-date-from">
                 Desde
               </label>
               <input
@@ -1666,11 +1832,11 @@ export const EvolutionTracking: React.FC = () => {
                 type="date"
                 value={dateFrom}
                 onChange={event => setDateFrom(event.target.value)}
-                className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="mt-1 w-full rounded-xl border border-rose-100 bg-white/80 px-3 py-2 text-sm text-slate-900 focus:border-rose-400 focus:outline-none focus:ring-2 focus:ring-rose-400/40"
               />
             </div>
             <div className="flex flex-col">
-              <label className="text-xs font-medium text-gray-600" htmlFor="evolution-date-to">
+              <label className="text-xs font-medium text-rose-500" htmlFor="evolution-date-to">
                 Hasta
               </label>
               <input
@@ -1678,55 +1844,33 @@ export const EvolutionTracking: React.FC = () => {
                 type="date"
                 value={dateTo}
                 onChange={event => setDateTo(event.target.value)}
-                className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="mt-1 w-full rounded-xl border border-rose-100 bg-white/80 px-3 py-2 text-sm text-slate-900 focus:border-rose-400 focus:outline-none focus:ring-2 focus:ring-rose-400/40"
               />
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={clearDateFilters}
-              disabled={!dateFrom && !dateTo}
-              className="self-end"
-            >
-              Limpiar
-            </Button>
-          </div>
-
-          <div className="flex flex-col sm:flex-row sm:items-center sm:space-x-2 space-y-2 sm:space-y-0">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => fetchVitals()}
-              disabled={!vitalsUrl || isLoadingVitals}
-            >
-              <RefreshCw className="w-4 h-4 mr-2" />
-              {isLoadingVitals ? 'Actualizando' : 'Actualizar'}
-            </Button>
-            {isPatient && (
+            <div className="flex items-end">
               <Button
-                onClick={() => {
-                  setSaveError(null);
-                  setFormData({ ...INITIAL_FORM_DATA });
-                  setIsModalOpen(true);
-                }}
+                variant="outline"
+                size="sm"
+                onClick={clearDateFilters}
+                disabled={!dateFrom && !dateTo}
+                className="w-full rounded-xl border-rose-200 text-rose-600 hover:bg-rose-50 focus:ring-rose-400"
               >
-                <Plus className="w-4 h-4 mr-2" />
-                Add Entry
+                Limpiar filtros
               </Button>
-            )}
+            </div>
           </div>
         </div>
       </div>
 
       {vitalsError && (
-        <Card>
+        <Card className="rounded-2xl border-rose-100/70 bg-white/95 shadow-md">
           <p className="text-sm text-red-600">{vitalsError}</p>
         </Card>
       )}
 
       {!vitalsError && !isLoadingVitals && !hasVitalsData && (
-        <Card>
-          <p className="text-sm text-gray-600">
+        <Card className="rounded-2xl border-rose-100/70 bg-white/95 shadow-md">
+          <p className="text-sm text-slate-600">
             {selectedPatient
               ? 'No hay registros de signos vitales para este paciente.'
               : 'Todavia no hay registros de signos vitales.'}
@@ -1762,7 +1906,7 @@ export const EvolutionTracking: React.FC = () => {
               colors={['#2563EB', '#10B981']}
             />
             <Chart
-              title="Glucemia"
+              title="Glicemia"
               data={glycemiaChartData}
               type="line"
               dataKey="value"
@@ -1772,7 +1916,10 @@ export const EvolutionTracking: React.FC = () => {
           </div>
 
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6">
-            <Card padding="sm" className="space-y-4">
+            <Card
+              padding="sm"
+              className="space-y-4 rounded-3xl border-rose-100/60 bg-white/95 shadow-lg ring-1 ring-rose-100/70"
+            >
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h3 className="text-base sm:text-lg font-medium text-gray-900">Historial de peso</h3>
@@ -1803,7 +1950,10 @@ export const EvolutionTracking: React.FC = () => {
               )}
             </Card>
 
-            <Card padding="sm" className="space-y-4">
+            <Card
+              padding="sm"
+              className="space-y-4 rounded-3xl border-rose-100/60 bg-white/95 shadow-lg ring-1 ring-rose-100/70"
+            >
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h3 className="text-base sm:text-lg font-medium text-gray-900">Historial de pulso</h3>
@@ -1834,11 +1984,14 @@ export const EvolutionTracking: React.FC = () => {
               )}
             </Card>
 
-            <Card padding="sm" className="space-y-4">
+            <Card
+              padding="sm"
+              className="space-y-4 rounded-3xl border-rose-100/60 bg-white/95 shadow-lg ring-1 ring-rose-100/70"
+            >
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <h3 className="text-base sm:text-lg font-medium text-gray-900">Glucemia</h3>
-                  <p className="text-sm text-gray-600">Valores de glucosa plasmaticos mas recientes.</p>
+                  <h3 className="text-base sm:text-lg font-medium text-gray-900">Glicemia</h3>
+                  <p className="text-sm text-gray-600">Valores de glicemia plasmaticos mas recientes.</p>
                 </div>
                 <Button
                   type="button"
@@ -1858,14 +2011,17 @@ export const EvolutionTracking: React.FC = () => {
                     className="shadow-none ring-0 border border-gray-200"
                   />
                 ) : (
-                  <p className="text-sm text-gray-600">No hay registros de glucemia disponibles.</p>
+                  <p className="text-sm text-gray-600">No hay registros de glicemia disponibles.</p>
                 )
               ) : (
                 <p className="text-sm text-gray-600">Haz clic en "Ver registros" para mostrar los datos.</p>
               )}
             </Card>
 
-            <Card padding="sm" className="space-y-4">
+            <Card
+              padding="sm"
+              className="space-y-4 rounded-3xl border-rose-100/60 bg-white/95 shadow-lg ring-1 ring-rose-100/70"
+            >
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h3 className="text-base sm:text-lg font-medium text-gray-900">Presion arterial</h3>
@@ -1898,7 +2054,10 @@ export const EvolutionTracking: React.FC = () => {
           </div>
 
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6">
-            <Card padding="sm" className="space-y-4">
+            <Card
+              padding="sm"
+              className="space-y-4 rounded-3xl border-rose-100/60 bg-white/95 shadow-lg ring-1 ring-rose-100/70"
+            >
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h3 className="text-base sm:text-lg font-medium text-gray-900">Indice de masa corporal (BMI)</h3>
@@ -1929,7 +2088,10 @@ export const EvolutionTracking: React.FC = () => {
               )}
             </Card>
 
-            <Card padding="sm" className="space-y-4">
+            <Card
+              padding="sm"
+              className="space-y-4 rounded-3xl border-rose-100/60 bg-white/95 shadow-lg ring-1 ring-rose-100/70"
+            >
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h3 className="text-base sm:text-lg font-medium text-gray-900">Recuperacion de frecuencia cardiaca</h3>
@@ -2174,11 +2336,11 @@ export const EvolutionTracking: React.FC = () => {
             setFormData({ ...INITIAL_FORM_DATA });
             setIsModalOpen(false);
           }}
-          title="Add Health Entry"
+          title="Registrar tu salud"
           size="lg"
         >
           <div className="space-y-6">
-            {/* Tab Navigation */}
+            {/* Navegación por pestañas */}
             <div className="border-b border-gray-200">
               <nav className="-mb-px flex space-x-4 sm:space-x-8 overflow-x-auto">
                 {healthTabs.map((tab) => {
@@ -2202,12 +2364,12 @@ export const EvolutionTracking: React.FC = () => {
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
-              {/* Mood & Energy Tab */}
+              {/* Estado de ánimo y energía */}
               {activeTab === 'mood' && (
                 <div className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Mood Level (1-10)
+                      Nivel de ánimo (1-10)
                     </label>
                     <input
                       type="range"
@@ -2218,15 +2380,15 @@ export const EvolutionTracking: React.FC = () => {
                       className="w-full"
                     />
                     <div className="flex justify-between text-xs text-gray-500 mt-1">
-                      <span>Very Low</span>
-                      <span className="font-medium">Current: {formData.mood}</span>
-                      <span>Excellent</span>
+                      <span>Muy bajo</span>
+                      <span className="font-medium">Actual: {formData.mood}</span>
+                      <span>Excelente</span>
                     </div>
                   </div>
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Energy Level (1-10)
+                      Nivel de energía (1-10)
                     </label>
                     <input
                       type="range"
@@ -2237,60 +2399,60 @@ export const EvolutionTracking: React.FC = () => {
                       className="w-full"
                     />
                     <div className="flex justify-between text-xs text-gray-500 mt-1">
-                      <span>Very Low</span>
-                      <span className="font-medium">Current: {formData.energy}</span>
-                      <span>High Energy</span>
+                      <span>Muy bajo</span>
+                      <span className="font-medium">Actual: {formData.energy}</span>
+                      <span>Mucha energía</span>
                     </div>
                   </div>
                 </div>
               )}
 
-              {/* Weight Tab */}
+              {/* Peso */}
               {activeTab === 'weight' && (
                 <div className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Weight (kg)
+                      Peso (kg)
                     </label>
                     <input
                       type="number"
                       step="0.1"
                       value={formData.weight}
                       onChange={(e) => setFormData(prev => ({ ...prev, weight: e.target.value }))}
-                      placeholder="Enter your weight"
+                      placeholder="Ingresa tu peso"
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     />
                   </div>
                   {formData.weight && (
                     <div className="bg-blue-50 p-3 rounded-lg">
                       <p className="text-sm text-blue-800">
-                        <strong>BMI:</strong> {calculateBMI(parseFloat(formData.weight))} 
-                        <span className="text-xs ml-2">(Based on average height of 1.7m)</span>
+                        <strong>IMC:</strong> {calculateBMI(parseFloat(formData.weight))} 
+                        <span className="text-xs ml-2">(Basado en una estatura promedio de 1.70 m)</span>
                       </p>
                     </div>
                   )}
                 </div>
               )}
 
-              {/* Blood Metrics Tab */}
+              {/* Biomarcadores */}
               {activeTab === 'blood' && (
                 <div className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Blood Sugar Level (mg/dL)
+                      Nivel de glucosa (mg/dL)
                     </label>
                     <input
                       type="number"
                       value={formData.bloodSugar}
                       onChange={(e) => setFormData(prev => ({ ...prev, bloodSugar: e.target.value }))}
-                      placeholder="Enter blood sugar level"
+                      placeholder="Ingresa tu nivel de glucosa"
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     />
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Blood Pressure - Systolic (mmHg)
+                        Presión arterial - Sistólica (mmHg)
                       </label>
                       <input
                         type="number"
@@ -2302,7 +2464,7 @@ export const EvolutionTracking: React.FC = () => {
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Blood Pressure - Diastolic (mmHg)
+                        Presión arterial - Diastólica (mmHg)
                       </label>
                       <input
                         type="number"
@@ -2316,18 +2478,18 @@ export const EvolutionTracking: React.FC = () => {
                 </div>
               )}
 
-              {/* Vital Signs Tab */}
+              {/* Signos vitales */}
               {activeTab === 'vitals' && (
                 <div className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Pulse (bpm)
+                      Pulso (bpm)
                     </label>
                     <input
                       type="number"
                       value={formData.pulse}
                       onChange={(e) => setFormData(prev => ({ ...prev, pulse: e.target.value }))}
-                      placeholder="Enter pulse rate"
+                      placeholder="Ingresa tu pulso"
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     />
                   </div>
@@ -2376,16 +2538,16 @@ export const EvolutionTracking: React.FC = () => {
                 </div>
               )}
 
-              {/* Notes - Available in all tabs */}
+              {/* Notas disponibles en todas las pestañas */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Notes
+                  Notas
                 </label>
                 <textarea
                   value={formData.notes}
                   onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
                   rows={3}
-                  placeholder="How are you feeling today? Any significant events or observations..."
+                  placeholder="¿Cómo te sientes hoy? ¿Algún evento o síntoma relevante?"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
               </div>
@@ -2403,16 +2565,16 @@ export const EvolutionTracking: React.FC = () => {
                     setIsModalOpen(false);
                   }}
                 >
-                  Cancel
+                  Cancelar
                 </Button>
                 <Button type="submit" disabled={isSavingEntry}>
-                  {isSavingEntry ? 'Guardando...' : 'Save Entry'}
+                  {isSavingEntry ? 'Guardando...' : 'Guardar registro'}
                 </Button>
               </div>
             </form>
           </div>
         </Modal>
       )}
-    </div>
+    </section>
   );
 };

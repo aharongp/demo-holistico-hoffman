@@ -1,6 +1,6 @@
 import React from 'react';
 import { Card } from '../UI/Card';
-import { DivideIcon as LucideIcon } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 
 interface StatsCardProps {
   title: string;
@@ -21,20 +21,20 @@ export const StatsCard: React.FC<StatsCardProps> = ({
   color = 'blue'
 }) => {
   const colorClasses = {
-    blue: 'bg-blue-500 text-blue-600 bg-blue-50',
-    green: 'bg-green-500 text-green-600 bg-green-50',
-    purple: 'bg-purple-500 text-purple-600 bg-purple-50',
-    red: 'bg-red-500 text-red-600 bg-red-50',
-    yellow: 'bg-yellow-500 text-yellow-600 bg-yellow-50',
-  };
+    blue: { text: 'text-blue-600', lightBg: 'bg-blue-50' },
+    green: { text: 'text-green-600', lightBg: 'bg-green-50' },
+    purple: { text: 'text-purple-600', lightBg: 'bg-purple-50' },
+    red: { text: 'text-red-600', lightBg: 'bg-red-50' },
+    yellow: { text: 'text-yellow-600', lightBg: 'bg-yellow-50' },
+  } as const;
 
-  const [bgColor, textColor, lightBg] = colorClasses[color].split(' ');
+  const { text, lightBg } = colorClasses[color];
 
   return (
     <Card>
       <div className="flex items-center justify-between sm:justify-start">
         <div className={`p-2 sm:p-3 rounded-full ${lightBg} flex-shrink-0`}>
-          <Icon className={`w-5 h-5 sm:w-6 sm:h-6 ${textColor}`} />
+          <Icon className={`w-5 h-5 sm:w-6 sm:h-6 ${text}`} />
         </div>
         <div className="ml-3 sm:ml-4 flex-1 min-w-0">
           <h3 className="text-xs sm:text-sm font-medium text-gray-500 truncate">{title}</h3>

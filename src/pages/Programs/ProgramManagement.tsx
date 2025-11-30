@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Edit, Trash2, Search } from 'lucide-react';
+import { Plus, Edit, Trash2, Search, ArrowRight } from 'lucide-react';
 import { Card } from '../../components/UI/Card';
 import { Button } from '../../components/UI/Button';
 import { Table } from '../../components/UI/Table';
@@ -76,13 +76,13 @@ export const ProgramManagement: React.FC = () => {
 
       setIsModalOpen(false);
     } catch (error) {
-      console.error('Program submission failed', error);
+      console.error('No se pudo guardar el programa', error);
       alert('No se pudo guardar el programa. Intenta nuevamente.');
     }
   };
 
   const handleDelete = async (programId: string) => {
-    if (!confirm('Are you sure you want to delete this program?')) {
+    if (!confirm('¿Seguro que deseas eliminar este programa?')) {
       return;
     }
 
@@ -95,7 +95,7 @@ export const ProgramManagement: React.FC = () => {
         alert('El programa no se pudo eliminar.');
       }
     } catch (error) {
-      console.error('Failed to delete program', error);
+      console.error('No se pudo eliminar el programa', error);
       alert('No se pudo eliminar el programa.');
     }
   };
@@ -131,33 +131,33 @@ export const ProgramManagement: React.FC = () => {
   const columns = [
     {
       key: 'name',
-      header: 'Name',
+      header: 'Nombre',
     },
     {
       key: 'description',
-      header: 'Description',
+      header: 'Descripción',
       render: (program: Program) => (
         <span className="truncate max-w-xs">{program.description}</span>
       ),
     },
     {
       key: 'instruments',
-      header: 'Instruments',
+      header: 'Instrumentos',
       render: (program: Program) => program.instruments.length,
     },
     {
       key: 'createdBy',
-      header: 'Created By',
+      header: 'Creado por',
       render: (program: Program) => program.createdBy ?? '—',
     },
     {
       key: 'updatedAt',
-      header: 'Last Updated',
+      header: 'Última actualización',
       render: (program: Program) => program.updatedAt ? program.updatedAt.toLocaleDateString() : '—',
     },
     {
       key: 'actions',
-      header: 'Actions',
+      header: 'Acciones',
       render: (program: Program) => (
         <div className="flex space-x-2">
           <Button
@@ -189,51 +189,106 @@ export const ProgramManagement: React.FC = () => {
     navigate(`/programs/${program.id}`);
   };
 
+  const totalPrograms = programs.length;
+  const linkedInstrumentCount = instruments.length;
+  const lastUpdatedLabel = useMemo(() => {
+    const timestamps = programs
+      .map(program => program.updatedAt?.getTime() ?? program.createdAt?.getTime())
+      .filter((value): value is number => typeof value === 'number' && Number.isFinite(value));
+    if (!timestamps.length) {
+      return 'Sin registros';
+    }
+    return new Date(Math.max(...timestamps)).toLocaleDateString();
+  }, [programs]);
+
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Program Management</h1>
-          <p className="text-gray-600">Create and manage treatment programs</p>
+    <section className="space-y-6 px-4 py-8 sm:px-6">
+      <div className="overflow-hidden rounded-3xl border border-orange-100 bg-gradient-to-br from-[#fff7ed] via-white to-[#ffe4cc] shadow-xl">
+        <div className="flex flex-col gap-6 px-6 py-6 lg:flex-row lg:items-center lg:justify-between">
+          <div className="max-w-2xl">
+            <p className="text-xs font-semibold uppercase tracking-[0.4em] text-orange-500">Programas</p>
+            <h1 className="mt-2 text-3xl font-bold text-slate-900">Centro de programas</h1>
+            <p className="mt-3 text-sm text-slate-700 sm:text-base">
+              Diseña, supervisa y conecta planes terapéuticos con instrumentos y equipos clínicos.
+            </p>
+            <div className="mt-6 flex flex-wrap gap-3">
+              <Button
+                onClick={() => handleOpenModal()}
+                className="bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-lg shadow-orange-200/60 hover:from-orange-600 hover:to-amber-600 focus:ring-orange-500"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Nuevo programa
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => navigate('/instruments')}
+                className="border-orange-200 text-orange-600 hover:bg-orange-50 focus:ring-orange-400"
+              >
+                Vincular instrumentos
+                <ArrowRight className="w-4 h-4 ml-2" />
+              </Button>
+            </div>
+          </div>
+          <div className="grid w-full gap-3 sm:grid-cols-3 lg:max-w-md">
+            <div className="rounded-2xl border border-white/60 bg-white/80 px-4 py-3 shadow-inner">
+              <p className="text-xs uppercase tracking-wide text-orange-500/80">Programas activos</p>
+              <p className="text-3xl font-semibold text-slate-900">{totalPrograms}</p>
+            </div>
+            <div className="rounded-2xl border border-white/60 bg-white/80 px-4 py-3 shadow-inner">
+              <p className="text-xs uppercase tracking-wide text-orange-500/80">Instrumentos vinculados</p>
+              <p className="text-3xl font-semibold text-slate-900">{linkedInstrumentCount}</p>
+            </div>
+            <div className="rounded-2xl border border-white/60 bg-white/80 px-4 py-3 shadow-inner">
+              <p className="text-xs uppercase tracking-wide text-orange-500/80">Última edición</p>
+              <p className="text-2xl font-semibold text-slate-900">{lastUpdatedLabel}</p>
+            </div>
+          </div>
         </div>
-        <Button onClick={() => handleOpenModal()}>
-          <Plus className="w-4 h-4 mr-2" />
-          Add Program
-        </Button>
       </div>
 
-      <Card>
-        <div className="flex items-center justify-between mb-6">
-          <div className="relative">
-            <Search className="w-5 h-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+      <Card className="rounded-3xl border-orange-100/70 bg-white/95 shadow-xl ring-1 ring-orange-100/80" padding="lg">
+        <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="relative w-full lg:max-w-md">
+            <Search className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-orange-300" />
             <input
               type="text"
-              placeholder="Search programs..."
+              placeholder="Buscar programas por nombre o descripción..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full rounded-2xl border border-orange-100 bg-white/80 pl-11 pr-4 py-3 text-sm text-slate-900 placeholder:text-orange-300 focus:border-orange-400 focus:ring-2 focus:ring-orange-400/40"
             />
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="rounded-full bg-orange-50 px-3 py-1 text-sm font-semibold text-orange-700">
+              {filteredPrograms.length} coincidencias
+            </span>
+            <span className="text-xs font-semibold uppercase tracking-[0.3em] text-orange-400">
+              Total: {totalPrograms}
+            </span>
           </div>
         </div>
 
-        <Table
-          data={filteredPrograms}
-          columns={columns}
-          onRowClick={handleRowClick}
-          rowKey={(program) => program.id}
-        />
+        <div className="overflow-hidden rounded-2xl border border-orange-100/60 bg-white">
+          <Table
+            data={filteredPrograms}
+            columns={columns}
+            onRowClick={handleRowClick}
+            rowKey={(program) => program.id}
+          />
+        </div>
       </Card>
 
       <Modal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        title={editingProgram ? 'Edit Program' : 'Add New Program'}
+        title={editingProgram ? 'Editar programa' : 'Crear nuevo programa'}
         size="lg"
       >
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Name
+              Nombre
             </label>
             <input
               type="text"
@@ -246,7 +301,7 @@ export const ProgramManagement: React.FC = () => {
           
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Description
+              Descripción
             </label>
             <textarea
               required
@@ -259,7 +314,7 @@ export const ProgramManagement: React.FC = () => {
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Instruments
+              Instrumentos
             </label>
             <div className="space-y-2 max-h-40 overflow-y-auto border border-gray-300 rounded-lg p-3">
               {instruments.map((instrument) => (
@@ -294,14 +349,14 @@ export const ProgramManagement: React.FC = () => {
               variant="outline"
               onClick={() => setIsModalOpen(false)}
             >
-              Cancel
+              Cancelar
             </Button>
             <Button type="submit">
-              {editingProgram ? 'Update Program' : 'Create Program'}
+              {editingProgram ? 'Actualizar programa' : 'Crear programa'}
             </Button>
           </div>
         </form>
       </Modal>
-    </div>
+    </section>
   );
 };

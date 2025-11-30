@@ -1949,7 +1949,8 @@ export const MedicalHistory: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6">
+    <>
+      <section className="space-y-6 px-4 py-8 sm:px-6">
       {isLoadingHistory && (
         <div className="rounded-md bg-blue-50 px-3 py-2 text-sm text-blue-700">
           Cargando historia médica...
@@ -2006,7 +2007,7 @@ export const MedicalHistory: React.FC = () => {
 
       {/* Upload Area */}
       <Card>
-        <div 
+        <div
           className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-gray-400 transition-colors cursor-pointer"
           onClick={() => document.getElementById('file-upload')?.click()}
         >
@@ -2103,6 +2104,7 @@ export const MedicalHistory: React.FC = () => {
           </div>
         </Card>
       )}
+      </section>
 
       {/* Upload Modal */}
       <Modal
@@ -2714,6 +2716,6 @@ export const MedicalHistory: React.FC = () => {
           </div>
         </form>
       </Modal>
-    </div>
+    </>
   );
 };

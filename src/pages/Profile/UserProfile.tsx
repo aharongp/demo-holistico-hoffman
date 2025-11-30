@@ -27,7 +27,7 @@ export const UserProfile: React.FC = () => {
     const file = event.target.files?.[0];
     if (file) {
       if (file.size > 5 * 1024 * 1024) { // 5MB limit
-        setErrors(prev => ({ ...prev, image: 'Image size must be less than 5MB' }));
+        setErrors(prev => ({ ...prev, image: 'La imagen debe ser menor a 5MB' }));
         return;
       }
       
@@ -44,33 +44,33 @@ export const UserProfile: React.FC = () => {
     const newErrors: Record<string, string> = {};
 
     if (!formData.firstName.trim()) {
-      newErrors.firstName = 'First name is required';
+      newErrors.firstName = 'El nombre es obligatorio';
     }
 
     if (!formData.lastName.trim()) {
-      newErrors.lastName = 'Last name is required';
+      newErrors.lastName = 'El apellido es obligatorio';
     }
 
     if (!formData.email.trim()) {
-      newErrors.email = 'Email is required';
+      newErrors.email = 'El correo es obligatorio';
     } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
-      newErrors.email = 'Email is invalid';
+      newErrors.email = 'El correo no tiene un formato válido';
     }
 
     // Password validation only if user is trying to change password
     if (formData.newPassword || formData.confirmPassword || formData.currentPassword) {
       if (!formData.currentPassword) {
-        newErrors.currentPassword = 'Current password is required to change password';
+        newErrors.currentPassword = 'Debes ingresar tu contraseña actual para poder cambiarla';
       }
 
       if (!formData.newPassword) {
-        newErrors.newPassword = 'New password is required';
+        newErrors.newPassword = 'La nueva contraseña es obligatoria';
       } else if (formData.newPassword.length < 6) {
-        newErrors.newPassword = 'Password must be at least 6 characters';
+        newErrors.newPassword = 'La contraseña debe tener al menos 6 caracteres';
       }
 
       if (formData.newPassword !== formData.confirmPassword) {
-        newErrors.confirmPassword = 'Passwords do not match';
+        newErrors.confirmPassword = 'Las contraseñas no coinciden';
       }
     }
 
@@ -102,7 +102,7 @@ export const UserProfile: React.FC = () => {
     setIsEditing(false);
     
     // Show success message (you could add a toast notification here)
-    alert('Profile updated successfully!');
+    alert('¡Perfil actualizado correctamente!');
   };
 
   const handleCancel = () => {
@@ -122,10 +122,10 @@ export const UserProfile: React.FC = () => {
   if (!user) return null;
 
   return (
-    <div className="space-y-6">
+    <section className="space-y-6 px-4 py-8 sm:px-6">
       <div>
-        <h1 className="text-xl sm:text-2xl font-bold text-gray-900">User Profile</h1>
-        <p className="text-sm sm:text-base text-gray-600">Manage your personal information and settings</p>
+        <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Perfil de usuario</h1>
+        <p className="text-sm sm:text-base text-gray-600">Administra tu información personal y configuraciones</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -175,7 +175,7 @@ export const UserProfile: React.FC = () => {
                 className="mt-4 w-full sm:w-auto"
                 size="sm"
               >
-                Edit Profile
+                Editar perfil
               </Button>
             )}
           </div>
@@ -186,12 +186,12 @@ export const UserProfile: React.FC = () => {
           <Card>
             <form onSubmit={handleSubmit} className="space-y-6">
               <div>
-                <h3 className="text-lg font-medium text-gray-900 mb-4">Personal Information</h3>
+                <h3 className="text-lg font-medium text-gray-900 mb-4">Información personal</h3>
                 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      First Name
+                      Nombre
                     </label>
                     <input
                       type="text"
@@ -209,7 +209,7 @@ export const UserProfile: React.FC = () => {
                   
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Last Name
+                      Apellido
                     </label>
                     <input
                       type="text"
@@ -228,7 +228,7 @@ export const UserProfile: React.FC = () => {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Email Address
+                    Correo electrónico
                   </label>
                   <input
                     type="email"
@@ -248,13 +248,13 @@ export const UserProfile: React.FC = () => {
               {/* Password Change Section */}
               {isEditing && (
                 <div>
-                  <h3 className="text-lg font-medium text-gray-900 mb-4">Change Password</h3>
-                  <p className="text-sm text-gray-600 mb-4">Leave blank if you don't want to change your password</p>
+                  <h3 className="text-lg font-medium text-gray-900 mb-4">Cambiar contraseña</h3>
+                  <p className="text-sm text-gray-600 mb-4">Déjalo en blanco si no deseas actualizarla</p>
                   
                   <div className="space-y-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Current Password
+                        Contraseña actual
                       </label>
                       <div className="relative">
                         <input
@@ -283,7 +283,7 @@ export const UserProfile: React.FC = () => {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
-                          New Password
+                          Nueva contraseña
                         </label>
                         <div className="relative">
                           <input
@@ -311,7 +311,7 @@ export const UserProfile: React.FC = () => {
 
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Confirm New Password
+                          Confirmar nueva contraseña
                         </label>
                         <div className="relative">
                           <input
@@ -350,14 +350,14 @@ export const UserProfile: React.FC = () => {
                     onClick={handleCancel}
                     className="w-full sm:w-auto"
                   >
-                    Cancel
+                    Cancelar
                   </Button>
                   <Button
                     type="submit"
                     className="w-full sm:w-auto"
                   >
                     <Save className="w-4 h-4 mr-2" />
-                    Save Changes
+                    Guardar cambios
                   </Button>
                 </div>
               )}
@@ -365,6 +365,6 @@ export const UserProfile: React.FC = () => {
           </Card>
         </div>
       </div>
-    </div>
+    </section>
   );
 };
