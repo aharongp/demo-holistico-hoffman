@@ -144,7 +144,7 @@ export const ProgramDetail: React.FC = () => {
       setEditingActivity(null);
       setFormState(initialFormState);
     } catch (err) {
-      console.error('Failed to create activity', err);
+      console.error('No se pudo guardar la actividad', err);
       const message = editingActivity ? 'No se pudo actualizar la actividad. Intenta nuevamente.' : 'No se pudo crear la actividad. Intenta nuevamente.';
       alert(message);
     } finally {
@@ -175,7 +175,7 @@ export const ProgramDetail: React.FC = () => {
         alert('No se pudo eliminar la actividad.');
       }
     } catch (error) {
-      console.error('Failed to delete activity', error);
+      console.error('No se pudo eliminar la actividad', error);
       alert('No se pudo eliminar la actividad. Intenta nuevamente.');
     }
   };
@@ -207,6 +207,33 @@ export const ProgramDetail: React.FC = () => {
       return '—';
     }
   };
+
+  const activityStats = useMemo(() => {
+    if (!program) {
+      return {
+        total: 0,
+        scheduledDays: 0,
+        nextActivity: 'Sin agenda',
+      };
+    }
+
+    const total = program.activities.length;
+    const days = new Set(
+      program.activities
+        .map((activity) => activity.day)
+        .filter((day): day is string => Boolean(day))
+    );
+    const nextActivity = sortedActivities[0];
+    const nextActivityLabel = nextActivity
+      ? `${DAY_LABEL_MAP[nextActivity.day ?? ''] ?? 'Sin día'} · ${nextActivity.time ?? 'Sin hora'}`
+      : 'Sin agenda';
+
+    return {
+      total,
+      scheduledDays: days.size,
+      nextActivity: nextActivityLabel,
+    };
+  }, [program, sortedActivities]);
 
   const activityColumns = [
     {
@@ -281,7 +308,7 @@ export const ProgramDetail: React.FC = () => {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-24">
-        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+        <Loader2 className="w-8 h-8 animate-spin text-orange-500" />
       </div>
     );
   }
@@ -306,79 +333,104 @@ export const ProgramDetail: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <Button variant="outline" onClick={() => navigate('/programs')}>
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Volver
-          </Button>
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">{program.name}</h1>
-            <p className="text-gray-600">Gestión de actividades del programa</p>
-          </div>
-        </div>
-        <Button onClick={() => handleOpenModal()}>
-          <Plus className="w-4 h-4 mr-2" />
-          Añadir actividad
-        </Button>
-      </div>
-
-      <Card>
-        <div className="p-6 space-y-4">
-          <div className="flex flex-col gap-3">
-            <div className="flex items-start gap-3 text-gray-700">
-              <FileText className="w-5 h-5 mt-1 text-gray-400" />
-              <p>{program.description || 'Sin descripción'}</p>
+      <div className="overflow-hidden rounded-3xl border border-orange-100 bg-gradient-to-br from-[#fff7ed] via-white to-[#ffe4cc] shadow-xl">
+        <div className="flex flex-col gap-6 px-6 py-6">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex flex-wrap items-center gap-3">
+              <Button
+                variant="outline"
+                onClick={() => navigate('/programs')}
+                className="border-orange-200 text-orange-600 hover:bg-orange-50 focus:ring-orange-400"
+              >
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                Volver a programas
+              </Button>
+              <span className="rounded-full bg-white/70 px-3 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-orange-500">
+                Programa activo
+              </span>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm text-gray-700">
-              <div className="flex items-center gap-2">
-                <User className="w-4 h-4 text-gray-400" />
-                <span><span className="font-medium">Creado por:</span> {program.createdBy ?? '—'}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Calendar className="w-4 h-4 text-gray-400" />
-                <span><span className="font-medium">Creado:</span> {formatDateTime(program.createdAt)}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Clock className="w-4 h-4 text-gray-400" />
-                <span><span className="font-medium">Actualizado:</span> {formatDateTime(program.updatedAt ?? null)}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </Card>
-
-      <Card>
-        <div className="p-6 space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-xl font-semibold text-gray-900">Actividades</h2>
-              <p className="text-gray-600 text-sm">Listado de actividades asociadas a este programa</p>
-            </div>
-            <Button variant="outline" onClick={() => handleOpenModal()}>
+            <Button
+              onClick={() => handleOpenModal()}
+              className="bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-lg shadow-orange-200/60 hover:from-orange-600 hover:to-amber-600 focus:ring-orange-500"
+            >
               <Plus className="w-4 h-4 mr-2" />
-              Nueva actividad
+              Añadir actividad
             </Button>
           </div>
-
-          {sortedActivities.length === 0 ? (
-            <div className="text-center text-gray-500 py-10">
-              No hay actividades registradas para este programa.
+          <div className="space-y-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.4em] text-orange-500">{program.createdBy ?? 'Equipo'}</p>
+              <h1 className="mt-2 text-3xl font-bold text-slate-900">{program.name}</h1>
+              <p className="mt-3 text-sm text-slate-700 sm:text-base">{program.description || 'Sin descripción'}</p>
             </div>
-          ) : (
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="rounded-2xl border border-white/60 bg-white/80 px-4 py-3 shadow-inner">
+                <p className="text-xs uppercase tracking-wide text-orange-500/80">Actividades totales</p>
+                <p className="text-3xl font-semibold text-slate-900">{activityStats.total}</p>
+              </div>
+              <div className="rounded-2xl border border-white/60 bg-white/80 px-4 py-3 shadow-inner">
+                <p className="text-xs uppercase tracking-wide text-orange-500/80">Días con agenda</p>
+                <p className="text-3xl font-semibold text-slate-900">{activityStats.scheduledDays}</p>
+              </div>
+              <div className="rounded-2xl border border-white/60 bg-white/80 px-4 py-3 shadow-inner">
+                <p className="text-xs uppercase tracking-wide text-orange-500/80">Próxima actividad</p>
+                <p className="text-base font-semibold text-slate-900">{activityStats.nextActivity}</p>
+              </div>
+            </div>
+            <div className="rounded-2xl border border-white/60 bg-white/80 p-4 shadow-inner">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-start gap-3 text-sm text-slate-700">
+                  <FileText className="w-5 h-5 text-orange-400" />
+                  <div>
+                    <p className="font-semibold text-slate-900">Ficha del programa</p>
+                    <p className="text-slate-600">{program.description || 'Sin descripción disponible.'}</p>
+                  </div>
+                </div>
+                <div className="grid gap-2 text-xs uppercase tracking-[0.2em] text-orange-500 sm:text-right">
+                  <span>Creado: {formatDateTime(program.createdAt)}</span>
+                  <span>Actualizado: {formatDateTime(program.updatedAt ?? null)}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <Card className="rounded-3xl border-orange-100/70 bg-white/95 shadow-xl ring-1 ring-orange-100/80" padding="lg">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <h2 className="text-2xl font-semibold text-slate-900">Actividades</h2>
+            <p className="text-sm text-slate-600">Organiza y programa las sesiones asociadas al plan.</p>
+          </div>
+          <Button
+            variant="outline"
+            onClick={() => handleOpenModal()}
+            className="border-orange-200 text-orange-600 hover:bg-orange-50 focus:ring-orange-400"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Nueva actividad
+          </Button>
+        </div>
+
+        {sortedActivities.length === 0 ? (
+          <div className="mt-8 rounded-2xl border border-dashed border-orange-200 bg-orange-50/60 px-6 py-10 text-center text-sm text-orange-600">
+            No hay actividades registradas para este programa.
+          </div>
+        ) : (
+          <div className="mt-6 overflow-hidden rounded-2xl border border-orange-100/60">
             <Table
               data={sortedActivities}
               columns={activityColumns}
               rowKey={(activity) => activity.id}
             />
-          )}
-        </div>
+          </div>
+        )}
       </Card>
 
       <Modal
         isOpen={isModalOpen}
         onClose={handleCloseModal}
-  title={editingActivity ? 'Editar actividad' : 'Añadir actividad'}
+        title={editingActivity ? 'Editar actividad' : 'Añadir actividad'}
         size="md"
       >
         <form onSubmit={handleSubmit} className="space-y-4">

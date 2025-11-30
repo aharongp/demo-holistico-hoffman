@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { clsx } from 'clsx';
 
 interface Column<T> {
@@ -14,6 +14,9 @@ interface TableProps<T> {
   className?: string;
   onRowClick?: (item: T) => void;
   rowKey?: (item: T, index: number) => React.Key;
+  initialRows?: number;
+  loadMoreStep?: number;
+  loadMoreLabel?: string;
 }
 
 export function Table<T extends Record<string, any>>({ 
@@ -22,7 +25,22 @@ export function Table<T extends Record<string, any>>({
   className,
   onRowClick,
   rowKey,
+  initialRows = 20,
+  loadMoreStep,
+  loadMoreLabel = 'Cargar más',
 }: TableProps<T>) {
+  const resolvedInitialRows = Math.max(initialRows, 0);
+  const resolvedLoadMoreStep = Math.max(loadMoreStep ?? resolvedInitialRows, 1);
+
+  const [visibleCount, setVisibleCount] = useState(() => Math.min(resolvedInitialRows || data.length, data.length));
+
+  useEffect(() => {
+    setVisibleCount(Math.min(resolvedInitialRows || data.length, data.length));
+  }, [data.length, resolvedInitialRows]);
+
+  const visibleData = data.slice(0, visibleCount || data.length);
+  const canLoadMore = visibleCount < data.length;
+
   return (
     <div className={clsx('overflow-hidden shadow ring-1 ring-black ring-opacity-5 rounded-lg', className)}>
       <div className="overflow-x-auto">
@@ -43,18 +61,23 @@ export function Table<T extends Record<string, any>>({
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {data.map((item, rowIndex) => (
+            {visibleData.map((item, rowIndex) => (
               <tr
                 key={rowKey ? rowKey(item, rowIndex) : rowIndex}
                 className={clsx('hover:bg-gray-50', onRowClick && 'cursor-pointer')}
                 onClick={onRowClick ? () => onRowClick(item) : undefined}
               >
                 {columns.map((column, colIndex) => (
-                  <td key={colIndex} className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900">
-                    {column.render 
+                  <td
+                    key={colIndex}
+                    className={clsx(
+                      'px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900',
+                      column.className
+                    )}
+                  >
+                    {column.render
                       ? column.render(item)
-                      : String(item[column.key as keyof T] || '')
-                    }
+                      : String(item[column.key as keyof T] || '')}
                   </td>
                 ))}
               </tr>
@@ -62,6 +85,17 @@ export function Table<T extends Record<string, any>>({
           </tbody>
         </table>
       </div>
+      {canLoadMore && (
+        <div className="border-t border-gray-100 bg-gray-50 px-4 py-3 text-center">
+          <button
+            type="button"
+            onClick={() => setVisibleCount(prev => Math.min(prev + resolvedLoadMoreStep, data.length))}
+            className="text-sm font-semibold text-slate-600 transition hover:text-slate-900"
+          >
+            {loadMoreLabel}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

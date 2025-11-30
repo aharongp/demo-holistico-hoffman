@@ -45,6 +45,12 @@ const createEmptyInstrumentForm = (instrumentTypeId = '', subjectId = ''): Instr
   colorResponse: 0,
 });
 
+const TAB_ITEMS: Array<{ id: 'all' | 'themes' | 'criteria'; label: string; helper: string }> = [
+  { id: 'all', label: 'Instrumentos', helper: 'Catálogo y plantillas' },
+  { id: 'themes', label: 'Temas', helper: 'Organiza contenidos' },
+  { id: 'criteria', label: 'Criterios', helper: 'Reglas de evaluación' },
+];
+
 export const InstrumentManagement: React.FC = () => {
   const {
     instruments,
@@ -871,38 +877,63 @@ export const InstrumentManagement: React.FC = () => {
   const instrumentsToShow = selectedTypeInstruments ?? filteredInstruments;
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Instrument Management</h1>
-          <p className="text-gray-600">Manage assessment instruments and questionnaires</p>
-        </div>
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-2">
-          <button
-            className={`w-full sm:w-auto px-3 py-1 rounded-md text-sm font-medium ${activeTab === 'all' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-700'}`}
-            onClick={() => setActiveTab('all')}
-            aria-pressed={activeTab === 'all'}
-          >
-            Todos los instrumentos
-          </button>
-          <button
-            className={`w-full sm:w-auto px-3 py-1 rounded-md text-sm font-medium ${activeTab === 'themes' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-700'}`}
-            onClick={() => setActiveTab('themes')}
-            aria-pressed={activeTab === 'themes'}
-          >
-            Temas
-          </button>
-          <button
-            className={`w-full sm:w-auto px-3 py-1 rounded-md text-sm font-medium ${activeTab === 'criteria' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-700'}`}
-            onClick={() => setActiveTab('criteria')}
-            aria-pressed={activeTab === 'criteria'}
-          >
-            Criterios
-          </button>
+    <>
+      <section className="space-y-6 px-4 py-8 sm:px-6">
+      <div className="overflow-hidden rounded-3xl border border-gray-200 bg-gradient-to-br from-[#e2e4e8] via-[#f5f6f8] to-[#cdd2d9] shadow-xl">
+        <div className="flex flex-col gap-6 px-6 py-6">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.4em] text-gray-600">Instrumentos</p>
+            <h1 className="mt-2 text-3xl font-bold text-gray-900">Centro de instrumentos</h1>
+            <p className="mt-2 text-sm text-gray-600 sm:text-base">
+              Centraliza plantillas, criterios y temas en una sola vista para mantener tu biblioteca clínica actualizada.
+            </p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700 shadow-sm">
+              <p className="text-xs uppercase tracking-wide text-gray-500">Tipos registrados</p>
+              <p className="text-2xl font-semibold text-gray-900">{instrumentTypes.length}</p>
+            </div>
+            <div className="rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700 shadow-sm">
+              <p className="text-xs uppercase tracking-wide text-gray-500">Temas disponibles</p>
+              <p className="text-2xl font-semibold text-gray-900">{subjects.length}</p>
+            </div>
+            <div className="rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700 shadow-sm">
+              <p className="text-xs uppercase tracking-wide text-gray-500">Criterios activos</p>
+              <p className="text-2xl font-semibold text-gray-900">{criteria.length}</p>
+            </div>
+          </div>
         </div>
       </div>
 
-      <Card>
+      <div className="rounded-3xl border border-gray-200 bg-white px-6 py-5 shadow-lg">
+        <div className="flex flex-col gap-3">
+          <span className="text-xs font-semibold uppercase tracking-[0.4em] text-gray-600">Vistas rápidas</span>
+          <div className="grid gap-2 sm:grid-cols-3">
+            {TAB_ITEMS.map((tab) => {
+              const isActive = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  aria-pressed={isActive}
+                  className={`rounded-2xl px-4 py-3 text-left transition focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-900/30 ${
+                    isActive
+                      ? 'bg-[#374151] text-white shadow-lg shadow-gray-700/40'
+                      : 'bg-white text-gray-600 border border-gray-300 hover:text-gray-900 hover:bg-gray-50'
+                  }`}
+                >
+                  <span className="text-sm font-semibold">{tab.label}</span>
+                  <span className={`block text-xs ${isActive ? 'text-gray-200/90' : 'text-gray-500'}`}>
+                    {tab.helper}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+  <Card className="border border-gray-200 bg-white shadow-xl" padding="lg">
         {/* Tab content switch */}
   {activeTab === 'all' && (
           <div className="py-4">
@@ -940,7 +971,9 @@ export const InstrumentManagement: React.FC = () => {
                     <button
                       key={type.id}
                       type="button"
-                      className={`p-4 border rounded-md text-left transition hover:shadow-md ${isSelected ? 'border-blue-500 bg-blue-50/70 ring-1 ring-blue-200' : 'border-gray-200'}`}
+                      className={`group rounded-2xl border bg-white/80 p-4 text-left shadow-sm transition hover:-translate-y-1 hover:shadow-xl ${
+                        isSelected ? 'border-gray-500/60 ring-2 ring-gray-400/60' : 'border-gray-200/70'
+                      }`}
                       onClick={async () => {
                         setTypeError(null);
                         setActiveInstrumentType(type);
@@ -1001,11 +1034,13 @@ export const InstrumentManagement: React.FC = () => {
                         }
                       }}
                     >
-                      <div className="flex items-start justify-between mb-2 gap-2">
+                      <div className="mb-2 flex items-start justify-between gap-2">
                         <div>
-                          <h3 className="font-medium text-gray-900">{type.name || `Tipo ${type.id}`}</h3>
+                          <h3 className={`font-semibold ${isSelected ? 'text-gray-900' : 'text-gray-800'}`}>
+                            {type.name || `Tipo ${type.id}`}
+                          </h3>
                           {criterionLabel && (
-                            <span className="mt-1 inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
+                            <span className="mt-1 inline-flex items-center rounded-full bg-gray-900/5 px-2 py-0.5 text-xs text-gray-600">
                               {criterionLabel}
                             </span>
                           )}
@@ -1039,10 +1074,10 @@ export const InstrumentManagement: React.FC = () => {
                           </Button>
                         </div>
                       </div>
-                      <p className="text-sm text-gray-600 mb-2 break-words min-h-[48px]">
+                      <p className="min-h-[48px] break-words text-sm text-gray-600">
                         {type.description ?? 'Sin descripción'}
                       </p>
-                      <div className="text-xs text-gray-500 flex items-center justify-between">
+                      <div className="flex items-center justify-between text-xs text-gray-500">
                         <span>Creado por: {type.createdBy ?? 'system'}</span>
                         {type.createdAt ? (
                           <span>{type.createdAt.toLocaleDateString()}</span>
@@ -1148,6 +1183,7 @@ export const InstrumentManagement: React.FC = () => {
           </div>
         )}
       </Card>
+      </section>
 
       <Modal
         isOpen={isModalOpen}
@@ -1461,6 +1497,6 @@ export const InstrumentManagement: React.FC = () => {
           </div>
         </form>
       </Modal>
-    </div>
+    </>
   );
 };

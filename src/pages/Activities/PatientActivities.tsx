@@ -227,7 +227,7 @@ export const PatientActivities: React.FC = () => {
 
   const loadActivities = useCallback(async () => {
     if (!token) {
-  setError('Debes iniciar sesión para ver tus instrumentos.');
+      setError('Debes iniciar sesión para ver tus instrumentos.');
       setActivities([]);
       return;
     }
@@ -254,13 +254,13 @@ export const PatientActivities: React.FC = () => {
       }
 
       const payload: BackendPatientInstrumentAssignment[] = await res.json();
-  const mapped = payload.map(mapAssignmentToActivity);
-  mapped.sort((a, b) => resolveTimestamp(b.createdAt) - resolveTimestamp(a.createdAt));
-  setActivities(mapped);
+      const mapped = payload.map(mapAssignmentToActivity);
+      mapped.sort((a, b) => resolveTimestamp(b.createdAt) - resolveTimestamp(a.createdAt));
+      setActivities(mapped);
       setLastUpdated(new Date().toISOString());
     } catch (error) {
       console.error('Error fetching patient activities', error);
-  setError('No fue posible cargar tus instrumentos. Intenta nuevamente más tarde.');
+      setError('No fue posible cargar tus instrumentos. Intenta nuevamente más tarde.');
     } finally {
       setIsLoading(false);
     }
@@ -315,13 +315,13 @@ export const PatientActivities: React.FC = () => {
   const showSkeleton = isLoading && activities.length === 0;
 
   return (
-    <div className="space-y-6">
+    <section className="space-y-6 px-4 py-8 sm:px-6">
       <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Mis instrumentos</h1>
           <p className="text-gray-600">Instrumentos y evaluaciones asignadas para tu seguimiento</p>
           {lastUpdated && (
-            <p className="text-xs text-gray-500 mt-1">Actualizado {formatDate(lastUpdated, 'recientemente')}</p>
+            <p className="mt-1 text-xs text-gray-500">Actualizado {formatDate(lastUpdated, 'recientemente')}</p>
           )}
         </div>
         <div className="flex items-center gap-2">
@@ -461,6 +461,6 @@ export const PatientActivities: React.FC = () => {
           </div>
         </Card>
       )}
-    </div>
+    </section>
   );
 };
