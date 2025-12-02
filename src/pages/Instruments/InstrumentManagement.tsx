@@ -876,7 +876,7 @@ export const InstrumentManagement: React.FC = () => {
 
   return (
     <>
-      <section className="space-y-8 bg-gradient-to-b from-[#F6F7F9] via-white to-[#E7E9EE] px-4 py-10 sm:px-6">
+      <section className="space-y-8 from-[#F6F7F9] via-white to-[#E7E9EE] px-4 py-8 sm:px-8">
         <div className="relative overflow-hidden rounded-[32px] border border-white/50 bg-gradient-to-br from-[#F3F4F6] via-white to-[#E5E7EB] shadow-[0_35px_90px_rgba(15,23,42,0.12)]">
           <div aria-hidden className="absolute -top-10 right-6 h-52 w-52 rounded-full bg-[#D1D5DB]/80 blur-3xl" />
           <div aria-hidden className="absolute -bottom-12 left-8 h-52 w-52 rounded-full bg-[#E5E7EB]/70 blur-3xl" />
@@ -1120,7 +1120,7 @@ export const InstrumentManagement: React.FC = () => {
             <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <Button
                 onClick={() => setShowAllInstrumentsTable((state) => !state)}
-                className="rounded-full border border-white/50 bg-white/70 px-5 py-2 text-sm font-semibold text-slate-700 shadow-inner shadow-white/40 backdrop-blur hover:text-slate-900"
+                className="rounded-full border border-white/50 bg-gray-500 px-5 py-2 text-sm font-semibold text-slate-700 shadow-inner shadow-white/40 backdrop-blur hover:text-slate-900 hover:bg-gray-400 transition"
               >
                 {showAllInstrumentsTable ? 'Ocultar tabla de instrumentos' : 'Ver tabla de instrumentos'}
               </Button>
