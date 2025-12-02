@@ -1236,7 +1236,7 @@ export const InstrumentManagement: React.FC = () => {
               required
               value={formData.subjectId}
               onChange={(event) => setFormData((prev) => ({ ...prev, subjectId: event.target.value }))}
-              className="w-full rounded-2xl border border-white/60 bg-white/70 px-3 py-2 text-sm text-slate-900 focus:border-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-300"
+              className="w-full rounded-2xl border border-gray-300 bg-white/70 px-3 py-2 text-sm text-slate-900 focus:border-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-300"
             >
               <option value="">Selecciona un tema</option>
               {subjects.map((subject) => (
@@ -1261,7 +1261,7 @@ export const InstrumentManagement: React.FC = () => {
               value={formData.description}
               onChange={(event) => setFormData((prev) => ({ ...prev, description: event.target.value }))}
               rows={3}
-              className="w-full rounded-2xl border border-white/60 bg-white/70 px-3 py-2 text-sm text-slate-900 focus:border-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-300"
+              className="w-full rounded-2xl border border-gray-300 bg-white/70 px-3 py-2 text-sm text-slate-900 focus:border-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-300"
               placeholder="Describe brevemente el instrumento"
             />
           </div>
@@ -1271,7 +1271,7 @@ export const InstrumentManagement: React.FC = () => {
             <select
               value={formData.resource}
               onChange={(event) => setFormData((prev) => ({ ...prev, resource: event.target.value }))}
-              className="w-full rounded-2xl border border-white/60 bg-white/70 px-3 py-2 text-sm text-slate-900 focus:border-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-300"
+              className="w-full rounded-2xl border border-gray-300 bg-white/70 px-3 py-2 text-sm text-slate-900 focus:border-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-300"
             >
               {RESOURCE_OPTIONS.map((option) => (
                 <option key={option} value={option}>
@@ -1286,7 +1286,7 @@ export const InstrumentManagement: React.FC = () => {
             <select
               value={formData.availability}
               onChange={(event) => setFormData((prev) => ({ ...prev, availability: event.target.value }))}
-              className="w-full rounded-2xl border border-white/60 bg-white/70 px-3 py-2 text-sm text-slate-900 focus:border-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-300"
+              className="w-full rounded-2xl border border-gray-300 bg-white/70 px-3 py-2 text-sm text-slate-900 focus:border-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-300"
             >
               {AUDIENCE_OPTIONS.map((option) => (
                 <option key={option} value={option}>
@@ -1306,7 +1306,7 @@ export const InstrumentManagement: React.FC = () => {
                   resultDelivery: event.target.value ? (event.target.value as Exclude<ResultDeliveryOption, null>) : null,
                 }))
               }
-              className="w-full rounded-2xl border border-white/60 bg-white/70 px-3 py-2 text-sm text-slate-900 focus:border-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-300"
+              className="w-full rounded-2xl border border-gray-300 bg-white/70 px-3 py-2 text-sm text-slate-900 focus:border-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-300"
             >
               {RESULT_DELIVERY_OPTIONS.map((option) => (
                 <option key={option.value ?? 'none'} value={option.value ?? ''}>
@@ -1326,7 +1326,7 @@ export const InstrumentManagement: React.FC = () => {
                   colorResponse: event.target.value === '1' ? 1 : 0,
                 }))
               }
-              className="w-full rounded-2xl border border-white/60 bg-white/70 px-3 py-2 text-sm text-slate-900 focus:border-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-300"
+              className="w-full rounded-2xl border border-gray-300 bg-white/70 px-3 py-2 text-sm text-slate-900 focus:border-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-300"
             >
               {COLOR_RESPONSE_OPTIONS.map((option) => (
                 <option key={option.value} value={String(option.value)}>
@@ -1342,7 +1342,7 @@ export const InstrumentManagement: React.FC = () => {
                 type="checkbox"
                 checked={formData.isActive}
                 onChange={(event) => setFormData((prev) => ({ ...prev, isActive: event.target.checked }))}
-                className="h-4 w-4 rounded border-white/50 bg-white/70 text-gray-600 focus:ring-gray-400"
+                className="h-4 w-4 rounded border-gray-300 bg-white/70 text-gray-600 focus:ring-gray-400"
               />
               <span>Activo</span>
             </label>
