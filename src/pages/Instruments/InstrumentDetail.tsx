@@ -42,7 +42,7 @@ const SelectPreview: React.FC<{ questionId: string; options: PreviewOption[]; pl
     <div ref={containerRef} className="relative mt-1">
       <button
         type="button"
-        className={`flex w-full items-center justify-between rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 ${isOpen ? 'ring-2 ring-blue-500' : ''}`}
+        className={`flex w-full items-center justify-between rounded-2xl border border-white/60 bg-white/70 px-3 py-2 text-sm text-slate-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-gray-300 ${isOpen ? 'ring-2 ring-gray-300' : ''}`}
         onClick={() => setIsOpen(prev => !prev)}
         aria-haspopup="listbox"
         aria-expanded={isOpen}
@@ -55,7 +55,7 @@ const SelectPreview: React.FC<{ questionId: string; options: PreviewOption[]; pl
         <div
           id={`${questionId}-preview-options`}
           role="listbox"
-          className="absolute z-20 mt-1 max-h-48 w-full overflow-y-auto rounded-lg border border-gray-200 bg-white py-1 shadow-lg"
+          className="absolute z-20 mt-1 max-h-48 w-full overflow-y-auto rounded-2xl border border-white/60 bg-white/90 py-1 shadow-xl shadow-slate-200/70 backdrop-blur"
         >
           {hasOptions ? (
             options.map((option) => (
@@ -63,24 +63,24 @@ const SelectPreview: React.FC<{ questionId: string; options: PreviewOption[]; pl
                 key={option.key}
                 role="option"
                 aria-selected="false"
-                className="flex cursor-default items-center justify-between px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                className="flex cursor-default items-center justify-between px-3 py-2 text-sm text-slate-700 hover:bg-slate-50/80"
               >
                 <span className="flex items-center gap-2">
                   {option.color ? (
                     <span
                       aria-hidden="true"
-                      className="inline-flex h-2.5 w-2.5 rounded-full border border-gray-300"
+                      className="inline-flex h-2.5 w-2.5 rounded-full border border-white/60"
                       style={{ backgroundColor: option.color }}
                       title={option.color ?? undefined}
                     />
                   ) : null}
                   <span>{option.label}</span>
                 </span>
-                <span className="text-xs text-gray-400">Vista previa</span>
+                <span className="text-xs text-slate-400">Vista previa</span>
               </div>
             ))
           ) : (
-            <div className="px-3 py-2 text-sm text-gray-500">No hay opciones disponibles.</div>
+            <div className="px-3 py-2 text-sm text-slate-500">No hay opciones disponibles.</div>
           )}
         </div>
       ) : null}
@@ -157,18 +157,18 @@ export const InstrumentDetail: React.FC = () => {
     const renderOptions = (options: PreviewOption[], inputType: 'checkbox' | 'radio') => (
       <div className="space-y-2">
         {options.map((option) => (
-          <label key={option.key} className="flex items-center gap-2 text-sm text-gray-700">
+          <label key={option.key} className="flex items-center gap-2 text-sm text-slate-700">
             <input
               type={inputType}
               name={question.id}
               disabled
-              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              className="h-4 w-4 rounded border-white/60 bg-white/80 text-slate-700 focus:ring-gray-300"
             />
             <span className="flex items-center gap-2">
               {option.color ? (
                 <span
                   aria-hidden="true"
-                  className="inline-flex h-2.5 w-2.5 rounded-full border border-gray-300"
+                  className="inline-flex h-2.5 w-2.5 rounded-full border border-white/60"
                   style={{ backgroundColor: option.color }}
                   title={option.color ?? undefined}
                 />
@@ -235,21 +235,21 @@ export const InstrumentDetail: React.FC = () => {
         }
         return (
           <div className="flex flex-col gap-2">
-            <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+            <label className="inline-flex items-center gap-2 text-sm text-slate-700">
               <input
                 type="radio"
                 name={`${question.id}-boolean`}
                 disabled
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500"
+                className="h-4 w-4 border-white/60 bg-white/80 text-slate-700 focus:ring-gray-300"
               />
               <span>Sí</span>
             </label>
-            <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+            <label className="inline-flex items-center gap-2 text-sm text-slate-700">
               <input
                 type="radio"
                 name={`${question.id}-boolean`}
                 disabled
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500"
+                className="h-4 w-4 border-white/60 bg-white/80 text-slate-700 focus:ring-gray-300"
               />
               <span>No</span>
             </label>
@@ -264,9 +264,9 @@ export const InstrumentDetail: React.FC = () => {
               max={10}
               defaultValue={5}
               disabled
-              className="w-full accent-blue-600"
+              className="w-full accent-slate-600"
             />
-            <div className="flex justify-between text-xs text-gray-500">
+            <div className="flex justify-between text-xs text-slate-500">
               <span>1</span>
               <span>5</span>
               <span>10</span>
@@ -279,7 +279,7 @@ export const InstrumentDetail: React.FC = () => {
           <textarea
             disabled
             rows={3}
-            className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="mt-1 block w-full rounded-2xl border border-white/60 bg-white/70 px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-gray-300"
             placeholder="Respuesta del paciente"
           />
         );
@@ -433,7 +433,7 @@ export const InstrumentDetail: React.FC = () => {
       header: 'Pregunta',
       render: (question: Question) => (
         <div className="flex flex-col">
-          <span className="font-medium text-gray-900 leading-snug">{question.text}</span>
+          <span className="font-medium text-slate-900 leading-snug">{question.text}</span>
           {(() => {
             const labels = Array.isArray(question.answers) && question.answers.length
               ? question.answers.reduce<string[]>((acc, answer) => {
@@ -445,7 +445,7 @@ export const InstrumentDetail: React.FC = () => {
                 }, [])
               : (Array.isArray(question.options) ? question.options : []);
             return labels.length ? (
-              <span className="text-xs text-gray-500 mt-1">
+              <span className="text-xs text-slate-500 mt-1">
                 Opciones: {labels.join(', ')}
               </span>
             ) : null;
@@ -503,7 +503,7 @@ export const InstrumentDetail: React.FC = () => {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-24">
-        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+        <Loader2 className="w-8 h-8 animate-spin text-slate-500" />
       </div>
     );
   }
@@ -526,103 +526,164 @@ export const InstrumentDetail: React.FC = () => {
     return null;
   }
 
+  const heroStats = [
+    { label: 'Preguntas', value: instrument.questions.length.toString() },
+    { label: 'Activas', value: activeQuestions.length.toString() },
+    { label: 'Duración', value: formatDuration(instrument.estimatedDuration) },
+  ];
+
+  const highlightBadges = [
+    instrument.availability ? `Disponible: ${instrument.availability}` : null,
+    instrument.resource ? `Recurso: ${instrument.resource}` : null,
+    instrument.resultDelivery ? `Resultados: ${instrument.resultDelivery === 'sistema' ? 'Sistema' : 'Programado'}` : null,
+  ].filter(Boolean) as string[];
+
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <Button variant="outline" onClick={() => navigate('/instruments')}>
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Volver
-          </Button>
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">{instrument.name || 'Instrumento'}</h1>
-            <p className="text-gray-600 text-sm">Gestión de preguntas del instrumento</p>
+    <section className="space-y-8 from-[#E8ECF8] via-[#F7F8FD] to-[#DDE3F7] px-4 py-8 sm:px-8">
+      <div className="relative overflow-hidden rounded-[32px] border border-white/50 bg-gradient-to-br from-[#FAF3CA] via-white to-[#8A8484] shadow-[0_35px_90px_rgba(15,23,42,0.16)]">
+        <div aria-hidden className="absolute -top-10 right-6 h-52 w-52 rounded-full bg-[#E6E0DF]/80 blur-3xl" />
+        <div aria-hidden className="absolute -bottom-12 left-8 h-52 w-52 rounded-full bg-[#E6E0DF]/70 blur-3xl" />
+        <div className="relative flex flex-col gap-6 px-6 py-8 lg:flex-row lg:items-center lg:justify-between">
+          <div className="space-y-5">
+            <div className="flex flex-wrap items-center gap-3">
+              <Button
+                variant="outline"
+                onClick={() => navigate('/instruments')}
+                className="rounded-full border-white/60 bg-white/70 px-4 py-2 text-sm font-medium text-slate-700 shadow-inner shadow-white/40 backdrop-blur hover:text-slate-900"
+              >
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                Volver
+              </Button>
+              {instrument.subjectName ? (
+                <span className="rounded-full border border-white/60 bg-white/70 px-3 py-1 text-xs font-semibold uppercase tracking-[0.35em] text-slate-500">
+                  {instrument.subjectName}
+                </span>
+              ) : null}
+              {instrument.instrumentTypeId ? (
+                <span className="rounded-full border border-white/60 bg-white/70 px-3 py-1 text-xs font-semibold uppercase tracking-[0.35em] text-slate-500">
+                  {instrument.instrumentTypeId}
+                </span>
+              ) : null}
+              <span className={`rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-[0.35em] ${instrument.isActive ? 'border-emerald-200/60 bg-emerald-50/80 text-emerald-600' : 'border-rose-200/60 bg-rose-50/80 text-rose-600'}`}>
+                {instrument.isActive ? 'Activo' : 'Inactivo'}
+              </span>
+            </div>
+            <div className="space-y-3">
+              <p className="text-[0.65rem] font-semibold uppercase tracking-[0.45em] text-slate-500">Instrumento clínico</p>
+              <h1 className="text-3xl font-semibold leading-tight text-slate-900 sm:text-4xl">
+                {instrument.name || 'Instrumento'}
+              </h1>
+              <p className="max-w-3xl text-sm text-slate-600">
+                {instrument.description || 'Sin descripción disponible para este instrumento.'}
+              </p>
+            </div>
+            {highlightBadges.length ? (
+              <div className="flex flex-wrap gap-3 text-[0.65rem] uppercase tracking-[0.4em] text-slate-500">
+                {highlightBadges.map((badge) => (
+                  <span key={badge} className="rounded-full border border-white/50 bg-white/70 px-3 py-1 text-[0.6rem] font-semibold tracking-[0.35em] text-slate-500">
+                    {badge}
+                  </span>
+                ))}
+              </div>
+            ) : null}
+          </div>
+          <div className="grid w-full gap-3 sm:grid-cols-3 lg:max-w-md">
+            {heroStats.map((stat) => (
+              <div
+                key={stat.label}
+                className="rounded-3xl border border-white/60 bg-white/75 px-5 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)] backdrop-blur"
+              >
+                <p className="text-[0.65rem] font-semibold uppercase tracking-[0.4em] text-slate-500">{stat.label}</p>
+                <p className="text-3xl font-semibold text-slate-900">{stat.value}</p>
+              </div>
+            ))}
           </div>
         </div>
       </div>
 
-      <Card>
+      <Card className="border border-white/50 bg-white/85 shadow-[0_30px_90px_rgba(15,23,42,0.12)] backdrop-blur">
         <div className="p-6 space-y-6">
           <div className="flex items-start gap-3">
-            <div className="rounded-full bg-blue-50 p-2 text-blue-600">
+            <div className="rounded-2xl bg-slate-900/5 p-3 text-slate-600">
               <BookOpen className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-lg font-semibold text-gray-900">Descripción</h2>
-              <p className="text-gray-700 mt-1 leading-relaxed">
+              <h2 className="text-lg font-semibold text-slate-900">Descripción</h2>
+              <p className="text-slate-600 mt-1 leading-relaxed">
                 {instrument.description || 'Sin descripción disponible para este instrumento.'}
               </p>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-sm text-gray-700">
-            <div className="flex flex-col">
-              <span className="uppercase text-xs text-gray-500">Tema</span>
-              <span className="font-medium text-gray-900">{instrument.subjectName ?? '—'}</span>
+          <div className="grid grid-cols-1 gap-4 text-sm text-slate-700 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="flex flex-col rounded-2xl border border-white/60 bg-white/70 p-4">
+              <span className="uppercase text-xs text-slate-400">Tema</span>
+              <span className="font-semibold text-slate-900">{instrument.subjectName ?? '—'}</span>
             </div>
-            <div className="flex flex-col">
-              <span className="uppercase text-xs text-gray-500">Tipo de instrumento</span>
-              <span className="font-medium text-gray-900">{instrument.instrumentTypeId ?? '—'}</span>
+            <div className="flex flex-col rounded-2xl border border-white/60 bg-white/70 p-4">
+              <span className="uppercase text-xs text-slate-400">Tipo de instrumento</span>
+              <span className="font-semibold text-slate-900">{instrument.instrumentTypeId ?? '—'}</span>
             </div>
-            <div className="flex flex-col">
-              <span className="uppercase text-xs text-gray-500">Disponibilidad</span>
-              <span className="font-medium text-gray-900">{instrument.availability ?? '—'}</span>
+            <div className="flex flex-col rounded-2xl border border-white/60 bg-white/70 p-4">
+              <span className="uppercase text-xs text-slate-400">Disponibilidad</span>
+              <span className="font-semibold text-slate-900">{instrument.availability ?? '—'}</span>
             </div>
-            <div className="flex flex-col">
-              <span className="uppercase text-xs text-gray-500">Recurso</span>
-              <span className="font-medium text-gray-900">{instrument.resource ?? '—'}</span>
+            <div className="flex flex-col rounded-2xl border border-white/60 bg-white/70 p-4">
+              <span className="uppercase text-xs text-slate-400">Recurso</span>
+              <span className="font-semibold text-slate-900">{instrument.resource ?? '—'}</span>
             </div>
-            <div className="flex flex-col">
-              <span className="uppercase text-xs text-gray-500">Entrega de resultados</span>
-              <span className="font-medium text-gray-900">
-                {instrument.resultDelivery ? instrument.resultDelivery === 'sistema' ? 'Sistema' : 'Programado' : '—'}
+            <div className="flex flex-col rounded-2xl border border-white/60 bg-white/70 p-4">
+              <span className="uppercase text-xs text-slate-400">Entrega de resultados</span>
+              <span className="font-semibold text-slate-900">
+                {instrument.resultDelivery ? (instrument.resultDelivery === 'sistema' ? 'Sistema' : 'Programado') : '—'}
               </span>
             </div>
-            <div className="flex flex-col">
-              <span className="uppercase text-xs text-gray-500">Resalta respuestas</span>
-              <span className="font-medium text-gray-900">{instrument.colorResponse === 1 ? 'Sí' : 'No'}</span>
+            <div className="flex flex-col rounded-2xl border border-white/60 bg-white/70 p-4">
+              <span className="uppercase text-xs text-slate-400">Resalta respuestas</span>
+              <span className="font-semibold text-slate-900">{instrument.colorResponse === 1 ? 'Sí' : 'No'}</span>
             </div>
-            <div className="flex flex-col">
-              <span className="uppercase text-xs text-gray-500">Estado</span>
-              <span className={`font-medium ${instrument.isActive ? 'text-green-600' : 'text-red-600'}`}>
+            <div className="flex flex-col rounded-2xl border border-white/60 bg-white/70 p-4">
+              <span className="uppercase text-xs text-slate-400">Estado</span>
+              <span className={`font-semibold ${instrument.isActive ? 'text-emerald-600' : 'text-rose-600'}`}>
                 {instrument.isActive ? 'Activo' : 'Inactivo'}
               </span>
             </div>
-            <div className="flex flex-col">
-              <span className="uppercase text-xs text-gray-500">Duración estimada</span>
-              <span className="font-medium text-gray-900">{formatDuration(instrument.estimatedDuration)}</span>
+            <div className="flex flex-col rounded-2xl border border-white/60 bg-white/70 p-4">
+              <span className="uppercase text-xs text-slate-400">Duración estimada</span>
+              <span className="font-semibold text-slate-900">{formatDuration(instrument.estimatedDuration)}</span>
             </div>
-            <div className="flex flex-col">
-              <span className="uppercase text-xs text-gray-500">Creado por</span>
-              <span className="font-medium text-gray-900">{instrument.createdBy ?? '—'}</span>
+            <div className="flex flex-col rounded-2xl border border-white/60 bg-white/70 p-4">
+              <span className="uppercase text-xs text-slate-400">Creado por</span>
+              <span className="font-semibold text-slate-900">{instrument.createdBy ?? '—'}</span>
             </div>
-            <div className="flex flex-col">
-              <span className="uppercase text-xs text-gray-500">Fecha de creación</span>
-              <span className="font-medium text-gray-900">{formatDateTime(instrument.createdAt)}</span>
+            <div className="flex flex-col rounded-2xl border border-white/60 bg-white/70 p-4">
+              <span className="uppercase text-xs text-slate-400">Fecha de creación</span>
+              <span className="font-semibold text-slate-900">{formatDateTime(instrument.createdAt)}</span>
             </div>
-            <div className="flex flex-col">
-              <span className="uppercase text-xs text-gray-500">Última actualización</span>
-              <span className="font-medium text-gray-900">{formatDateTime(instrument.updatedAt)}</span>
+            <div className="flex flex-col rounded-2xl border border-white/60 bg-white/70 p-4">
+              <span className="uppercase text-xs text-slate-400">Última actualización</span>
+              <span className="font-semibold text-slate-900">{formatDateTime(instrument.updatedAt)}</span>
             </div>
           </div>
         </div>
       </Card>
 
-      <Card>
+      <Card className="border border-white/50 bg-white/85 shadow-[0_30px_90px_rgba(15,23,42,0.12)] backdrop-blur">
         <div className="p-6 space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <h2 className="text-xl font-semibold text-gray-900">Preguntas</h2>
-              <p className="text-sm text-gray-600">
+              <h2 className="text-xl font-semibold text-slate-900">Preguntas</h2>
+              <p className="text-sm text-slate-600">
                 {instrument.questions.length ? `Total de preguntas: ${instrument.questions.length}` : 'Este instrumento aún no tiene preguntas registradas.'}
               </p>
             </div>
-            <div className="flex flex-col sm:flex-row gap-2">
+            <div className="flex flex-col gap-2 sm:flex-row">
               <Button
                 type="button"
                 variant="outline"
                 onClick={handleOpenPreview}
                 disabled={activeQuestions.length === 0}
+                className="rounded-full border border-white/60 bg-white/60 px-5 py-2 text-sm font-semibold text-slate-700 shadow-inner shadow-white/40 backdrop-blur disabled:cursor-not-allowed disabled:opacity-60"
               >
                 Previsualizar preguntas
               </Button>
@@ -631,6 +692,7 @@ export const InstrumentDetail: React.FC = () => {
                 variant="primary"
                 onClick={handleOpenCreateForm}
                 disabled={isSaving || Boolean(pendingQuestionId)}
+                className="rounded-full bg-gradient-to-r from-[#1F2937] via-[#303A4A] to-[#4B5563] px-5 py-2 text-sm font-semibold text-white shadow-lg shadow-slate-900/30 transition hover:translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <Plus className="w-4 h-4 mr-2" />
                 Agregar pregunta
@@ -639,13 +701,15 @@ export const InstrumentDetail: React.FC = () => {
           </div>
 
           {!isFormOpen && actionError ? (
-            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            <div className="rounded-2xl border border-rose-200/70 bg-rose-50/80 px-4 py-3 text-sm text-rose-600">
               {actionError}
             </div>
           ) : null}
 
           {instrument.questions.length === 0 ? (
-            <div className="text-center text-gray-500 py-10">No hay preguntas registradas para este instrumento.</div>
+            <div className="rounded-3xl border border-white/60 bg-white/70 py-10 text-center text-sm text-slate-500">
+              No hay preguntas registradas para este instrumento.
+            </div>
           ) : (
             <Table
               data={instrument.questions}
@@ -664,7 +728,7 @@ export const InstrumentDetail: React.FC = () => {
       >
         <div className="space-y-4">
           {actionError ? (
-            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            <div className="rounded-2xl border border-rose-200/70 bg-rose-50/80 px-4 py-3 text-sm text-rose-600">
               {actionError}
             </div>
           ) : null}
@@ -709,23 +773,26 @@ export const InstrumentDetail: React.FC = () => {
         size="lg"
       >
         {activeQuestions.length === 0 ? (
-          <div className="rounded-lg border border-gray-200 bg-white px-4 py-6 text-center text-sm text-gray-600">
+          <div className="rounded-3xl border border-white/60 bg-white/80 px-4 py-6 text-center text-sm text-slate-500">
             No hay preguntas activas para mostrar.
           </div>
         ) : (
           <div className="space-y-6">
             {activeQuestions.map((question, index) => (
-              <div key={question.id} className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+              <div
+                key={question.id}
+                className="rounded-3xl border border-white/60 bg-white/80 p-4 shadow-[0_20px_60px_rgba(15,23,42,0.12)] backdrop-blur"
+              >
                 <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
                   <div className="flex items-start gap-2">
-                    <span className="text-sm font-semibold text-gray-900">{index + 1}.</span>
+                    <span className="text-sm font-semibold text-slate-900">{index + 1}.</span>
                     <div className="space-y-1">
-                      <p className="font-medium text-gray-900 leading-snug">{question.text}</p>
-                      <div className="flex flex-wrap items-center gap-2 text-xs text-gray-500">
-                        <span className="rounded-full bg-blue-50 px-2 py-0.5 font-semibold text-blue-600">
+                      <p className="font-medium text-slate-900 leading-snug">{question.text}</p>
+                      <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                        <span className="rounded-full bg-slate-100 px-2 py-0.5 font-semibold text-slate-700">
                           {formatQuestionType(question.type)}
                         </span>
-                        <span className="rounded-full bg-green-50 px-2 py-0.5 font-semibold text-green-600">Activa</span>
+                        <span className="rounded-full bg-emerald-50 px-2 py-0.5 font-semibold text-emerald-600">Activa</span>
                       </div>
                     </div>
                   </div>
@@ -738,6 +805,6 @@ export const InstrumentDetail: React.FC = () => {
           </div>
         )}
       </Modal>
-    </div>
+    </section>
   );
 };

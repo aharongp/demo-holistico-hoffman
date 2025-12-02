@@ -113,7 +113,7 @@ const SECTION_THEMES: Record<string, {
   },
   '/instruments': {
     sidebarBg: 'bg-gradient-to-b from-[#f9fafb] via-white to-[#e5e7eb]',
-    navActive: 'bg-[#f7f7f5] text-[#57534e] ring-1 ring-gray-200 shadow-md shadow-gray-300/60',
+    navActive: 'bg-[#F2F1E4] text-[#57534e] ring-1 ring-gray-200 shadow-md shadow-gray-300/60',
     iconActive: 'border-gray-200 bg-white text-[#57534e]',
     subLabelActive: 'text-[#78716c]',
   },

@@ -809,7 +809,7 @@ export const InstrumentManagement: React.FC = () => {
       key: 'availability',
       header: 'Disponible',
       render: (instrument: Instrument) => (
-        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-200 text-gray-700">
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gradient-to-r from-[#CBD5F5] to-[#A5B4FC] text-slate-800">
           {(instrument.availability ?? '').toString().trim() || (instrument.isActive ? 'Sí' : 'No')}
         </span>
       ),
@@ -876,10 +876,10 @@ export const InstrumentManagement: React.FC = () => {
 
   return (
     <>
-      <section className="space-y-8 from-[#F6F7F9] via-white to-[#E7E9EE] px-4 py-8 sm:px-8">
-        <div className="relative overflow-hidden rounded-[32px] border border-white/50 bg-gradient-to-br from-[#F3F4F6] via-white to-[#E5E7EB] shadow-[0_35px_90px_rgba(15,23,42,0.12)]">
-          <div aria-hidden className="absolute -top-10 right-6 h-52 w-52 rounded-full bg-[#D1D5DB]/80 blur-3xl" />
-          <div aria-hidden className="absolute -bottom-12 left-8 h-52 w-52 rounded-full bg-[#E5E7EB]/70 blur-3xl" />
+      <section className="space-y-8 from-[#E8ECF8] via-[#F7F8FD] to-[#DDE3F7] px-4 py-8 sm:px-8">
+        <div className="relative overflow-hidden rounded-[32px] border border-white/50 bg-gradient-to-br from-[#FAF3CA] via-white to-[#8A8484] shadow-[0_35px_90px_rgba(15,23,42,0.16)]">
+          <div aria-hidden className="absolute -top-10 right-6 h-52 w-52 rounded-full bg-[#E6E0DF]/80 blur-3xl" />
+          <div aria-hidden className="absolute -bottom-12 left-8 h-52 w-52 rounded-full bg-[#E6E0DF]/70 blur-3xl" />
           <div className="relative flex flex-col gap-8 px-6 py-8 lg:flex-row lg:items-center lg:justify-between">
             <div className="space-y-5">
               <span className="inline-flex items-center gap-2 rounded-full border border-white/60 bg-white/70 px-4 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.45em] text-slate-700">
@@ -903,17 +903,17 @@ export const InstrumentManagement: React.FC = () => {
               {[{
                 label: 'Tipos registrados',
                 value: instrumentTypes.length,
-                accent: 'from-[#4B5563] to-[#9CA3AF]',
+                accent: 'from-[#1F2937] via-[#334155] to-[#475569]',
               },
               {
                 label: 'Temas disponibles',
                 value: subjects.length,
-                accent: 'from-[#6B7280] to-[#D1D5DB]',
+                accent: 'from-[#273449] via-[#39445A] to-[#6B7280]',
               },
               {
                 label: 'Criterios activos',
                 value: criteria.length,
-                accent: 'from-[#374151] to-[#9CA3AF]',
+                accent: 'from-[#111827] via-[#1F2937] to-[#475569]',
               }].map((stat) => (
                 <div
                   key={stat.label}
@@ -941,7 +941,7 @@ export const InstrumentManagement: React.FC = () => {
                     aria-pressed={isActive}
                     className={`rounded-2xl border px-4 py-3 text-left transition focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400/40 ${
                       isActive
-                        ? 'border-transparent bg-gradient-to-r from-[#4B5563] to-[#9CA3AF] text-white shadow-lg shadow-[#4B5563]/30'
+                        ? 'border-transparent bg-gradient-to-r from-[#1F2937] via-[#2F3B4C] to-[#4B5563] text-white shadow-lg shadow-[#1F2937]/35'
                         : 'border-white/60 bg-white/60 text-slate-500 hover:text-slate-900'
                     }`}
                   >
@@ -975,7 +975,7 @@ export const InstrumentManagement: React.FC = () => {
               <Button
                 onClick={() => handleOpenTypeModal()}
                 size="sm"
-                className="rounded-full bg-[#4B5563] px-5 py-2 text-sm font-semibold text-white shadow-lg shadow-slate-700/30 transition hover:bg-[#374151]"
+                className="rounded-full bg-gradient-to-r from-[#1F2937] via-[#303A4A] to-[#4B5563] px-5 py-2 text-sm font-semibold text-white shadow-lg shadow-slate-900/30 transition hover:translate-y-0.5"
               >
                 <Plus className="w-4 h-4 mr-2" />
                 Nuevo tipo
@@ -1120,7 +1120,7 @@ export const InstrumentManagement: React.FC = () => {
             <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <Button
                 onClick={() => setShowAllInstrumentsTable((state) => !state)}
-                className="rounded-full border border-white/50 bg-gray-500 px-5 py-2 text-sm font-semibold text-slate-700 shadow-inner shadow-white/40 backdrop-blur hover:text-slate-900 hover:bg-gray-400 transition"
+                className="rounded-full bg-gradient-to-r from-[#1F2937] via-[#303A4A] to-[#4B5563] px-5 py-2 text-sm font-semibold text-white shadow-lg shadow-slate-900/30 transition hover:translate-y-0.5"
               >
                 {showAllInstrumentsTable ? 'Ocultar tabla de instrumentos' : 'Ver tabla de instrumentos'}
               </Button>
@@ -1128,7 +1128,7 @@ export const InstrumentManagement: React.FC = () => {
                 <Button
                   onClick={() => handleOpenModal()}
                   disabled={subjects.length === 0}
-                  className="rounded-full bg-gradient-to-r from-[#4B5563] via-[#6B7280] to-[#9CA3AF] px-5 py-2 text-sm font-semibold text-white shadow-lg shadow-[#4B5563]/25 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="rounded-full bg-gradient-to-r from-[#1F2937] via-[#303A4A] to-[#4B5563] px-5 py-2 text-sm font-semibold text-white shadow-lg shadow-slate-900/30 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <Plus className="w-4 h-4 mr-2" />
                   Agregar instrumento
@@ -1165,7 +1165,7 @@ export const InstrumentManagement: React.FC = () => {
               <Button
                 onClick={() => handleOpenSubjectModal()}
                 size="sm"
-                className="rounded-full bg-[#4B5563] px-5 py-2 text-sm font-semibold text-white shadow-lg shadow-slate-700/30 transition hover:bg-[#374151]"
+                className="rounded-full bg-gradient-to-r from-[#1F2937] via-[#303A4A] to-[#4B5563] px-5 py-2 text-sm font-semibold text-white shadow-lg shadow-slate-900/30 transition hover:translate-y-0.5"
               >
                 <Plus className="w-4 h-4 mr-2" />
                 Nuevo tema
@@ -1197,7 +1197,7 @@ export const InstrumentManagement: React.FC = () => {
                 <h2 className="text-lg font-semibold">Criterios</h2>
                 <p className="text-sm text-gray-600">Administración de criterios asociados a instrumentos y preguntas.</p>
               </div>
-              <Button onClick={() => handleOpenCriterionModal()} size="sm" className="rounded-full bg-[#4B5563] px-5 py-2 text-sm font-semibold text-white shadow-lg shadow-slate-700/30 transition hover:bg-[#374151]">
+              <Button onClick={() => handleOpenCriterionModal()} size="sm" className="rounded-full bg-gradient-to-r from-[#1F2937] via-[#303A4A] to-[#4B5563] px-5 py-2 text-sm font-semibold text-white shadow-lg shadow-slate-900/30 transition hover:translate-y-0.5">
                 <Plus className="w-4 h-4 mr-2" />
                 Nuevo criterio
               </Button>
