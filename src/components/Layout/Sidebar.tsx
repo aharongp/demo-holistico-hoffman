@@ -100,10 +100,10 @@ const SECTION_THEMES: Record<string, {
   subLabelActive: string;
 }> = {
   '/users': {
-    sidebarBg: 'bg-gradient-to-b from-[#ecfdf5] via-white to-[#d1fae5]',
-    navActive: 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100 shadow-md shadow-emerald-200/60',
-    iconActive: 'border-emerald-100 bg-white text-emerald-600',
-    subLabelActive: 'text-emerald-600',
+    sidebarBg: 'bg-gradient-to-b from-[#e0f2f1] via-white to-[#d1fae5]/70',
+    navActive: 'bg-gradient-to-r from-[#d1fae5] to-[#a7f3d0] text-[#065f46] ring-1 ring-[#6ee7b7] shadow-md shadow-emerald-200/70',
+    iconActive: 'border-[#a7f3d0] bg-white text-[#047857]',
+    subLabelActive: 'text-[#10b981]',
   },
   '/patients': {
     sidebarBg: 'bg-gradient-to-b from-[#f5f3ff] via-white to-[#ede9fe]',
@@ -118,22 +118,22 @@ const SECTION_THEMES: Record<string, {
     subLabelActive: 'text-[#78716c]',
   },
   '/programs': {
-    sidebarBg: 'bg-gradient-to-b from-[#fff7ed] via-white to-[#fed7aa]',
-    navActive: 'bg-[#fff7ed] text-[#ea580c] ring-1 ring-orange-100 shadow-md shadow-orange-200/60',
-    iconActive: 'border-orange-100 bg-white text-[#ea580c]',
-    subLabelActive: 'text-[#f97316]',
+    sidebarBg: 'bg-gradient-to-b from-[#E0F7FF] via-white to-[#EEF2FF]',
+    navActive: 'bg-[#DBF5FF] text-[#0369A1] ring-1 ring-[#BFDBFE] shadow-sm shadow-sky-100/40',
+    iconActive: 'border-[#BFDBFE] bg-white text-[#0EA5E9]',
+    subLabelActive: 'text-[#0284C7]',
   },
   '/evolution': {
-    sidebarBg: 'bg-gradient-to-b from-[#fef2f2] via-white to-[#fecaca]',
-    navActive: 'bg-[#fef2f2] text-[#dc2626] ring-1 ring-rose-100 shadow-md shadow-rose-200/60',
-    iconActive: 'border-rose-100 bg-white text-[#dc2626]',
-    subLabelActive: 'text-[#f87171]',
+    sidebarBg: 'bg-gradient-to-b from-[#FFF9F4] via-white to-[#FFEFE8]',
+    navActive: 'bg-[#FFE4D6] text-[#B45309] ring-1 ring-[#FED7AA] shadow-sm shadow-orange-100/40',
+    iconActive: 'border-[#FED7AA] bg-white text-[#C2410C]',
+    subLabelActive: 'text-[#F97316]',
   },
   '/reports': {
-    sidebarBg: 'bg-gradient-to-b from-[#f8f1ea] via-white to-[#eadfcc]',
-    navActive: 'bg-[#f6ede3] text-[#7F5B3E] ring-1 ring-[#e5d6c4] shadow-md shadow-[#e5d6c4]/60',
-    iconActive: 'border-[#e0cfbb] bg-white text-[#7F5B3E]',
-    subLabelActive: 'text-[#a87954]',
+    sidebarBg: 'bg-gradient-to-b from-[#EEF5FF] via-white to-[#FDF4FF]',
+    navActive: 'bg-gradient-to-r from-[#EEF2FF] to-[#F5F3FF] text-[#4F46E5] ring-1 ring-[#E0E7FF] shadow-md shadow-[#cbd5f5]/70',
+    iconActive: 'border-[#E0E7FF] bg-white text-[#4F46E5]',
+    subLabelActive: 'text-[#6366F1]',
   },
 };
 
@@ -148,7 +148,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ onClose }) => {
     item.roles.includes(user.role)
   );
 
-  const sidebarBackgroundClass = 'bg-gradient-to-b from-[#f7f7f7] via-white to-[#e5e7eb]';
+  const sidebarBackgroundClass = 'bg-gradient-to-b from-[#f5f5f4] via-white to-[#e5e7eb]';
 
   return (
     <div className={`flex h-full w-full flex-col border-r border-white/60 ${sidebarBackgroundClass} shadow-2xl`}>

@@ -290,79 +290,86 @@ export const PatientManagement: React.FC = () => {
   ];
 
   return (
-    <section className="space-y-8 bg-gradient-to-b from-slate-50 via-white to-violet-50/20 px-4 py-8 sm:px-6">
-      <div className="overflow-hidden rounded-3xl border border-white/60 bg-gradient-to-br from-white via-violet-50 to-white shadow-2xl">
-        <div className="p-6 sm:p-8">
-          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div>
-              <div className="inline-flex items-center gap-2 rounded-full border border-white/70 bg-white/80 px-3 py-1 text-xs font-semibold uppercase tracking-[0.5em] text-violet-500">
-                <Stethoscope className="h-3.5 w-3.5" /> Pacientes
-              </div>
-              <h1 className="mt-3 text-3xl font-semibold tracking-tight text-slate-900 sm:text-4xl">
+    <section className="space-y-9 from-slate-50 via-white to-violet-50/25 px-4 py-8 sm:px-8">
+      <div className="relative overflow-hidden rounded-[32px] border border-white/40 bg-gradient-to-br from-white/90 via-violet-50/80 to-white/90 shadow-[0_35px_90px_-65px_rgba(109,40,217,0.7)] backdrop-blur-xl">
+        <div aria-hidden className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(168,85,247,0.18),_transparent_60%)]" />
+        <div className="relative z-10 flex flex-col gap-6 p-6 sm:p-10 lg:flex-row lg:items-end lg:justify-between">
+          <div className="space-y-4">
+            <div className="inline-flex items-center gap-2 rounded-full border border-white/60 bg-white/70 px-4 py-1.5 text-[0.65rem] font-semibold uppercase tracking-[0.45em] text-violet-500">
+              <Stethoscope className="h-3.5 w-3.5" /> Custodia Clínica
+            </div>
+            <div className="space-y-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.35em] text-slate-500/80">Panel de Pacientes</p>
+              <h1 className="text-3xl font-semibold leading-tight text-slate-900 sm:text-4xl lg:text-5xl">
                 Seguimiento integral de expedientes
               </h1>
-              <p className="mt-2 max-w-2xl text-sm text-slate-500">
-                Observa la evolución clínica, asigna programas y mantén cada registro actualizado desde un ambiente claro y confiable.
+              <p className="max-w-2xl text-base text-slate-500">
+                Observa la evolución clínica, asigna programas y mantén cada registro actualizado desde un entorno claro y confiable.
               </p>
             </div>
-            <Button onClick={() => handleOpenModal()} className="whitespace-nowrap">
-              <Plus className="w-4 h-4 mr-2" /> Nuevo paciente
-            </Button>
           </div>
-          <div className="mt-6 grid gap-3 text-xs uppercase tracking-[0.3em] text-slate-500 sm:grid-cols-3">
-            <span className="rounded-2xl border border-white/70 bg-white/80 px-3 py-2 text-center">
-              {totalPatients.toLocaleString()} pacientes en seguimiento
+          <Button
+            onClick={() => handleOpenModal()}
+            className="whitespace-nowrap rounded-full border border-violet-500/30 bg-violet-500 px-6 py-3 text-sm font-semibold text-white shadow-xl shadow-violet-500/25 transition hover:bg-violet-400"
+          >
+            <Plus className="w-4 h-4 mr-2" /> Nuevo paciente
+          </Button>
+        </div>
+        <div className="relative z-10 grid gap-3 border-t border-white/40 px-6 py-4 text-[0.65rem] uppercase tracking-[0.4em] text-slate-500 sm:grid-cols-3">
+          {[
+            { label: 'En seguimiento', value: totalPatients.toLocaleString() },
+            { label: 'Coincidencias', value: filteredPatientCount.toLocaleString() },
+            { label: 'Con programa activo', value: assignedProgramCount.toLocaleString() },
+          ].map((item) => (
+            <span key={item.label} className="rounded-2xl border border-white/60 bg-white/80 px-3 py-3 text-center text-slate-600">
+              <strong className="block text-2xl font-semibold tracking-normal text-slate-900">{item.value}</strong>
+              {item.label}
             </span>
-            <span className="rounded-2xl border border-white/70 bg-white/80 px-3 py-2 text-center">
-              {filteredPatientCount.toLocaleString()} coinciden con la búsqueda
-            </span>
-            <span className="rounded-2xl border border-white/70 bg-white/80 px-3 py-2 text-center">
-              {assignedProgramCount.toLocaleString()} con programa activo
-            </span>
-          </div>
+          ))}
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card className="border border-slate-100 bg-white/90 shadow-lg">
-          <div className="flex items-start gap-4">
-            <div className="rounded-2xl bg-slate-50 p-3 text-violet-500">
-              <HeartPulse className="h-5 w-5" />
+      <div className="grid gap-5 md:grid-cols-3">
+        {[{
+          label: 'Pacientes activos',
+          value: activePatients.toLocaleString(),
+          detail: 'Con seguimiento vigente',
+          icon: HeartPulse,
+          accent: 'text-violet-400',
+        },
+        {
+          label: 'Con programa asignado',
+          value: assignedProgramCount.toLocaleString(),
+          detail: 'Participando en protocolos',
+          icon: Activity,
+          accent: 'text-violet-500',
+        },
+        {
+          label: 'Pendientes por asignar',
+          value: awaitingAssignmentCount.toLocaleString(),
+          detail: 'Listos para plan personalizado',
+          icon: ClipboardList,
+          accent: 'text-fuchsia-500',
+        }].map(tile => (
+          <Card
+            key={tile.label}
+            className="border border-white/50 bg-white/85 backdrop-blur-xl"
+          >
+            <div className="flex items-start gap-5">
+              <div className={`rounded-3xl bg-slate-900/5 p-3 ${tile.accent}`}>
+                <tile.icon className="h-6 w-6" />
+              </div>
+              <div className="space-y-2">
+                <p className="text-[0.65rem] font-semibold uppercase tracking-[0.5em] text-slate-400">{tile.label}</p>
+                <p className="text-3xl font-semibold text-slate-900">{tile.value}</p>
+                <p className="text-xs text-slate-500">{tile.detail}</p>
+              </div>
             </div>
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.4em] text-slate-400">Pacientes activos</p>
-              <p className="text-2xl font-semibold text-slate-900">{activePatients.toLocaleString()}</p>
-              <p className="text-xs text-slate-500">Con seguimiento vigente</p>
-            </div>
-          </div>
-        </Card>
-        <Card className="border border-slate-100 bg-white/90 shadow-lg">
-          <div className="flex items-start gap-4">
-            <div className="rounded-2xl bg-slate-50 p-3 text-purple-500">
-              <Activity className="h-5 w-5" />
-            </div>
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.4em] text-slate-400">Con programa asignado</p>
-              <p className="text-2xl font-semibold text-slate-900">{assignedProgramCount.toLocaleString()}</p>
-              <p className="text-xs text-slate-500">Participando en protocolos</p>
-            </div>
-          </div>
-        </Card>
-        <Card className="border border-slate-100 bg-white/90 shadow-lg">
-          <div className="flex items-start gap-4">
-            <div className="rounded-2xl bg-slate-50 p-3 text-fuchsia-500">
-              <ClipboardList className="h-5 w-5" />
-            </div>
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.4em] text-slate-400">Pendientes por asignar</p>
-              <p className="text-2xl font-semibold text-slate-900">{awaitingAssignmentCount.toLocaleString()}</p>
-              <p className="text-xs text-slate-500">Listos para plan personalizado</p>
-            </div>
-          </div>
-        </Card>
+          </Card>
+        ))}
       </div>
 
-      <Card className="border border-slate-200 bg-white shadow-xl">
+      <Card className="border border-white/40 bg-white/85 shadow-[0_30px_80px_-65px_rgba(109,40,217,0.75)] backdrop-blur-xl">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6">
           <div className="relative w-full sm:max-w-xs">
             <Search className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -371,7 +378,7 @@ export const PatientManagement: React.FC = () => {
               placeholder="Filtra por nombre, correo o programa"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full rounded-2xl border border-slate-200 bg-slate-50/70 pl-10 pr-4 py-2 text-sm focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/10"
+              className="w-full rounded-3xl border border-slate-200/60 bg-slate-50/70 pl-10 pr-4 py-2 text-sm focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-200"
             />
           </div>
           <p className="text-xs uppercase tracking-[0.4em] text-slate-400">{filteredPatientCount.toLocaleString()} resultados</p>
@@ -392,7 +399,7 @@ export const PatientManagement: React.FC = () => {
             <p className="text-sm text-slate-600">Selecciona el protocolo más adecuado para {selectedPatientForAssign.firstName}.</p>
             <div className="space-y-3">
               {programs.map((program) => (
-                <div key={program.id} className="flex items-start justify-between rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+                <div key={program.id} className="flex items-start justify-between rounded-2xl border border-white/60 bg-white/70 p-4">
                   <div className="pr-3">
                     <div className="text-sm font-semibold text-slate-900">{program.name}</div>
                     <div className="text-xs text-slate-500">{program.description}</div>

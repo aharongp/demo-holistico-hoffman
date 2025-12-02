@@ -128,73 +128,87 @@ across all measured parameters. Patient engagement remains high.
   const getTypeColor = (type: Report['type']) => {
     switch (type) {
       case 'patient':
-        return 'border-[#E2D2C1] bg-[#F8EEE2] text-[#6F4E35]';
+        return 'border-[#C7D2FE]/80 bg-[#EEF2FF]/80 text-[#3730A3]';
       case 'instrument':
-        return 'border-[#DCC8B4] bg-[#F4E6D7] text-[#6A4A32]';
+        return 'border-[#BFDBFE]/80 bg-[#E0F2FE]/80 text-[#1D4ED8]';
       case 'program':
-        return 'border-[#E7D3C2] bg-[#FBF1E4] text-[#735237]';
+        return 'border-[#DDD6FE]/80 bg-[#EDE9FE]/80 text-[#5B21B6]';
       case 'system':
-        return 'border-[#DECDBA] bg-[#F6EBDE] text-[#6B4C33]';
+        return 'border-[#A5F3FC]/80 bg-[#ECFEFF]/80 text-[#0F766E]';
       default:
-        return 'border-[#E5D6C4] bg-[#F7EEE3] text-[#715339]';
+        return 'border-white/50 bg-white/70 text-slate-700';
     }
   };
 
   return (
-    <section className="space-y-6 px-4 py-8 sm:px-6">
-      <div className="overflow-hidden rounded-3xl border border-[#E6D8C7] bg-gradient-to-br from-[#f8f1ea] via-white to-[#eadfce] shadow-xl">
-        <div className="flex flex-col gap-6 px-6 py-6 lg:flex-row lg:items-center lg:justify-between">
-          <div className="max-w-2xl space-y-3">
-            <span className="text-xs font-semibold uppercase tracking-[0.4em] text-[#7E573C]">Reportes</span>
-            <h1 className="text-3xl font-bold text-slate-900">Centro de reportes clínicos</h1>
-            <p className="text-sm text-slate-700 sm:text-base">
-              Genera, descarga y comparte reportes personalizados de pacientes, programas e instrumentos.
-              Visualiza métricas clave antes de exportar para mantener un control ejecutivo.
+    <section className="space-y-8 px-4 py-8 sm:px-6">
+      <div className="relative overflow-hidden rounded-[32px] border border-white/25 bg-gradient-to-br from-[#EEF5FF] via-white to-[#FDF4FF] p-6 sm:p-8 shadow-[0_35px_85px_rgba(15,23,42,0.12)]">
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(148,163,184,0.28),_transparent_60%)]"
+        />
+        <div aria-hidden="true" className="absolute -right-10 -top-10 h-56 w-56 rounded-full bg-[#C7D2FE] opacity-40 blur-3xl" />
+        <div aria-hidden="true" className="absolute -left-16 bottom-0 h-48 w-48 rounded-full bg-[#FBCFE8] opacity-30 blur-3xl" />
+        <div className="relative flex flex-col gap-8 lg:flex-row lg:items-center lg:justify-between">
+          <div className="max-w-2xl space-y-5">
+            <span className="inline-flex items-center gap-2 rounded-full border border-white/50 bg-white/40 px-4 py-1 text-[11px] font-semibold uppercase tracking-[0.55em] text-[#4F46E5]">
+              Reportes
+              <span className="h-1 w-1 rounded-full bg-[#4F46E5]" />
+              Quantum
+            </span>
+            <h1 className="text-3xl font-semibold leading-tight text-slate-900 sm:text-4xl">
+              Observatorio de reportes inteligentes
+            </h1>
+            <p className="text-sm text-slate-600 sm:text-base">
+              Monitoriza el pulso clínico con paneles predictivos y exporta narrativas ejecutivas en segundos. Cada reporte se nutre de métricas actualizadas y trazabilidad total.
             </p>
             <div className="flex flex-wrap gap-3">
               <Button
                 variant="primary"
-                className="bg-[#7F5B3E] hover:bg-[#6D4F34] focus:ring-[#d6c2ac] shadow-lg shadow-[#eadbca]"
+                className="bg-gradient-to-r from-[#6366F1] via-[#8B5CF6] to-[#D946EF] text-white shadow-[0_20px_45px_rgba(99,102,241,0.35)] hover:opacity-90"
               >
-                <FileText className="w-4 h-4 mr-2" />
+                <FileText className="mr-2 h-4 w-4" />
                 Nuevo reporte
               </Button>
               <Button
                 type="button"
                 variant="outline"
-                className="border border-[#E5D5C4] text-[#7F5B3E] hover:bg-[#f7eee4] focus:ring-[#d9c6b3]"
+                className="border border-white/60 bg-white/40 text-[#4338CA] backdrop-blur hover:bg-white/60"
               >
                 Ver historial
-                <ArrowRight className="w-4 h-4 ml-2" />
+                <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             </div>
           </div>
-          <div className="grid w-full gap-3 sm:grid-cols-3 lg:max-w-md">
-            <div className="rounded-2xl border border-white/70 bg-white/80 px-4 py-3 shadow-inner">
-              <p className="text-xs uppercase tracking-wide text-[#A07C5A]/80">Reportes totales</p>
-              <p className="text-3xl font-semibold text-slate-900">{totalReports}</p>
+          <div className="grid w-full gap-4 sm:grid-cols-3 lg:max-w-xl">
+            <div className="rounded-3xl border border-white/40 bg-white/60 px-5 py-4 text-slate-900 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)] backdrop-blur">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.35em] text-slate-500">Totales</p>
+              <p className="text-3xl font-semibold">{totalReports}</p>
+              <span className="text-xs text-slate-500">Reportes activos</span>
             </div>
-            <div className="rounded-2xl border border-white/70 bg-white/80 px-4 py-3 shadow-inner">
-              <p className="text-xs uppercase tracking-wide text-[#A07C5A]/80">Resultados filtrados</p>
-              <p className="text-3xl font-semibold text-slate-900">{filteredCount}</p>
+            <div className="rounded-3xl border border-white/40 bg-white/60 px-5 py-4 text-slate-900 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)] backdrop-blur">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.35em] text-slate-500">Filtrados</p>
+              <p className="text-3xl font-semibold">{filteredCount}</p>
+              <span className="text-xs text-slate-500">Coincidencias actuales</span>
             </div>
-            <div className="rounded-2xl border border-white/70 bg-white/80 px-4 py-3 shadow-inner">
-              <p className="text-xs uppercase tracking-wide text-[#A07C5A]/80">Última generación</p>
-              <p className="text-2xl font-semibold text-slate-900">{lastGeneratedLabel}</p>
+            <div className="rounded-3xl border border-white/40 bg-white/60 px-5 py-4 text-slate-900 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)] backdrop-blur">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.35em] text-slate-500">Último PDF</p>
+              <p className="text-2xl font-semibold">{lastGeneratedLabel}</p>
+              <span className="text-xs text-slate-500">Hora de corte</span>
             </div>
           </div>
         </div>
       </div>
 
-      <Card className="rounded-3xl border border-slate-200 bg-white shadow-xl" padding="lg">
+      <Card className="rounded-[28px] border border-white/25 bg-white/60 shadow-[0_25px_70px_rgba(15,23,42,0.08)] backdrop-blur" padding="lg">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-center gap-3">
-            <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#F2E4D4] text-[#7A563C]">
-              <Filter className="w-5 h-5" />
+            <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-[#6366F1]/15 to-[#DBEAFE]/60 text-[#4338CA]">
+              <Filter className="h-5 w-5" />
             </span>
             <div>
               <h2 className="text-lg font-semibold text-slate-900">Filtros inteligentes</h2>
-              <p className="text-sm text-slate-600">Elige el tipo de reporte para ajustar el tablero.</p>
+              <p className="text-sm text-slate-600">Afina el tablero por dominio y obtén resultados curados.</p>
             </div>
           </div>
           <div
@@ -209,14 +223,14 @@ across all measured parameters. Patient engagement remains high.
                   type="button"
                   onClick={() => setSelectedType(option.value)}
                   aria-pressed={isActive}
-                  className={`flex-shrink-0 rounded-full px-4 py-2 text-sm font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[#d1bda9]/60 ${
+                  className={`flex-shrink-0 rounded-full px-5 py-2.5 text-sm font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C7D2FE] ${
                     isActive
-                      ? 'bg-[#7F5B3E] text-white shadow-lg shadow-[#eadbca]'
-                      : 'border border-[#E5D6C4] bg-white text-[#7F5B3E] hover:bg-[#f7eee4]'
+                      ? 'bg-gradient-to-r from-[#6366F1] to-[#8B5CF6] text-white shadow-[0_15px_35px_rgba(99,102,241,0.35)]'
+                      : 'border border-white/60 bg-white/40 text-slate-600 hover:border-[#C7D2FE] hover:text-slate-900'
                   }`}
                 >
                   <span>{option.label}</span>
-                  <span className={`block text-xs ${isActive ? 'text-[#F5E9DD]/90' : 'text-[#C8AA8E]'}`}>
+                  <span className={`block text-xs ${isActive ? 'text-white/80' : 'text-slate-500'}`}>
                     {option.helper}
                   </span>
                 </button>
@@ -230,45 +244,51 @@ across all measured parameters. Patient engagement remains high.
         {filteredReports.map((report) => (
           <Card
             key={report.id}
-            className="rounded-3xl border border-slate-200 bg-white shadow-lg"
+            className="group relative overflow-hidden rounded-[28px] border border-white/25 bg-white/65 shadow-[0_30px_70px_rgba(15,23,42,0.1)] backdrop-blur"
           >
-            <div className="flex items-start justify-between mb-3">
+            <div
+              aria-hidden="true"
+              className="absolute inset-0 bg-gradient-to-br from-white/40 via-transparent to-[#EEF2FF]/90 opacity-0 transition group-hover:opacity-100"
+            />
+            <div className="relative flex items-start justify-between mb-4">
               <span
-                className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium capitalize ${getTypeColor(report.type)}`}
+                className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold capitalize ${getTypeColor(report.type)}`}
               >
                 {report.type}
               </span>
-              <span className="rounded-xl border border-[#E5D5C4] bg-[#F4E7D7] p-2 text-[#7A563C]">
-                <BarChart3 className="w-4 h-4" />
+              <span className="rounded-2xl border border-white/40 bg-white/50 p-2.5 text-[#4F46E5] shadow-inner">
+                <BarChart3 className="h-4 w-4" />
               </span>
             </div>
-            
-            <h3 className="text-lg font-semibold text-slate-900 mb-2">{report.title}</h3>
-            <p className="text-sm text-slate-600 mb-4">{report.description}</p>
-            
-            <div className="flex items-center justify-between text-sm text-slate-500 mb-4">
-              <div className="flex items-center">
-                <Calendar className="w-4 h-4 mr-1 text-[#B08462]" />
+
+            <div className="relative space-y-3">
+              <h3 className="text-lg font-semibold text-slate-900">{report.title}</h3>
+              <p className="text-sm text-slate-600">{report.description}</p>
+            </div>
+
+            <div className="relative mt-5 flex items-center justify-between text-sm text-slate-500">
+              <div className="flex items-center gap-2 text-slate-600">
+                <Calendar className="h-4 w-4 text-[#6366F1]" />
                 <span>{report.createdAt.toLocaleDateString()}</span>
               </div>
-              <span>Por {report.createdBy}</span>
+              <span className="text-slate-500">Por {report.createdBy}</span>
             </div>
-            
-            <div className="flex space-x-2">
-              <Button 
-                variant="primary" 
-                className="flex-1 bg-[#7F5B3E] hover:bg-[#6D4F34] focus:ring-[#d6c2ac]" 
+
+            <div className="relative mt-5 flex gap-2">
+              <Button
+                variant="primary"
+                className="flex-1 bg-gradient-to-r from-[#4F46E5] to-[#7C3AED] text-white shadow-[0_20px_45px_rgba(79,70,229,0.35)] hover:opacity-90"
                 size="sm"
                 onClick={() => generatePDF(report)}
                 disabled={isGenerating}
               >
-                <Download className="w-4 h-4 mr-2" />
+                <Download className="mr-2 h-4 w-4" />
                 {isGenerating ? 'Generando...' : 'Descargar PDF'}
               </Button>
               <Button
                 variant="outline"
                 size="sm"
-                className="border border-[#E5D5C4] text-[#7F5B3E] hover:bg-[#f7eee4] focus:ring-[#d9c6b3]"
+                className="border border-white/50 bg-white/40 text-[#4338CA] backdrop-blur hover:bg-white/60"
               >
                 Ver detalle
               </Button>
@@ -278,13 +298,11 @@ across all measured parameters. Patient engagement remains high.
       </div>
 
       {filteredReports.length === 0 && (
-        <Card className="rounded-3xl border border-slate-200 bg-white shadow-lg">
-          <div className="text-center py-12">
-            <FileText className="w-12 h-12 text-[#D4BBA3] mx-auto mb-4" />
-            <h3 className="text-lg font-semibold text-slate-900 mb-2">No hay reportes</h3>
-            <p className="text-slate-600">
-              Ajusta los filtros para visualizar otros conjuntos de informes.
-            </p>
+        <Card className="rounded-[28px] border border-white/30 bg-white/60 shadow-[0_25px_60px_rgba(15,23,42,0.08)] backdrop-blur">
+          <div className="py-12 text-center">
+            <FileText className="mx-auto mb-4 h-12 w-12 text-[#94A3B8]" />
+            <h3 className="mb-2 text-lg font-semibold text-slate-900">No hay reportes</h3>
+            <p className="text-slate-600">Ajusta los filtros para visualizar otros conjuntos de informes.</p>
           </div>
         </Card>
       )}

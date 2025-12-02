@@ -221,79 +221,86 @@ export const UserManagement: React.FC = () => {
   ];
 
   return (
-    <section className="space-y-8 bg-gradient-to-b from-slate-50 via-white to-emerald-50/20 px-4 py-8 sm:px-6">
-      <div className="overflow-hidden rounded-3xl border border-white/60 bg-gradient-to-br from-white via-emerald-50 to-white shadow-2xl">
-        <div className="p-6 sm:p-8">
-          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div>
-              <div className="inline-flex items-center gap-2 rounded-full border border-white/70 bg-white/80 px-3 py-1 text-xs font-semibold uppercase tracking-[0.5em] text-emerald-500">
-                <Shield className="h-3.5 w-3.5" /> Usuarios
-              </div>
-              <h1 className="mt-3 text-3xl font-semibold tracking-tight text-slate-900 sm:text-4xl">
-                Control preciso de perfiles y roles
+    <section className="space-y-9 from-slate-900/5 via-white to-emerald-50/50 px-4 py-8 sm:px-8">
+      <div className="relative overflow-hidden rounded-[32px] border border-white/40 bg-gradient-to-br from-white/90 via-emerald-50/70 to-white/90 shadow-[0_35px_90px_-65px_rgba(15,118,110,0.8)] backdrop-blur-xl">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(16,185,129,0.18),_transparent_60%)]" aria-hidden />
+        <div className="relative z-10 flex flex-col gap-6 p-6 sm:p-10 lg:flex-row lg:items-end lg:justify-between">
+          <div className="space-y-4">
+            <div className="inline-flex items-center gap-2 rounded-full border border-white/60 bg-white/70 px-4 py-1.5 text-[0.65rem] font-semibold uppercase tracking-[0.45em] text-emerald-500">
+              <Shield className="h-3.5 w-3.5" /> Custodia Digital
+            </div>
+            <div className="space-y-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.35em] text-slate-500/80">Panel de Usuarios</p>
+              <h1 className="text-3xl font-semibold leading-tight text-slate-900 sm:text-4xl lg:text-5xl">
+                Identidades seguras para tu ecosistema clínico
               </h1>
-              <p className="mt-2 max-w-2xl text-sm text-slate-500">
-                Supervisa quién tiene acceso al ecosistema clínico y aplica cambios con una interfaz clara y profesional.
+              <p className="max-w-2xl text-base text-slate-500">
+                Administra roles, accesos y estados con un tablero minimalista que prioriza la claridad y la velocidad de respuesta.
               </p>
             </div>
-            <Button onClick={() => handleOpenModal()} className="whitespace-nowrap">
-              <Plus className="w-4 h-4 mr-2" /> Nuevo usuario
-            </Button>
           </div>
-          <div className="mt-6 grid gap-3 text-xs uppercase tracking-[0.3em] text-slate-500 sm:grid-cols-3">
-            <span className="rounded-2xl border border-white/70 bg-white/80 px-3 py-2 text-center">
-              {users.length.toLocaleString()} usuarios registrados
+          <Button
+            onClick={() => handleOpenModal()}
+            className="whitespace-nowrap rounded-full border border-emerald-500/30 bg-emerald-500 px-6 py-3 text-sm font-semibold text-white shadow-xl shadow-emerald-500/20 transition hover:bg-emerald-400"
+          >
+            <Plus className="w-4 h-4 mr-2" /> Nuevo usuario
+          </Button>
+        </div>
+        <div className="relative z-10 grid gap-3 border-t border-white/40 px-6 py-4 text-[0.65rem] uppercase tracking-[0.4em] text-slate-500 sm:grid-cols-3">
+          {[
+            { label: 'Registrados', value: users.length.toLocaleString() },
+            { label: 'Coincidencias', value: filteredUsers.length.toLocaleString() },
+            { label: 'Activos', value: users.filter(u => u.isActive).length.toLocaleString() },
+          ].map((item) => (
+            <span key={item.label} className="rounded-2xl border border-white/60 bg-white/80 px-3 py-3 text-center text-slate-600">
+              <strong className="block text-2xl font-semibold tracking-normal text-slate-900">{item.value}</strong>
+              {item.label}
             </span>
-            <span className="rounded-2xl border border-white/70 bg-white/80 px-3 py-2 text-center">
-              {filteredUsers.length.toLocaleString()} coinciden con la búsqueda
-            </span>
-            <span className="rounded-2xl border border-white/70 bg-white/80 px-3 py-2 text-center">
-              {users.filter(u => u.isActive).length.toLocaleString()} activos
-            </span>
-          </div>
+          ))}
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card className="border border-slate-100 bg-white/90 shadow-lg">
-          <div className="flex items-start gap-4">
-            <div className="rounded-2xl bg-slate-50 p-3 text-emerald-400">
-              <Users className="h-5 w-5" />
+      <div className="grid gap-5 md:grid-cols-3">
+        {[{
+          label: 'Usuarios totales',
+          value: users.length.toLocaleString(),
+          color: 'text-emerald-400',
+          icon: Users,
+          detail: 'Incluye todos los roles activos',
+        },
+        {
+          label: 'Administradores',
+          value: users.filter(u => u.role === 'administrator').length.toLocaleString(),
+          color: 'text-emerald-500',
+          icon: Sparkles,
+          detail: 'Con permisos de control total',
+        },
+        {
+          label: 'Usuarios inactivos',
+          value: users.filter(u => !u.isActive).length.toLocaleString(),
+          color: 'text-rose-500',
+          icon: Shield,
+          detail: 'Pendientes de revisión',
+        }].map(tile => (
+          <Card
+            key={tile.label}
+            className="border border-white/50 bg-white/85 shadow-[0_25px_60px_-50px_rgba(15,118,110,0.7)] backdrop-blur-xl"
+          >
+            <div className="flex items-start gap-5">
+              <div className={`rounded-3xl bg-slate-900/5 p-3 ${tile.color}`}>
+                <tile.icon className="h-6 w-6" />
+              </div>
+              <div className="space-y-2">
+                <p className="text-[0.65rem] font-semibold uppercase tracking-[0.5em] text-slate-400">{tile.label}</p>
+                <p className="text-3xl font-semibold text-slate-900">{tile.value}</p>
+                <p className="text-xs text-slate-500">{tile.detail}</p>
+              </div>
             </div>
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.4em] text-slate-400">Usuarios totales</p>
-              <p className="text-2xl font-semibold text-slate-900">{users.length.toLocaleString()}</p>
-              <p className="text-xs text-slate-500">Incluye todos los roles activos</p>
-            </div>
-          </div>
-        </Card>
-        <Card className="border border-slate-100 bg-white/90 shadow-lg">
-          <div className="flex items-start gap-4">
-            <div className="rounded-2xl bg-slate-50 p-3 text-emerald-500">
-              <Sparkles className="h-5 w-5" />
-            </div>
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.4em] text-slate-400">Administradores</p>
-              <p className="text-2xl font-semibold text-slate-900">{users.filter(u => u.role === 'administrator').length}</p>
-              <p className="text-xs text-slate-500">Con permisos de control total</p>
-            </div>
-          </div>
-        </Card>
-        <Card className="border border-slate-100 bg-white/90 shadow-lg">
-          <div className="flex items-start gap-4">
-            <div className="rounded-2xl bg-slate-50 p-3 text-rose-500">
-              <Shield className="h-5 w-5" />
-            </div>
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.4em] text-slate-400">Usuarios inactivos</p>
-              <p className="text-2xl font-semibold text-slate-900">{users.filter(u => !u.isActive).length}</p>
-              <p className="text-xs text-slate-500">Pendientes de revisión</p>
-            </div>
-          </div>
-        </Card>
+          </Card>
+        ))}
       </div>
 
-      <Card className="border border-slate-200 bg-white shadow-xl">
+      <Card className="border border-white/40 bg-white/85 shadow-[0_30px_80px_-65px_rgba(15,118,110,0.8)] backdrop-blur-xl">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6">
           <div className="relative w-full sm:max-w-xs">
             <Search className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -302,13 +309,13 @@ export const UserManagement: React.FC = () => {
               placeholder="Filtrar por nombre o correo"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full rounded-2xl border border-slate-200 bg-slate-50/70 pl-10 pr-4 py-2 text-sm focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/10"
+              className="w-full rounded-3xl border border-slate-200/60 bg-slate-50/70 pl-10 pr-4 py-2 text-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-200"
             />
           </div>
         </div>
 
-        {loading && <div className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600">Cargando usuarios...</div>}
-        {error && <div className="rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-600">Error: {error}</div>}
+        {loading && <div className="rounded-2xl border border-white/60 bg-slate-50/80 px-4 py-3 text-sm text-slate-600">Cargando usuarios...</div>}
+        {error && <div className="rounded-2xl border border-white/60 bg-rose-50/90 px-4 py-3 text-sm text-rose-600">Error: {error}</div>}
 
         <Table data={filteredUsers} columns={columns} />
       </Card>

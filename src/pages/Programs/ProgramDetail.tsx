@@ -333,25 +333,30 @@ export const ProgramDetail: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="overflow-hidden rounded-3xl border border-orange-100 bg-gradient-to-br from-[#fff7ed] via-white to-[#ffe4cc] shadow-xl">
-        <div className="flex flex-col gap-6 px-6 py-6">
+      <div className="relative overflow-hidden rounded-[32px] border border-white/35 bg-gradient-to-br from-[#ECFEFF] via-white to-[#F5F3FF] shadow-[0_35px_90px_rgba(15,23,42,0.2)]">
+        <div aria-hidden className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(14,165,233,0.15),_transparent_60%)]" />
+        <div aria-hidden className="absolute -top-10 right-4 h-52 w-52 rounded-full bg-[#C7D2FE] opacity-40 blur-3xl" />
+        <div aria-hidden className="absolute -bottom-12 left-0 h-48 w-48 rounded-full bg-[#A5F3FC] opacity-40 blur-3xl" />
+        <div className="relative flex flex-col gap-6 px-6 py-6">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex flex-wrap items-center gap-3">
               <Button
                 variant="outline"
                 onClick={() => navigate('/programs')}
-                className="border-orange-200 text-orange-600 hover:bg-orange-50 focus:ring-orange-400"
+                className="rounded-full border border-white/60 bg-white/50 px-4 py-2 text-sm font-semibold text-slate-700 backdrop-blur hover:text-slate-900"
               >
                 <ArrowLeft className="w-4 h-4 mr-2" />
                 Volver a programas
               </Button>
-              <span className="rounded-full bg-white/70 px-3 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-orange-500">
-                Programa activo
+              <span className="inline-flex items-center gap-2 rounded-full border border-white/60 bg-white/40 px-4 py-1 text-[11px] font-semibold uppercase tracking-[0.45em] text-[#0E7490]">
+                Programa
+                <span className="h-1 w-1 rounded-full bg-[#22D3EE]" />
+                Cuántico
               </span>
             </div>
             <Button
               onClick={() => handleOpenModal()}
-              className="bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-lg shadow-orange-200/60 hover:from-orange-600 hover:to-amber-600 focus:ring-orange-500"
+              className="rounded-full bg-gradient-to-r from-[#0EA5E9] via-[#6366F1] to-[#A855F7] px-6 py-2 text-sm font-semibold text-white shadow-[0_20px_55px_rgba(14,165,233,0.35)] hover:opacity-95"
             >
               <Plus className="w-4 h-4 mr-2" />
               Añadir actividad
@@ -359,34 +364,34 @@ export const ProgramDetail: React.FC = () => {
           </div>
           <div className="space-y-4">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.4em] text-orange-500">{program.createdBy ?? 'Equipo'}</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.4em] text-[#0EA5E9]">{program.createdBy ?? 'Equipo'}</p>
               <h1 className="mt-2 text-3xl font-bold text-slate-900">{program.name}</h1>
               <p className="mt-3 text-sm text-slate-700 sm:text-base">{program.description || 'Sin descripción'}</p>
             </div>
             <div className="grid gap-3 sm:grid-cols-3">
-              <div className="rounded-2xl border border-white/60 bg-white/80 px-4 py-3 shadow-inner">
-                <p className="text-xs uppercase tracking-wide text-orange-500/80">Actividades totales</p>
+              <div className="rounded-3xl border border-white/50 bg-white/70 px-5 py-4 text-slate-900 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.35em] text-[#0EA5E9]">Actividades</p>
                 <p className="text-3xl font-semibold text-slate-900">{activityStats.total}</p>
               </div>
-              <div className="rounded-2xl border border-white/60 bg-white/80 px-4 py-3 shadow-inner">
-                <p className="text-xs uppercase tracking-wide text-orange-500/80">Días con agenda</p>
+              <div className="rounded-3xl border border-white/50 bg-white/70 px-5 py-4 text-slate-900 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.35em] text-[#0EA5E9]">Días con agenda</p>
                 <p className="text-3xl font-semibold text-slate-900">{activityStats.scheduledDays}</p>
               </div>
-              <div className="rounded-2xl border border-white/60 bg-white/80 px-4 py-3 shadow-inner">
-                <p className="text-xs uppercase tracking-wide text-orange-500/80">Próxima actividad</p>
+              <div className="rounded-3xl border border-white/50 bg-white/70 px-5 py-4 text-slate-900 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.35em] text-[#0EA5E9]">Próxima actividad</p>
                 <p className="text-base font-semibold text-slate-900">{activityStats.nextActivity}</p>
               </div>
             </div>
-            <div className="rounded-2xl border border-white/60 bg-white/80 p-4 shadow-inner">
+            <div className="rounded-3xl border border-white/50 bg-white/70 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-start gap-3 text-sm text-slate-700">
-                  <FileText className="w-5 h-5 text-orange-400" />
+                  <FileText className="w-5 h-5 text-[#38BDF8]" />
                   <div>
                     <p className="font-semibold text-slate-900">Ficha del programa</p>
                     <p className="text-slate-600">{program.description || 'Sin descripción disponible.'}</p>
                   </div>
                 </div>
-                <div className="grid gap-2 text-xs uppercase tracking-[0.2em] text-orange-500 sm:text-right">
+                <div className="grid gap-2 text-xs uppercase tracking-[0.2em] text-[#0EA5E9] sm:text-right">
                   <span>Creado: {formatDateTime(program.createdAt)}</span>
                   <span>Actualizado: {formatDateTime(program.updatedAt ?? null)}</span>
                 </div>
@@ -396,7 +401,7 @@ export const ProgramDetail: React.FC = () => {
         </div>
       </div>
 
-      <Card className="rounded-3xl border-orange-100/70 bg-white/95 shadow-xl ring-1 ring-orange-100/80" padding="lg">
+      <Card className="rounded-[28px] border border-white/40 bg-white/75 shadow-[0_30px_80px_rgba(15,23,42,0.12)] backdrop-blur" padding="lg">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h2 className="text-2xl font-semibold text-slate-900">Actividades</h2>
@@ -405,7 +410,7 @@ export const ProgramDetail: React.FC = () => {
           <Button
             variant="outline"
             onClick={() => handleOpenModal()}
-            className="border-orange-200 text-orange-600 hover:bg-orange-50 focus:ring-orange-400"
+            className="rounded-full border border-white/60 bg-white/50 px-5 py-2 text-sm font-semibold text-slate-600 backdrop-blur hover:text-slate-900"
           >
             <Plus className="w-4 h-4 mr-2" />
             Nueva actividad
@@ -413,11 +418,11 @@ export const ProgramDetail: React.FC = () => {
         </div>
 
         {sortedActivities.length === 0 ? (
-          <div className="mt-8 rounded-2xl border border-dashed border-orange-200 bg-orange-50/60 px-6 py-10 text-center text-sm text-orange-600">
+          <div className="mt-8 rounded-3xl border border-dashed border-[#C7D2FE]/70 bg-[#EFF6FF]/80 px-6 py-10 text-center text-sm text-[#4C1D95]">
             No hay actividades registradas para este programa.
           </div>
         ) : (
-          <div className="mt-6 overflow-hidden rounded-2xl border border-orange-100/60">
+          <div className="mt-6 overflow-hidden rounded-3xl border border-white/40">
             <Table
               data={sortedActivities}
               columns={activityColumns}
@@ -443,7 +448,7 @@ export const ProgramDetail: React.FC = () => {
               required
               value={formState.name}
               onChange={handleInputChange('name')}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full rounded-2xl border border-gray/60 bg-white/70 px-3 py-2 text-sm text-slate-900 focus:border-[#A5B4FC] focus:outline-none focus:ring-2 focus:ring-[#C7D2FE]"
             />
           </div>
 
@@ -455,7 +460,7 @@ export const ProgramDetail: React.FC = () => {
               value={formState.description}
               onChange={handleInputChange('description')}
               rows={3}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full rounded-2xl border border-gray/60 bg-white/70 px-3 py-2 text-sm text-slate-900 focus:border-[#A5B4FC] focus:outline-none focus:ring-2 focus:ring-[#C7D2FE]"
             />
           </div>
 
@@ -468,7 +473,7 @@ export const ProgramDetail: React.FC = () => {
                 required
                 value={formState.day}
                 onChange={event => setFormState(prev => ({ ...prev, day: event.target.value }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full rounded-2xl border border-gray/60 bg-white/70 px-3 py-2 text-sm text-slate-900 focus:border-[#A5B4FC] focus:outline-none focus:ring-2 focus:ring-[#C7D2FE]"
               >
                 <option value="" disabled>
                   Selecciona un día
@@ -488,7 +493,7 @@ export const ProgramDetail: React.FC = () => {
                 type="time"
                 value={formState.time}
                 onChange={handleInputChange('time')}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full rounded-2xl border border-gray/60 bg-white/70 px-3 py-2 text-sm text-slate-900 focus:border-[#A5B4FC] focus:outline-none focus:ring-2 focus:ring-[#C7D2FE]"
               />
             </div>
           </div>

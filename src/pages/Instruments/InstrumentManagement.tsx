@@ -83,7 +83,6 @@ export const InstrumentManagement: React.FC = () => {
   const [typeError, setTypeError] = useState<string | null>(null);
   const [typeSaving, setTypeSaving] = useState(false);
   const [deletingTypeId, setDeletingTypeId] = useState<string | null>(null);
-
   const getInstrumentFormDefaults = useCallback(
     (subjectId = '') =>
       createEmptyInstrumentForm(
@@ -661,7 +660,6 @@ export const InstrumentManagement: React.FC = () => {
       },
       {
         key: 'description',
-        header: 'Descripción',
         render: (criterion: Criterion) => criterion.description ?? '—',
       },
       {
@@ -811,7 +809,7 @@ export const InstrumentManagement: React.FC = () => {
       key: 'availability',
       header: 'Disponible',
       render: (instrument: Instrument) => (
-        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-200 text-gray-700">
           {(instrument.availability ?? '').toString().trim() || (instrument.isActive ? 'Sí' : 'No')}
         </span>
       ),
@@ -878,62 +876,87 @@ export const InstrumentManagement: React.FC = () => {
 
   return (
     <>
-      <section className="space-y-6 px-4 py-8 sm:px-6">
-      <div className="overflow-hidden rounded-3xl border border-gray-200 bg-gradient-to-br from-[#e2e4e8] via-[#f5f6f8] to-[#cdd2d9] shadow-xl">
-        <div className="flex flex-col gap-6 px-6 py-6">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.4em] text-gray-600">Instrumentos</p>
-            <h1 className="mt-2 text-3xl font-bold text-gray-900">Centro de instrumentos</h1>
-            <p className="mt-2 text-sm text-gray-600 sm:text-base">
-              Centraliza plantillas, criterios y temas en una sola vista para mantener tu biblioteca clínica actualizada.
-            </p>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-3">
-            <div className="rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700 shadow-sm">
-              <p className="text-xs uppercase tracking-wide text-gray-500">Tipos registrados</p>
-              <p className="text-2xl font-semibold text-gray-900">{instrumentTypes.length}</p>
+      <section className="space-y-8 bg-gradient-to-b from-[#F6F7F9] via-white to-[#E7E9EE] px-4 py-10 sm:px-6">
+        <div className="relative overflow-hidden rounded-[32px] border border-white/50 bg-gradient-to-br from-[#F3F4F6] via-white to-[#E5E7EB] shadow-[0_35px_90px_rgba(15,23,42,0.12)]">
+          <div aria-hidden className="absolute -top-10 right-6 h-52 w-52 rounded-full bg-[#D1D5DB]/80 blur-3xl" />
+          <div aria-hidden className="absolute -bottom-12 left-8 h-52 w-52 rounded-full bg-[#E5E7EB]/70 blur-3xl" />
+          <div className="relative flex flex-col gap-8 px-6 py-8 lg:flex-row lg:items-center lg:justify-between">
+            <div className="space-y-5">
+              <span className="inline-flex items-center gap-2 rounded-full border border-white/60 bg-white/70 px-4 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.45em] text-slate-700">
+                Instrumentos
+                <span className="h-1 w-1 rounded-full bg-slate-400" />
+                Nexus
+              </span>
+              <div className="space-y-3">
+                <h1 className="text-3xl font-semibold leading-tight text-slate-900 sm:text-4xl">Centro de instrumentos inteligentes</h1>
+                <p className="max-w-2xl text-sm text-slate-600 sm:text-base">
+                  Orquesta plantillas, criterios y temas en una consola translúcida que mantiene tu biblioteca diagnóstica precisa y lista para desplegarse.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-3 text-[0.65rem] uppercase tracking-[0.4em] text-slate-500">
+                <span className="rounded-full border border-white/50 bg-white/70 px-3 py-1">Colaborativo</span>
+                <span className="rounded-full border border-white/50 bg-white/70 px-3 py-1">Modular</span>
+                <span className="rounded-full border border-white/50 bg-white/70 px-3 py-1">En tiempo real</span>
+              </div>
             </div>
-            <div className="rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700 shadow-sm">
-              <p className="text-xs uppercase tracking-wide text-gray-500">Temas disponibles</p>
-              <p className="text-2xl font-semibold text-gray-900">{subjects.length}</p>
-            </div>
-            <div className="rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700 shadow-sm">
-              <p className="text-xs uppercase tracking-wide text-gray-500">Criterios activos</p>
-              <p className="text-2xl font-semibold text-gray-900">{criteria.length}</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="rounded-3xl border border-gray-200 bg-white px-6 py-5 shadow-lg">
-        <div className="flex flex-col gap-3">
-          <span className="text-xs font-semibold uppercase tracking-[0.4em] text-gray-600">Vistas rápidas</span>
-          <div className="grid gap-2 sm:grid-cols-3">
-            {TAB_ITEMS.map((tab) => {
-              const isActive = activeTab === tab.id;
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  aria-pressed={isActive}
-                  className={`rounded-2xl px-4 py-3 text-left transition focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-900/30 ${
-                    isActive
-                      ? 'bg-[#374151] text-white shadow-lg shadow-gray-700/40'
-                      : 'bg-white text-gray-600 border border-gray-300 hover:text-gray-900 hover:bg-gray-50'
-                  }`}
+            <div className="grid w-full gap-3 sm:grid-cols-3 lg:max-w-xl">
+              {[{
+                label: 'Tipos registrados',
+                value: instrumentTypes.length,
+                accent: 'from-[#4B5563] to-[#9CA3AF]',
+              },
+              {
+                label: 'Temas disponibles',
+                value: subjects.length,
+                accent: 'from-[#6B7280] to-[#D1D5DB]',
+              },
+              {
+                label: 'Criterios activos',
+                value: criteria.length,
+                accent: 'from-[#374151] to-[#9CA3AF]',
+              }].map((stat) => (
+                <div
+                  key={stat.label}
+                  className="rounded-3xl border border-white/60 bg-white/75 px-5 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)] backdrop-blur"
                 >
-                  <span className="text-sm font-semibold">{tab.label}</span>
-                  <span className={`block text-xs ${isActive ? 'text-gray-200/90' : 'text-gray-500'}`}>
-                    {tab.helper}
-                  </span>
-                </button>
-              );
-            })}
+                  <p className="text-[0.65rem] font-semibold uppercase tracking-[0.4em] text-slate-500">{stat.label}</p>
+                  <p className="text-3xl font-semibold text-slate-900">{stat.value}</p>
+                  <span className={`mt-2 inline-flex items-center rounded-full bg-gradient-to-r ${stat.accent} px-3 py-0.5 text-[0.6rem] font-semibold uppercase tracking-[0.35em] text-white`}>Activo</span>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
-      </div>
 
-  <Card className="border border-gray-200 bg-white shadow-xl" padding="lg">
+        <div className="rounded-[28px] border border-white/50 bg-white/80 px-6 py-5 shadow-[0_25px_70px_rgba(15,23,42,0.08)] backdrop-blur">
+          <div className="flex flex-col gap-3">
+            <span className="text-xs font-semibold uppercase tracking-[0.4em] text-slate-500">Vistas rápidas</span>
+            <div className="grid gap-2 sm:grid-cols-3">
+              {TAB_ITEMS.map((tab) => {
+                const isActive = activeTab === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    aria-pressed={isActive}
+                    className={`rounded-2xl border px-4 py-3 text-left transition focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400/40 ${
+                      isActive
+                        ? 'border-transparent bg-gradient-to-r from-[#4B5563] to-[#9CA3AF] text-white shadow-lg shadow-[#4B5563]/30'
+                        : 'border-white/60 bg-white/60 text-slate-500 hover:text-slate-900'
+                    }`}
+                  >
+                    <span className="text-sm font-semibold">{tab.label}</span>
+                    <span className={`block text-xs ${isActive ? 'text-white/80' : 'text-slate-400'}`}>
+                      {tab.helper}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+  <Card className="border border-white/50 bg-white/85 shadow-[0_30px_90px_rgba(15,23,42,0.12)] backdrop-blur" padding="lg">
         {/* Tab content switch */}
   {activeTab === 'all' && (
           <div className="py-4">
@@ -946,10 +969,14 @@ export const InstrumentManagement: React.FC = () => {
                   placeholder="Buscar tipos..."
                   value={typeSearch}
                   onChange={(e) => setTypeSearch(e.target.value)}
-                  className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg w-full"
+                  className="w-full rounded-3xl border border-white/60 bg-white/70 pl-10 pr-4 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-300"
                 />
               </div>
-              <Button onClick={() => handleOpenTypeModal()} size="sm">
+              <Button
+                onClick={() => handleOpenTypeModal()}
+                size="sm"
+                className="rounded-full bg-[#4B5563] px-5 py-2 text-sm font-semibold text-white shadow-lg shadow-slate-700/30 transition hover:bg-[#374151]"
+              >
                 <Plus className="w-4 h-4 mr-2" />
                 Nuevo tipo
               </Button>
@@ -971,8 +998,8 @@ export const InstrumentManagement: React.FC = () => {
                     <button
                       key={type.id}
                       type="button"
-                      className={`group rounded-2xl border bg-white/80 p-4 text-left shadow-sm transition hover:-translate-y-1 hover:shadow-xl ${
-                        isSelected ? 'border-gray-500/60 ring-2 ring-gray-400/60' : 'border-gray-200/70'
+                      className={`group rounded-3xl border bg-white/70 p-4 text-left shadow-[0_20px_60px_rgba(15,23,42,0.08)] backdrop-blur transition hover:-translate-y-1 hover:shadow-[0_25px_70px_rgba(15,23,42,0.18)] ${
+                        isSelected ? 'border-transparent ring-2 ring-[#D1D5DB]' : 'border-white/60'
                       }`}
                       onClick={async () => {
                         setTypeError(null);
@@ -1036,7 +1063,7 @@ export const InstrumentManagement: React.FC = () => {
                     >
                       <div className="mb-2 flex items-start justify-between gap-2">
                         <div>
-                          <h3 className={`font-semibold ${isSelected ? 'text-gray-900' : 'text-gray-800'}`}>
+                          <h3 className={`font-semibold ${isSelected ? 'text-slate-900' : 'text-slate-700'}`}>
                             {type.name || `Tipo ${type.id}`}
                           </h3>
                           {criterionLabel && (
@@ -1074,10 +1101,10 @@ export const InstrumentManagement: React.FC = () => {
                           </Button>
                         </div>
                       </div>
-                      <p className="min-h-[48px] break-words text-sm text-gray-600">
+                      <p className="min-h-[48px] break-words text-sm text-slate-600">
                         {type.description ?? 'Sin descripción'}
                       </p>
-                      <div className="flex items-center justify-between text-xs text-gray-500">
+                      <div className="flex items-center justify-between text-xs text-slate-400">
                         <span>Creado por: {type.createdBy ?? 'system'}</span>
                         {type.createdAt ? (
                           <span>{type.createdAt.toLocaleDateString()}</span>
@@ -1091,11 +1118,18 @@ export const InstrumentManagement: React.FC = () => {
               </div>
             )}
             <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <Button onClick={() => setShowAllInstrumentsTable((state) => !state)}>
+              <Button
+                onClick={() => setShowAllInstrumentsTable((state) => !state)}
+                className="rounded-full border border-white/50 bg-white/70 px-5 py-2 text-sm font-semibold text-slate-700 shadow-inner shadow-white/40 backdrop-blur hover:text-slate-900"
+              >
                 {showAllInstrumentsTable ? 'Ocultar tabla de instrumentos' : 'Ver tabla de instrumentos'}
               </Button>
               {activeInstrumentType ? (
-                <Button onClick={() => handleOpenModal()} disabled={subjects.length === 0}>
+                <Button
+                  onClick={() => handleOpenModal()}
+                  disabled={subjects.length === 0}
+                  className="rounded-full bg-gradient-to-r from-[#4B5563] via-[#6B7280] to-[#9CA3AF] px-5 py-2 text-sm font-semibold text-white shadow-lg shadow-[#4B5563]/25 disabled:cursor-not-allowed disabled:opacity-50"
+                >
                   <Plus className="w-4 h-4 mr-2" />
                   Agregar instrumento
                 </Button>
@@ -1128,7 +1162,11 @@ export const InstrumentManagement: React.FC = () => {
                 <h2 className="text-lg font-semibold">Temas</h2>
                 <p className="text-sm text-gray-600">Listado de todos los temas disponibles en la plataforma.</p>
               </div>
-              <Button onClick={() => handleOpenSubjectModal()} size="sm">
+              <Button
+                onClick={() => handleOpenSubjectModal()}
+                size="sm"
+                className="rounded-full bg-[#4B5563] px-5 py-2 text-sm font-semibold text-white shadow-lg shadow-slate-700/30 transition hover:bg-[#374151]"
+              >
                 <Plus className="w-4 h-4 mr-2" />
                 Nuevo tema
               </Button>
@@ -1159,7 +1197,7 @@ export const InstrumentManagement: React.FC = () => {
                 <h2 className="text-lg font-semibold">Criterios</h2>
                 <p className="text-sm text-gray-600">Administración de criterios asociados a instrumentos y preguntas.</p>
               </div>
-              <Button onClick={() => handleOpenCriterionModal()} size="sm">
+              <Button onClick={() => handleOpenCriterionModal()} size="sm" className="rounded-full bg-[#4B5563] px-5 py-2 text-sm font-semibold text-white shadow-lg shadow-slate-700/30 transition hover:bg-[#374151]">
                 <Plus className="w-4 h-4 mr-2" />
                 Nuevo criterio
               </Button>
@@ -1198,7 +1236,7 @@ export const InstrumentManagement: React.FC = () => {
               required
               value={formData.subjectId}
               onChange={(event) => setFormData((prev) => ({ ...prev, subjectId: event.target.value }))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full rounded-2xl border border-white/60 bg-white/70 px-3 py-2 text-sm text-slate-900 focus:border-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-300"
             >
               <option value="">Selecciona un tema</option>
               {subjects.map((subject) => (
@@ -1223,7 +1261,7 @@ export const InstrumentManagement: React.FC = () => {
               value={formData.description}
               onChange={(event) => setFormData((prev) => ({ ...prev, description: event.target.value }))}
               rows={3}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full rounded-2xl border border-white/60 bg-white/70 px-3 py-2 text-sm text-slate-900 focus:border-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-300"
               placeholder="Describe brevemente el instrumento"
             />
           </div>
@@ -1233,7 +1271,7 @@ export const InstrumentManagement: React.FC = () => {
             <select
               value={formData.resource}
               onChange={(event) => setFormData((prev) => ({ ...prev, resource: event.target.value }))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full rounded-2xl border border-white/60 bg-white/70 px-3 py-2 text-sm text-slate-900 focus:border-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-300"
             >
               {RESOURCE_OPTIONS.map((option) => (
                 <option key={option} value={option}>
@@ -1248,7 +1286,7 @@ export const InstrumentManagement: React.FC = () => {
             <select
               value={formData.availability}
               onChange={(event) => setFormData((prev) => ({ ...prev, availability: event.target.value }))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full rounded-2xl border border-white/60 bg-white/70 px-3 py-2 text-sm text-slate-900 focus:border-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-300"
             >
               {AUDIENCE_OPTIONS.map((option) => (
                 <option key={option} value={option}>
@@ -1268,7 +1306,7 @@ export const InstrumentManagement: React.FC = () => {
                   resultDelivery: event.target.value ? (event.target.value as Exclude<ResultDeliveryOption, null>) : null,
                 }))
               }
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full rounded-2xl border border-white/60 bg-white/70 px-3 py-2 text-sm text-slate-900 focus:border-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-300"
             >
               {RESULT_DELIVERY_OPTIONS.map((option) => (
                 <option key={option.value ?? 'none'} value={option.value ?? ''}>
@@ -1288,7 +1326,7 @@ export const InstrumentManagement: React.FC = () => {
                   colorResponse: event.target.value === '1' ? 1 : 0,
                 }))
               }
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full rounded-2xl border border-white/60 bg-white/70 px-3 py-2 text-sm text-slate-900 focus:border-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-300"
             >
               {COLOR_RESPONSE_OPTIONS.map((option) => (
                 <option key={option.value} value={String(option.value)}>
@@ -1304,7 +1342,7 @@ export const InstrumentManagement: React.FC = () => {
                 type="checkbox"
                 checked={formData.isActive}
                 onChange={(event) => setFormData((prev) => ({ ...prev, isActive: event.target.checked }))}
-                className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                className="h-4 w-4 rounded border-white/50 bg-white/70 text-gray-600 focus:ring-gray-400"
               />
               <span>Activo</span>
             </label>
@@ -1347,7 +1385,7 @@ export const InstrumentManagement: React.FC = () => {
               required
               value={typeFormData.name}
               onChange={(event) => setTypeFormData((prev) => ({ ...prev, name: event.target.value }))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full rounded-2xl border border-gray/60 bg-white/70 px-3 py-2 text-sm text-slate-900 focus:border-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-300"
               placeholder="Ingresa el nombre del tipo"
             />
           </div>
@@ -1358,7 +1396,7 @@ export const InstrumentManagement: React.FC = () => {
               value={typeFormData.description}
               onChange={(event) => setTypeFormData((prev) => ({ ...prev, description: event.target.value }))}
               rows={3}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full rounded-2xl border border-gray/60 bg-white/70 px-3 py-2 text-sm text-slate-900 focus:border-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-300"
               placeholder="Describe brevemente el tipo de instrumento"
             />
           </div>
@@ -1368,7 +1406,7 @@ export const InstrumentManagement: React.FC = () => {
             <select
               value={typeFormData.criterionId}
               onChange={(event) => setTypeFormData((prev) => ({ ...prev, criterionId: event.target.value }))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full rounded-2xl border border-gray/60 bg-white/70 px-3 py-2 text-sm text-slate-900 focus:border-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-300"
             >
               <option value="">Sin criterio</option>
               {criteria.map((criterion) => (
@@ -1407,7 +1445,7 @@ export const InstrumentManagement: React.FC = () => {
               required
               value={criterionFormData.name}
               onChange={(event) => setCriterionFormData((prev) => ({ ...prev, name: event.target.value }))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full rounded-2xl border border-gray/60 bg-white/70 px-3 py-2 text-sm text-slate-900 focus:border-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-300"
               placeholder="Ingresa el nombre del criterio"
             />
           </div>
@@ -1418,7 +1456,7 @@ export const InstrumentManagement: React.FC = () => {
               value={criterionFormData.description}
               onChange={(event) => setCriterionFormData((prev) => ({ ...prev, description: event.target.value }))}
               rows={3}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full rounded-2xl border border-gray/60 bg-white/70 px-3 py-2 text-sm text-slate-900 focus:border-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-300"
               placeholder="Descripción breve del criterio"
             />
           </div>
@@ -1451,7 +1489,7 @@ export const InstrumentManagement: React.FC = () => {
               required
               value={subjectFormData.name}
               onChange={(event) => setSubjectFormData((prev) => ({ ...prev, name: event.target.value }))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full rounded-2xl border border-gray/60 bg-white/70 px-3 py-2 text-sm text-slate-900 focus:border-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-300"
               placeholder="Ingresa el nombre del tema"
             />
           </div>
@@ -1462,7 +1500,7 @@ export const InstrumentManagement: React.FC = () => {
               value={subjectFormData.description}
               onChange={(event) => setSubjectFormData((prev) => ({ ...prev, description: event.target.value }))}
               rows={3}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full rounded-2xl border border-gray/60 bg-white/70 px-3 py-2 text-sm text-slate-900 focus:border-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-300"
               placeholder="Descripción breve del tema"
             />
           </div>
@@ -1472,7 +1510,7 @@ export const InstrumentManagement: React.FC = () => {
             <select
               value={subjectFormData.instrumentType}
               onChange={(event) => setSubjectFormData((prev) => ({ ...prev, instrumentType: event.target.value }))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full rounded-2xl border border-gray/60 bg-white/70 px-3 py-2 text-sm text-slate-900 focus:border-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-300"
             >
               <option value="">Selecciona un tipo (opcional)</option>
               {instrumentTypes.map((type) => (

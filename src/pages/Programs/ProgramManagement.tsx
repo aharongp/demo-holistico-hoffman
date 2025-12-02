@@ -209,18 +209,27 @@ export const ProgramManagement: React.FC = () => {
 
   return (
     <section className="space-y-6 px-4 py-8 sm:px-6">
-      <div className="overflow-hidden rounded-3xl border border-orange-100 bg-gradient-to-br from-[#fff7ed] via-white to-[#ffe4cc] shadow-xl">
-        <div className="flex flex-col gap-6 px-6 py-6 lg:flex-row lg:items-center lg:justify-between">
-          <div className="max-w-2xl">
-            <p className="text-xs font-semibold uppercase tracking-[0.4em] text-orange-500">Programas</p>
-            <h1 className="mt-2 text-3xl font-bold text-slate-900">Centro de programas</h1>
-            <p className="mt-3 text-sm text-slate-700 sm:text-base">
-              Diseña, supervisa y conecta planes terapéuticos con instrumentos y equipos clínicos.
-            </p>
-            <div className="mt-6 flex flex-wrap gap-3">
+      <div className="relative overflow-hidden rounded-[32px] border border-white/35 bg-gradient-to-br from-[#E0F2FE] via-white to-[#F5F3FF] shadow-[0_40px_95px_rgba(15,23,42,0.18)]">
+        <div aria-hidden className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(56,189,248,0.18),_transparent_60%)]" />
+        <div aria-hidden className="absolute -top-10 right-6 h-48 w-48 rounded-full bg-[#C7D2FE] opacity-50 blur-3xl" />
+        <div aria-hidden className="absolute -bottom-12 left-4 h-56 w-56 rounded-full bg-[#99F6E4] opacity-40 blur-3xl" />
+        <div className="relative flex flex-col gap-6 px-6 py-6 lg:flex-row lg:items-center lg:justify-between">
+          <div className="max-w-2xl space-y-4">
+            <span className="inline-flex items-center gap-2 rounded-full border border-white/60 bg-white/40 px-4 py-1 text-[11px] font-semibold uppercase tracking-[0.5em] text-[#0F172A]">
+              Programas
+              <span className="h-1 w-1 rounded-full bg-[#22D3EE]" />
+              Orbital
+            </span>
+            <div className="space-y-3">
+              <h1 className="text-3xl font-semibold text-slate-900">Centro de programas</h1>
+              <p className="text-sm text-slate-600 sm:text-base">
+                Diseña, supervisa y conecta planes terapéuticos con instrumentos y escuadras clínicas desde un tablero ligero y envolvente.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-3">
               <Button
                 onClick={() => handleOpenModal()}
-                className="bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-lg shadow-orange-200/60 hover:from-orange-600 hover:to-amber-600 focus:ring-orange-500"
+                className="rounded-full bg-gradient-to-r from-[#06B6D4] via-[#3B82F6] to-[#8B5CF6] px-6 py-2 text-sm font-semibold text-white shadow-[0_20px_55px_rgba(59,130,246,0.35)] hover:opacity-95"
               >
                 <Plus className="w-4 h-4 mr-2" />
                 Nuevo programa
@@ -229,7 +238,7 @@ export const ProgramManagement: React.FC = () => {
                 type="button"
                 variant="outline"
                 onClick={() => navigate('/instruments')}
-                className="border-orange-200 text-orange-600 hover:bg-orange-50 focus:ring-orange-400"
+                className="rounded-full border border-white/60 bg-white/40 px-4 py-2 text-sm font-semibold text-slate-600 backdrop-blur hover:text-slate-900"
               >
                 Vincular instrumentos
                 <ArrowRight className="w-4 h-4 ml-2" />
@@ -237,45 +246,42 @@ export const ProgramManagement: React.FC = () => {
             </div>
           </div>
           <div className="grid w-full gap-3 sm:grid-cols-3 lg:max-w-md">
-            <div className="rounded-2xl border border-white/60 bg-white/80 px-4 py-3 shadow-inner">
-              <p className="text-xs uppercase tracking-wide text-orange-500/80">Programas activos</p>
+            <div className="rounded-3xl border border-white/50 bg-white/70 px-5 py-4 text-slate-900 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.35em] text-[#0EA5E9]">Programas activos</p>
               <p className="text-3xl font-semibold text-slate-900">{totalPrograms}</p>
             </div>
-            <div className="rounded-2xl border border-white/60 bg-white/80 px-4 py-3 shadow-inner">
-              <p className="text-xs uppercase tracking-wide text-orange-500/80">Instrumentos vinculados</p>
+            <div className="rounded-3xl border border-white/50 bg-white/70 px-5 py-4 text-slate-900 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur">
+              <p className="text-[9px] font-semibold uppercase tracking-[0.35em] text-[#0EA5E9]">Instrumentos vinculados</p>
               <p className="text-3xl font-semibold text-slate-900">{linkedInstrumentCount}</p>
             </div>
-            <div className="rounded-2xl border border-white/60 bg-white/80 px-4 py-3 shadow-inner">
-              <p className="text-xs uppercase tracking-wide text-orange-500/80">Última edición</p>
+            <div className="rounded-3xl border border-white/50 bg-white/70 px-5 py-4 text-slate-900 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.35em] text-[#0EA5E9]">Última edición</p>
               <p className="text-2xl font-semibold text-slate-900">{lastUpdatedLabel}</p>
             </div>
           </div>
         </div>
       </div>
 
-      <Card className="rounded-3xl border-orange-100/70 bg-white/95 shadow-xl ring-1 ring-orange-100/80" padding="lg">
+      <Card className="rounded-[28px] border border-white/40 bg-white/80 shadow-[0_30px_85px_rgba(15,23,42,0.12)] backdrop-blur" padding="lg">
         <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="relative w-full lg:max-w-md">
-            <Search className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-orange-300" />
+            <Search className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-cyan-600" />
             <input
               type="text"
               placeholder="Buscar programas por nombre o descripción..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full rounded-2xl border border-orange-100 bg-white/80 pl-11 pr-4 py-3 text-sm text-slate-900 placeholder:text-orange-300 focus:border-orange-400 focus:ring-2 focus:ring-orange-400/40"
+              className="w-full rounded-3xl border border-gray/50 bg-white/70 pl-11 pr-4 py-3 text-sm text-slate-900 placeholder:text-gray-400 focus:border-[#67E8F9] focus:ring-2 focus:ring-[#C7D2FE]"
             />
           </div>
           <div className="flex flex-wrap items-center gap-3">
-            <span className="rounded-full bg-orange-50 px-3 py-1 text-sm font-semibold text-orange-700">
+            <span className="rounded-full border border-white/60 bg-white/50 px-3 py-1 text-sm font-semibold text-[#0F172A]">
               {filteredPrograms.length} coincidencias
-            </span>
-            <span className="text-xs font-semibold uppercase tracking-[0.3em] text-orange-400">
-              Total: {totalPrograms}
             </span>
           </div>
         </div>
 
-        <div className="overflow-hidden rounded-2xl border border-orange-100/60 bg-white">
+        <div className="overflow-hidden rounded-3xl border border-white/40">
           <Table
             data={filteredPrograms}
             columns={columns}
@@ -300,8 +306,9 @@ export const ProgramManagement: React.FC = () => {
               type="text"
               required
               value={formData.name}
+              placeholder='Ingresa el nombre del programa'
               onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full rounded-2xl border border-gray/60 bg-white/70 px-3 py-2 text-sm text-slate-900 focus:border-[#67E8F9] focus:outline-none focus:ring-2 focus:ring-[#C7D2FE]"
             />
           </div>
           
@@ -312,9 +319,10 @@ export const ProgramManagement: React.FC = () => {
             <textarea
               required
               value={formData.description}
+              placeholder='Ingresa la descripción del programa'
               onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
               rows={3}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full rounded-2xl border border-gray/60 bg-white/70 px-3 py-2 text-sm text-slate-900 focus:border-[#67E8F9] focus:outline-none focus:ring-2 focus:ring-[#C7D2FE]"
             />
           </div>
 
@@ -324,7 +332,7 @@ export const ProgramManagement: React.FC = () => {
             </label>
             <div className="space-y-2 max-h-40 overflow-y-auto border border-gray-300 rounded-lg p-3">
               {instruments.map((instrument) => (
-                <label key={instrument.id} className="flex items-center">
+                <label key={instrument.id} className="flex items-center rounded-2xl border border-white/40 bg-white/60 px-3 py-2 text-sm text-slate-700">
                   <input
                     type="checkbox"
                     checked={formData.instruments.includes(instrument.id)}
@@ -341,9 +349,9 @@ export const ProgramManagement: React.FC = () => {
                         }));
                       }
                     }}
-                    className="mr-2"
+                    className="mr-2 accent-[#38BDF8]"
                   />
-                  <span className="text-sm">{instrument.name}</span>
+                  <span>{instrument.name}</span>
                 </label>
               ))}
             </div>

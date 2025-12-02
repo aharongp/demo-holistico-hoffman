@@ -1696,48 +1696,61 @@ export const EvolutionTracking: React.FC = () => {
 
   if (isTherapist && !selectedPatient) {
     return (
-      <section className="space-y-6 px-4 py-8 sm:px-6">
-        <div className="overflow-hidden rounded-3xl border border-rose-100 bg-gradient-to-br from-[#fff1f2] via-white to-[#ffe4e6] shadow-xl">
-          <div className="px-6 py-8 space-y-4">
-            <span className="text-xs font-semibold uppercase tracking-[0.4em] text-rose-500">Evolución</span>
-            <h1 className="text-3xl font-bold text-slate-900">Explora la evolución clínica de tu equipo</h1>
-            <p className="text-sm text-slate-700 sm:text-base max-w-2xl">
-              Selecciona un paciente para revisar sus signos vitales, curvas de progreso y registros detallados.
-              Esta vista centraliza toda la información longitudinal para tomar mejores decisiones terapéuticas.
-            </p>
+      <section className="space-y-8 px-4 py-8 sm:px-6">
+        <div className="relative overflow-hidden rounded-[32px] border border-white/40 bg-gradient-to-br from-[#FFF5EC] via-[#FFF8F3] to-[#FFE9F3] p-6 sm:p-10 shadow-[0_45px_110px_rgba(120,53,15,0.15)]">
+          <div aria-hidden className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(249,115,22,0.12),_transparent_60%)]" />
+          <div aria-hidden className="absolute -top-10 right-0 h-56 w-56 rounded-full bg-[#FED7AA] opacity-60 blur-3xl" />
+          <div aria-hidden className="absolute -bottom-12 left-4 h-48 w-48 rounded-full bg-[#F9A8D4] opacity-40 blur-3xl" />
+          <div className="relative space-y-6">
+            <span className="inline-flex items-center gap-2 rounded-full border border-white/60 bg-white/50 px-4 py-1 text-[11px] font-semibold uppercase tracking-[0.55em] text-[#9A3412]">
+              Evolución
+              <span className="h-1 w-1 rounded-full bg-[#FB923C]" />
+              Áurea
+            </span>
+            <div className="space-y-3">
+              <h1 className="text-3xl font-semibold leading-tight text-slate-900 sm:text-4xl">
+                Explora la evolución clínica de tu equipo
+              </h1>
+              <p className="max-w-2xl text-sm text-slate-600 sm:text-base">
+                Selecciona un paciente para revisar curvas de progreso, narrativas longitudinales y métricas vitales en un entorno translúcido y centrado en la precisión.
+              </p>
+            </div>
             <div className="grid gap-3 sm:grid-cols-3">
-              <div className="rounded-2xl border border-white/60 bg-white/80 px-4 py-3 shadow-inner">
-                <p className="text-xs uppercase tracking-wide text-rose-500/80">Pacientes registrados</p>
-                <p className="text-3xl font-semibold text-slate-900">{patients.length}</p>
+              <div className="rounded-3xl border border-[#FFE4D6]/80 bg-white/70 px-5 py-4 text-slate-900 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.35em] text-[#B45309]">Pacientes</p>
+                <p className="text-3xl font-semibold">{patients.length}</p>
+                <span className="text-xs text-[#B45309]/70">Registrados</span>
               </div>
-              <div className="rounded-2xl border border-white/60 bg-white/80 px-4 py-3 shadow-inner">
-                <p className="text-xs uppercase tracking-wide text-rose-500/80">Métricas monitoreadas</p>
-                <p className="text-3xl font-semibold text-slate-900">{trackedMetricsCount}</p>
+              <div className="rounded-3xl border border-[#FFE4D6]/80 bg-white/70 px-5 py-4 text-slate-900 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.35em] text-[#B45309]">Métricas</p>
+                <p className="text-3xl font-semibold">{trackedMetricsCount}</p>
+                <span className="text-xs text-[#B45309]/70">Monitoreadas</span>
               </div>
-              <div className="rounded-2xl border border-white/60 bg-white/80 px-4 py-3 shadow-inner">
-                <p className="text-xs uppercase tracking-wide text-rose-500/80">Última actualización</p>
-                <p className="text-2xl font-semibold text-slate-900">{lastRecordedLabel}</p>
+              <div className="rounded-3xl border border-[#FFE4D6]/80 bg-white/70 px-5 py-4 text-slate-900 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.35em] text-[#B45309]">Último pulso</p>
+                <p className="text-2xl font-semibold">{lastRecordedLabel}</p>
+                <span className="text-xs text-[#B45309]/70">Fecha de corte</span>
               </div>
             </div>
           </div>
         </div>
 
-        <Card className="rounded-3xl border-rose-100/70 bg-white/95 shadow-xl ring-1 ring-rose-100/80" padding="lg">
+        <Card className="rounded-[28px] border border-[#FFE4D6]/70 bg-white/85 shadow-[0_35px_95px_rgba(124,45,18,0.12)] backdrop-blur" padding="lg">
           <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-3">
-              <span className="flex h-10 w-10 items-center justify-center rounded-full bg-rose-50 text-rose-500">
-                <User className="w-5 h-5" />
+              <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-[#FDBA74]/30 to-[#FECACA]/60 text-[#B45309]">
+                <User className="h-5 w-5" />
               </span>
               <div>
                 <h3 className="text-lg font-semibold text-slate-900">Selecciona un paciente</h3>
                 <p className="text-sm text-slate-600">Accede al histórico completo de evolución y signos vitales.</p>
               </div>
             </div>
-            <span className="rounded-full bg-rose-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-rose-500">
+            <span className="rounded-full border border-[#FFE4D6]/80 bg-white/50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.35em] text-[#B45309]">
               Listado maestro
             </span>
           </div>
-          <div className="overflow-hidden rounded-2xl border border-rose-100/60">
+          <div className="overflow-hidden rounded-2xl border border-[#FFE4D6]/70 shadow-inner">
             <Table data={patients} columns={patientColumns} />
           </div>
         </Card>
@@ -1747,48 +1760,55 @@ export const EvolutionTracking: React.FC = () => {
 
 
   return (
-    <section className="space-y-6 px-4 py-8 sm:px-6">
-      <div className="overflow-hidden rounded-3xl border border-rose-100 bg-gradient-to-br from-[#fff1f2] via-white to-[#ffe4e6] shadow-xl">
-        <div className="flex flex-col gap-6 px-6 py-6">
+    <section className="space-y-8 px-4 py-8 sm:px-6">
+      <div className="relative overflow-hidden rounded-[32px] border border-white/35 bg-gradient-to-br from-[#FFF7ED] via-[#FFF0F5] to-[#FFE6E0] p-6 sm:p-10 shadow-[0_45px_110px_rgba(120,53,15,0.15)]">
+        <div aria-hidden className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(251,146,60,0.14),_transparent_60%)]" />
+        <div aria-hidden className="absolute -top-12 left-6 h-48 w-48 rounded-full bg-[#FED7AA] opacity-60 blur-3xl" />
+        <div aria-hidden className="absolute -bottom-10 right-6 h-52 w-52 rounded-full bg-[#F9A8D4] opacity-40 blur-3xl" />
+        <div className="relative flex flex-col gap-8">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div className="space-y-3">
+            <div className="space-y-4">
               <div className="flex flex-wrap items-center gap-3">
                 {selectedPatient && (
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => setSelectedPatient(null)}
-                    className="border-rose-200 text-rose-600 hover:bg-rose-50 focus:ring-rose-400"
+                    className="rounded-full border border-[#FED7AA] bg-white/60 px-4 py-2 text-sm font-semibold text-[#B45309] backdrop-blur hover:text-[#7C2D12]"
                   >
                     ← Volver a pacientes
                   </Button>
                 )}
-                <span className="rounded-full bg-white/70 px-3 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-rose-500">
+                <span className="inline-flex items-center gap-2 rounded-full border border-[#FED7AA] bg-white/50 px-4 py-1 text-[11px] font-semibold uppercase tracking-[0.55em] text-[#9A3412]">
                   Evolución
+                  <span className="h-1 w-1 rounded-full bg-[#FB923C]" />
+                  Calima
                 </span>
               </div>
-              <h1 className="text-3xl font-bold text-slate-900">
-                {selectedPatient
-                  ? `${selectedPatient.firstName} ${selectedPatient.lastName}`
-                  : 'Seguimiento de evolución'}
-              </h1>
-              <p className="text-sm text-slate-700 sm:text-base">
-                {isPatient
-                  ? 'Revisa tu progreso diario, energía y signos vitales en un panel integrado.'
-                  : selectedPatient
-                    ? `Monitorea la evolución completa de ${selectedPatient.firstName} con métricas longitudinales.`
-                    : 'Selecciona un paciente para revisar su evolución clínica y tomar decisiones informadas.'}
-              </p>
+              <div className="space-y-3">
+                <h1 className="text-3xl font-semibold leading-tight text-slate-900 sm:text-4xl">
+                  {selectedPatient
+                    ? `${selectedPatient.firstName} ${selectedPatient.lastName}`
+                    : 'Seguimiento de evolución'}
+                </h1>
+                <p className="text-sm text-slate-600 sm:text-base">
+                  {isPatient
+                    ? 'Revisa tu progreso diario, energía y signos vitales en un panel integrado.'
+                    : selectedPatient
+                      ? `Monitorea la evolución completa de ${selectedPatient.firstName} con métricas longitudinales.`
+                      : 'Selecciona un paciente para revisar su evolución clínica y tomar decisiones informadas.'}
+                </p>
+              </div>
             </div>
-            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => fetchVitals()}
                 disabled={!vitalsUrl || isLoadingVitals}
-                className="border-rose-200 text-rose-600 hover:bg-rose-50 focus:ring-rose-400"
+                className="rounded-full border border-[#FED7AA] bg-white/60 px-5 py-2 text-sm font-semibold text-[#B45309] backdrop-blur hover:text-[#7C2D12]"
               >
-                <RefreshCw className="w-4 h-4 mr-2" />
+                <RefreshCw className="mr-2 h-4 w-4" />
                 {isLoadingVitals ? 'Actualizando' : 'Actualizar'}
               </Button>
               {isPatient && (
@@ -1798,9 +1818,9 @@ export const EvolutionTracking: React.FC = () => {
                     setFormData({ ...INITIAL_FORM_DATA });
                     setIsModalOpen(true);
                   }}
-                  className="bg-gradient-to-r from-rose-500 to-red-500 text-white shadow-lg shadow-rose-200/60 hover:from-rose-600 hover:to-red-600 focus:ring-rose-500"
+                  className="rounded-full bg-gradient-to-r from-[#F97316] via-[#FB7185] to-[#F472B6] px-6 py-2 text-sm font-semibold text-white shadow-[0_25px_60px_rgba(249,115,22,0.35)] hover:opacity-90"
                 >
-                  <Plus className="w-4 h-4 mr-2" />
+                  <Plus className="mr-2 h-4 w-4" />
                   Registrar datos
                 </Button>
               )}
@@ -1808,23 +1828,26 @@ export const EvolutionTracking: React.FC = () => {
           </div>
 
           <div className="grid gap-3 sm:grid-cols-3">
-            <div className="rounded-2xl border border-white/60 bg-white/80 px-4 py-3 shadow-inner">
-              <p className="text-xs uppercase tracking-wide text-rose-500/80">Registros acumulados</p>
-              <p className="text-3xl font-semibold text-slate-900">{totalRecords}</p>
+            <div className="rounded-3xl border border-[#FFE4D6]/80 bg-white/70 px-5 py-4 text-slate-900 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.35em] text-[#B45309]">Registros</p>
+              <p className="text-3xl font-semibold">{totalRecords}</p>
+              <span className="text-xs text-[#B45309]/70">Acumulados</span>
             </div>
-            <div className="rounded-2xl border border-white/60 bg-white/80 px-4 py-3 shadow-inner">
-              <p className="text-xs uppercase tracking-wide text-rose-500/80">Métricas activas</p>
-              <p className="text-3xl font-semibold text-slate-900">{trackedMetricsCount}</p>
+            <div className="rounded-3xl border border-[#FFE4D6]/80 bg-white/70 px-5 py-4 text-slate-900 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.35em] text-[#B45309]">Métricas</p>
+              <p className="text-3xl font-semibold">{trackedMetricsCount}</p>
+              <span className="text-xs text-[#B45309]/70">Activas</span>
             </div>
-            <div className="rounded-2xl border border-white/60 bg-white/80 px-4 py-3 shadow-inner">
-              <p className="text-xs uppercase tracking-wide text-rose-500/80">Último registro</p>
-              <p className="text-2xl font-semibold text-slate-900">{lastRecordedLabel}</p>
+            <div className="rounded-3xl border border-[#FFE4D6]/80 bg-white/70 px-5 py-4 text-slate-900 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.35em] text-[#B45309]">Último registro</p>
+              <p className="text-2xl font-semibold">{lastRecordedLabel}</p>
+              <span className="text-xs text-[#B45309]/70">Fecha exacta</span>
             </div>
           </div>
 
           <div className="grid gap-4 lg:grid-cols-[repeat(3,minmax(0,1fr))]">
             <div className="flex flex-col">
-              <label className="text-xs font-medium text-rose-500" htmlFor="evolution-date-from">
+              <label className="text-xs font-semibold uppercase tracking-[0.3em] text-[#C2410C]" htmlFor="evolution-date-from">
                 Desde
               </label>
               <input
@@ -1832,11 +1855,11 @@ export const EvolutionTracking: React.FC = () => {
                 type="date"
                 value={dateFrom}
                 onChange={event => setDateFrom(event.target.value)}
-                className="mt-1 w-full rounded-xl border border-rose-100 bg-white/80 px-3 py-2 text-sm text-slate-900 focus:border-rose-400 focus:outline-none focus:ring-2 focus:ring-rose-400/40"
+                className="mt-2 w-full rounded-2xl border border-[#FFE4D6]/80 bg-white/70 px-3 py-2 text-sm text-slate-900 backdrop-blur focus:border-[#FDBA74] focus:outline-none focus:ring-2 focus:ring-[#FED7AA]"
               />
             </div>
             <div className="flex flex-col">
-              <label className="text-xs font-medium text-rose-500" htmlFor="evolution-date-to">
+              <label className="text-xs font-semibold uppercase tracking-[0.3em] text-[#C2410C]" htmlFor="evolution-date-to">
                 Hasta
               </label>
               <input
@@ -1844,7 +1867,7 @@ export const EvolutionTracking: React.FC = () => {
                 type="date"
                 value={dateTo}
                 onChange={event => setDateTo(event.target.value)}
-                className="mt-1 w-full rounded-xl border border-rose-100 bg-white/80 px-3 py-2 text-sm text-slate-900 focus:border-rose-400 focus:outline-none focus:ring-2 focus:ring-rose-400/40"
+                className="mt-2 w-full rounded-2xl border border-[#FFE4D6]/80 bg-white/70 px-3 py-2 text-sm text-slate-900 backdrop-blur focus:border-[#FDBA74] focus:outline-none focus:ring-2 focus:ring-[#FED7AA]"
               />
             </div>
             <div className="flex items-end">
@@ -1853,7 +1876,7 @@ export const EvolutionTracking: React.FC = () => {
                 size="sm"
                 onClick={clearDateFilters}
                 disabled={!dateFrom && !dateTo}
-                className="w-full rounded-xl border-rose-200 text-rose-600 hover:bg-rose-50 focus:ring-rose-400"
+                className="w-full rounded-2xl border border-[#FED7AA] bg-white/60 px-4 py-2 text-sm font-semibold text-[#B45309] backdrop-blur hover:text-[#7C2D12]"
               >
                 Limpiar filtros
               </Button>
@@ -1863,13 +1886,13 @@ export const EvolutionTracking: React.FC = () => {
       </div>
 
       {vitalsError && (
-        <Card className="rounded-2xl border-rose-100/70 bg-white/95 shadow-md">
+        <Card className="rounded-2xl border border-[#FFE4D6]/80 bg-white/85 shadow-[0_30px_70px_rgba(120,53,15,0.08)] backdrop-blur">
           <p className="text-sm text-red-600">{vitalsError}</p>
         </Card>
       )}
 
       {!vitalsError && !isLoadingVitals && !hasVitalsData && (
-        <Card className="rounded-2xl border-rose-100/70 bg-white/95 shadow-md">
+        <Card className="rounded-2xl border border-[#FFE4D6]/80 bg-white/85 shadow-[0_30px_70px_rgba(120,53,15,0.08)] backdrop-blur">
           <p className="text-sm text-slate-600">
             {selectedPatient
               ? 'No hay registros de signos vitales para este paciente.'
@@ -1903,7 +1926,7 @@ export const EvolutionTracking: React.FC = () => {
               type="line"
               dataKey={['systolic', 'diastolic']}
               xAxisKey="label"
-              colors={['#2563EB', '#10B981']}
+              colors={['#FB923C', '#F472B6']}
             />
             <Chart
               title="Glicemia"
@@ -1911,14 +1934,14 @@ export const EvolutionTracking: React.FC = () => {
               type="line"
               dataKey="value"
               xAxisKey="label"
-              colors={['#8B5CF6']}
+              colors={['#F97316']}
             />
           </div>
 
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6">
             <Card
               padding="sm"
-              className="space-y-4 rounded-3xl border-rose-100/60 bg-white/95 shadow-lg ring-1 ring-rose-100/70"
+              className="space-y-4 rounded-[28px] border border-[#FFE4D6]/70 bg-white/85 shadow-[0_30px_80px_rgba(124,45,18,0.08)] backdrop-blur"
             >
               <div className="flex items-start justify-between gap-3">
                 <div>
@@ -1940,7 +1963,7 @@ export const EvolutionTracking: React.FC = () => {
                     data={weightRows}
                     columns={weightColumns}
                     rowKey={(row) => row.id}
-                    className="shadow-none ring-0 border border-gray-200"
+                    className="shadow-none ring-0 border border-white/40"
                   />
                 ) : (
                   <p className="text-sm text-gray-600">No hay registros de peso disponibles.</p>
@@ -1952,7 +1975,7 @@ export const EvolutionTracking: React.FC = () => {
 
             <Card
               padding="sm"
-              className="space-y-4 rounded-3xl border-rose-100/60 bg-white/95 shadow-lg ring-1 ring-rose-100/70"
+              className="space-y-4 rounded-[28px] border border-[#FFE4D6]/70 bg-white/85 shadow-[0_30px_80px_rgba(124,45,18,0.08)] backdrop-blur"
             >
               <div className="flex items-start justify-between gap-3">
                 <div>
@@ -1974,7 +1997,7 @@ export const EvolutionTracking: React.FC = () => {
                     data={pulseRows}
                     columns={pulseColumns}
                     rowKey={(row) => row.id}
-                    className="shadow-none ring-0 border border-gray-200"
+                    className="shadow-none ring-0 border border-white/40"
                   />
                 ) : (
                   <p className="text-sm text-gray-600">No hay registros de pulso disponibles.</p>
@@ -1986,7 +2009,7 @@ export const EvolutionTracking: React.FC = () => {
 
             <Card
               padding="sm"
-              className="space-y-4 rounded-3xl border-rose-100/60 bg-white/95 shadow-lg ring-1 ring-rose-100/70"
+              className="space-y-4 rounded-[28px] border border-[#FFE4D6]/70 bg-white/85 shadow-[0_30px_80px_rgba(124,45,18,0.08)] backdrop-blur"
             >
               <div className="flex items-start justify-between gap-3">
                 <div>
@@ -2008,7 +2031,7 @@ export const EvolutionTracking: React.FC = () => {
                     data={glycemiaRows}
                     columns={glycemiaColumns}
                     rowKey={(row) => row.id}
-                    className="shadow-none ring-0 border border-gray-200"
+                    className="shadow-none ring-0 border border-white/40"
                   />
                 ) : (
                   <p className="text-sm text-gray-600">No hay registros de glicemia disponibles.</p>
@@ -2020,7 +2043,7 @@ export const EvolutionTracking: React.FC = () => {
 
             <Card
               padding="sm"
-              className="space-y-4 rounded-3xl border-rose-100/60 bg-white/95 shadow-lg ring-1 ring-rose-100/70"
+              className="space-y-4 rounded-[28px] border border-[#FFE4D6]/70 bg-white/85 shadow-[0_30px_80px_rgba(124,45,18,0.08)] backdrop-blur"
             >
               <div className="flex items-start justify-between gap-3">
                 <div>
@@ -2042,7 +2065,7 @@ export const EvolutionTracking: React.FC = () => {
                     data={bloodPressureRows}
                     columns={bloodPressureColumns}
                     rowKey={(row) => row.id}
-                    className="shadow-none ring-0 border border-gray-200"
+                    className="shadow-none ring-0 border border-white/40"
                   />
                 ) : (
                   <p className="text-sm text-gray-600">No hay registros de presion arterial disponibles.</p>
@@ -2056,7 +2079,7 @@ export const EvolutionTracking: React.FC = () => {
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6">
             <Card
               padding="sm"
-              className="space-y-4 rounded-3xl border-rose-100/60 bg-white/95 shadow-lg ring-1 ring-rose-100/70"
+              className="space-y-4 rounded-[28px] border border-[#FFE4D6]/70 bg-white/85 shadow-[0_30px_80px_rgba(124,45,18,0.08)] backdrop-blur"
             >
               <div className="flex items-start justify-between gap-3">
                 <div>
@@ -2078,7 +2101,7 @@ export const EvolutionTracking: React.FC = () => {
                     data={bmiRows}
                     columns={bmiColumns}
                     rowKey={(row) => row.id}
-                    className="shadow-none ring-0 border border-gray-200"
+                    className="shadow-none ring-0 border border-white/40"
                   />
                 ) : (
                   <p className="text-sm text-gray-600">No hay calculos de BMI disponibles.</p>
@@ -2090,7 +2113,7 @@ export const EvolutionTracking: React.FC = () => {
 
             <Card
               padding="sm"
-              className="space-y-4 rounded-3xl border-rose-100/60 bg-white/95 shadow-lg ring-1 ring-rose-100/70"
+              className="space-y-4 rounded-[28px] border border-[#FFE4D6]/70 bg-white/85 shadow-[0_30px_80px_rgba(124,45,18,0.08)] backdrop-blur"
             >
               <div className="flex items-start justify-between gap-3">
                 <div>
@@ -2112,7 +2135,7 @@ export const EvolutionTracking: React.FC = () => {
                     data={heartRateRows}
                     columns={heartRateColumns}
                     rowKey={(row) => row.id}
-                    className="shadow-none ring-0 border border-gray-200"
+                    className="shadow-none ring-0 border border-white/40"
                   />
                 ) : (
                   <p className="text-sm text-gray-600">No hay registros de recuperacion cardiaca disponibles.</p>
