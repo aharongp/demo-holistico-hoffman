@@ -8,7 +8,6 @@ import { Modal } from '../../components/UI/Modal';
 import { User, UserRole } from '../../types';
 
 
-// definimos la api base
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3000';
 
 const mapUserFromApi = (u: any): User => {
