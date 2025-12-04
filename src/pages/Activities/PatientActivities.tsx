@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Play, Clock, CheckCircle, FileText, RefreshCw } from 'lucide-react';
+import { Play, Clock, CheckCircle, FileText, RefreshCw, Sparkles } from 'lucide-react';
 import { Card } from '../../components/UI/Card';
 import { Button } from '../../components/UI/Button';
 import { useAuth } from '../../context/AuthContext';
@@ -52,16 +52,28 @@ const resolveTimestamp = (value: string | null): number => {
 };
 
 const CATEGORY_STYLES: ReadonlyArray<{ match: (value: string) => boolean; className: string }> = [
-  { match: (value) => value.includes('salud') || value.includes('health'), className: 'bg-green-100 text-green-800' },
-  { match: (value) => value.includes('psic') || value.includes('psy'), className: 'bg-blue-100 text-blue-800' },
-  { match: (value) => value.includes('actitud') || value.includes('attitude'), className: 'bg-purple-100 text-purple-800' },
-  { match: (value) => value.includes('emoc') || value.includes('emotion'), className: 'bg-pink-100 text-pink-800' },
+  {
+    match: (value) => value.includes('salud') || value.includes('health'),
+    className: 'bg-emerald-50/80 text-emerald-600 ring-1 ring-emerald-100/80',
+  },
+  {
+    match: (value) => value.includes('psic') || value.includes('psy'),
+    className: 'bg-sky-50/80 text-sky-600 ring-1 ring-sky-100/80',
+  },
+  {
+    match: (value) => value.includes('actitud') || value.includes('attitude'),
+    className: 'bg-violet-50/80 text-violet-600 ring-1 ring-violet-100/80',
+  },
+  {
+    match: (value) => value.includes('emoc') || value.includes('emotion'),
+    className: 'bg-rose-50/80 text-rose-600 ring-1 ring-rose-100/80',
+  },
 ];
 
 const getCategoryColor = (category: string): string => {
   const normalized = category.trim().toLowerCase();
   const match = CATEGORY_STYLES.find((style) => style.match(normalized));
-  return match ? match.className : 'bg-gray-100 text-gray-800';
+  return match ? match.className : 'bg-slate-100/80 text-slate-700 ring-1 ring-slate-200/80';
 };
 
 const formatCategoryLabel = (category: string): string => {
@@ -300,6 +312,24 @@ export const PatientActivities: React.FC = () => {
     };
   }, [activities]);
 
+  const heroHighlights = useMemo(
+    () => [
+      { label: 'Activas', value: counts.pending },
+      { label: 'Completadas', value: counts.completed },
+      { label: 'Total', value: counts.all },
+    ],
+    [counts],
+  );
+
+  const tabConfig = useMemo(
+    () => [
+      { key: 'all' as const, label: 'Todas', count: counts.all },
+      { key: 'pending' as const, label: 'Pendientes', count: counts.pending },
+      { key: 'completed' as const, label: 'Completadas', count: counts.completed },
+    ],
+    [counts],
+  );
+
   const filteredActivities = useMemo(() => {
     if (activeTab === 'pending') {
       return activities.filter((activity) => activity.status === 'pending' || activity.status === 'in_progress');
@@ -313,100 +343,145 @@ export const PatientActivities: React.FC = () => {
   }, [activities, activeTab]);
 
   const showSkeleton = isLoading && activities.length === 0;
+  const formattedLastUpdated = lastUpdated ? formatDate(lastUpdated, 'Pendiente') : null;
 
   return (
-    <section className="space-y-6 px-4 py-8 sm:px-6">
-      <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Mis instrumentos</h1>
-          <p className="text-gray-600">Instrumentos y evaluaciones asignadas para tu seguimiento</p>
-          {lastUpdated && (
-            <p className="mt-1 text-xs text-gray-500">Actualizado {formatDate(lastUpdated, 'recientemente')}</p>
-          )}
+    <section className="space-y-10 from-fuchsia-50/60 via-white to-slate-50/70 px-4 py-10 sm:px-8">
+      <div className="relative overflow-hidden rounded-[32px] border border-white/40 bg-gradient-to-r from-white/90 via-fuchsia-50/70 to-white/90 shadow-[0_40px_80px_-60px_rgba(76,29,149,0.45)] backdrop-blur-xl">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(217,70,239,0.22),_transparent_58%)]" aria-hidden />
+        <div className="relative z-10 flex flex-col gap-8 p-6 sm:p-10 lg:flex-row lg:items-end lg:justify-between">
+          <div className="space-y-4">
+            <div className="inline-flex items-center gap-2 rounded-full border border-white/60 bg-white/70 px-4 py-1.5 text-[0.65rem] font-semibold uppercase tracking-[0.45em] text-fuchsia-500">
+              <Sparkles className="h-3 w-3" /> Experiencia guiada
+            </div>
+            <div className="space-y-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.35em] text-slate-500/70">Instrumentos personales</p>
+              <h1 className="text-3xl font-semibold leading-tight text-slate-900 sm:text-5xl">Mis instrumentos</h1>
+              <p className="max-w-2xl text-base text-slate-500">
+                Instrumentos y evaluaciones asignadas para tu seguimiento diario. Mantén el ritmo con esta consola futurista alineada al panel ejecutivo.
+              </p>
+            </div>
+          </div>
+          <div className="flex w-full flex-col gap-3 rounded-3xl border border-white/60 bg-white/80 px-4 py-4 text-center text-xs font-semibold uppercase tracking-[0.4em] text-slate-500 shadow-inner shadow-white/40 sm:flex-row sm:items-center sm:justify-between lg:w-auto lg:flex-col">
+            <span>{formattedLastUpdated ? 'Actualizado' : 'Sincronización'}</span>
+            <span className="text-base tracking-[0.1em] text-slate-900">{formattedLastUpdated ?? 'Pendiente'}</span>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleRefresh}
-            disabled={!hasAuthContext || isLoading}
-          >
-            <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
-            Actualizar
-          </Button>
+        <div className="relative z-10 grid gap-3 border-t border-white/40 px-6 py-4 text-[0.65rem] uppercase tracking-[0.4em] text-slate-500 sm:grid-cols-3">
+          {heroHighlights.map((item) => (
+            <span
+              key={item.label}
+              className="rounded-2xl border border-white/60 bg-white/70 px-3 py-3 text-center text-slate-600"
+            >
+              <strong className="block text-2xl font-semibold tracking-normal text-slate-900">{item.value}</strong>
+              {item.label}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      <div className="rounded-[28px] border border-white/50 bg-white/85 p-5 shadow-[0_35px_75px_-55px_rgba(136,19,55,0.45)] backdrop-blur-xl">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <p className="text-[0.65rem] font-semibold uppercase tracking-[0.45em] text-slate-400">Tablero</p>
+            <h2 className="text-xl font-semibold text-slate-900">Gestiona tus actividades</h2>
+            <p className="text-sm text-slate-500">Filtra, actualiza o continúa cualquier instrumento desde aquí.</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleRefresh}
+              disabled={!hasAuthContext || isLoading}
+              className="rounded-2xl border-white/60 bg-white/80 text-slate-600 shadow-inner shadow-white/50 hover:bg-white"
+            >
+              <RefreshCw className={`mr-2 h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+              Actualizar
+            </Button>
+          </div>
+        </div>
+        <div className="mt-6 overflow-x-auto">
+          <nav className="flex gap-3 rounded-2xl bg-white/80 p-2 text-sm font-semibold text-slate-500">
+            {tabConfig.map((tab) => (
+              <button
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key)}
+                className={`flex items-center gap-2 rounded-2xl px-4 py-2 transition border border-gray/60 ${
+                  activeTab === tab.key
+                    ? 'bg-gradient-to-r from-fuchsia-600 to-indigo-600 text-white shadow-lg shadow-fuchsia-500/30'
+                    : 'text-slate-500 hover:text-slate-900'
+                }`}
+              >
+                <span>{tab.label}</span>
+                <span className="text-xs font-normal opacity-80">{tab.count}</span>
+              </button>
+            ))}
+          </nav>
         </div>
       </div>
 
       {error && (
-        <Card>
-          <div className="text-sm text-red-600">{error}</div>
-        </Card>
+        <div className="rounded-[24px] border border-rose-100 bg-rose-50/85 p-4 text-sm text-rose-600 shadow-[0_25px_55px_-45px_rgba(190,24,93,0.6)]">
+          {error}
+        </div>
       )}
 
-      <div className="border-b border-gray-200">
-        <nav className="-mb-px flex space-x-8 overflow-x-auto">
-          {[
-            { key: 'all', label: 'Todas', count: counts.all },
-            { key: 'pending', label: 'Pendientes', count: counts.pending },
-            { key: 'completed', label: 'Completadas', count: counts.completed },
-          ].map((tab) => (
-            <button
-              key={tab.key}
-              onClick={() => setActiveTab(tab.key as typeof activeTab)}
-              className={`whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm transition-colors ${
-                activeTab === tab.key
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
-            >
-              {tab.label} ({tab.count})
-            </button>
-          ))}
-        </nav>
-      </div>
-
       {showSkeleton ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
           {Array.from({ length: 3 }).map((_, index) => (
-            <Card key={index}>
+            <div
+              key={index}
+              className="rounded-[26px] border border-white/50 bg-white/85 p-6 shadow-[0_34px_60px_-45px_rgba(136,19,55,0.45)] backdrop-blur-xl"
+            >
               <div className="animate-pulse space-y-4">
-                <div className="flex items-center gap-2">
-                  <div className="w-6 h-6 rounded-full bg-gray-200" />
-                  <div className="h-4 bg-gray-200 rounded w-24" />
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-full bg-slate-100" />
+                  <div className="h-4 w-32 rounded bg-slate-100" />
                 </div>
-                <div className="h-5 bg-gray-200 rounded w-3/4" />
-                <div className="h-4 bg-gray-200 rounded w-full" />
-                <div className="h-4 bg-gray-200 rounded w-1/2" />
-                <div className="h-9 bg-gray-200 rounded" />
+                <div className="h-5 w-3/4 rounded bg-slate-100" />
+                <div className="h-4 w-full rounded bg-slate-100" />
+                <div className="h-4 w-1/2 rounded bg-slate-100" />
+                <div className="h-10 w-full rounded-2xl bg-slate-100" />
               </div>
-            </Card>
+            </div>
           ))}
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
           {filteredActivities.map((activity) => (
-            <Card key={activity.id}>
-              <div className="flex items-start justify-between mb-3">
-                <div className="flex items-center">
-                  {getStatusIcon(activity.status)}
+            <Card
+              key={activity.id}
+              className="flex h-full flex-col space-y-4 !rounded-[26px] !border-gray/60 !bg-gradient-to-br !from-white/95 !via-rose-50/60 !to-white/95 !shadow-[0_35px_75px_-55px_rgba(136,19,55,0.45)] backdrop-blur-xl"
+            >
+              <div className="flex items-start justify-between">
+                <div className="flex flex-wrap items-center gap-2 text-slate-500">
+                  <span className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/70 bg-white/80 shadow-inner">
+                    {getStatusIcon(activity.status)}
+                  </span>
                   <span
-                    className={`ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getCategoryColor(activity.category)}`}
+                    className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${getCategoryColor(
+                      activity.category,
+                    )}`}
                   >
                     {formatCategoryLabel(activity.category)}
                   </span>
                 </div>
-                <FileText className="w-5 h-5 text-gray-400" />
+                <span className="rounded-2xl border border-white/70 bg-white/85 p-2 text-fuchsia-300 shadow-inner">
+                  <FileText className="h-5 w-5" />
+                </span>
               </div>
 
-              <h3 className="text-lg font-medium text-gray-900 mb-2">{activity.name}</h3>
-              {activity.description && <p className="text-sm text-gray-600 mb-4">{activity.description}</p>}
+              <div className="space-y-2">
+                <h3 className="text-xl font-semibold text-slate-900">{activity.name}</h3>
+                {activity.description && <p className="text-sm text-slate-500">{activity.description}</p>}
+              </div>
 
               {activity.topics.length > 0 && (
-                <div className="flex flex-wrap gap-2 mb-4">
+                <div className="flex flex-wrap gap-2">
                   {activity.topics.map((topic) => (
                     <span
                       key={topic}
-                      className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600"
+                      className="inline-flex items-center rounded-full bg-slate-100/80 px-2.5 py-1 text-xs text-slate-500 shadow-inner shadow-white/60"
                     >
                       {topic}
                     </span>
@@ -414,9 +489,11 @@ export const PatientActivities: React.FC = () => {
                 </div>
               )}
 
-              <div className="flex items-center justify-between text-sm text-gray-500 mb-4">
-                <span>{formatDate(activity.assignedAt, 'Sin fecha de asignación')}</span>
-                <span>
+              <div className="flex flex-col gap-1 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between">
+                <span className="font-medium text-slate-600">
+                  {formatDate(activity.assignedAt, 'Sin fecha de asignación')}
+                </span>
+                <span className="text-slate-500">
                   {activity.status === 'completed'
                     ? `Finalizado ${formatDate(activity.completedAt, 'sin fecha')}`
                     : formatDueDate(activity.dueDate)}
@@ -424,21 +501,30 @@ export const PatientActivities: React.FC = () => {
               </div>
 
               {activity.evaluated && (
-                <div className="mb-4">
-                  <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-700">
+                <div>
+                  <span className="inline-flex items-center rounded-full bg-fuchsia-50/80 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-fuchsia-600">
                     Evaluado
                   </span>
                 </div>
               )}
 
-              <div className="flex space-x-2">
+              <div className="mt-auto flex space-x-2">
                 {activity.status === 'completed' ? (
-                  <Button variant="outline" className="w-full" size="sm">
+                  <Button
+                    variant="outline"
+                    className="w-full rounded-2xl !border-fuchsia-100 !bg-white/85 !text-fuchsia-700 shadow-inner shadow-white/60 hover:!bg-white"
+                    size="sm"
+                  >
                     Ver resultados
                   </Button>
                 ) : (
-                  <Button variant="primary" className="w-full" size="sm" disabled={!activity.available}>
-                    <Play className="w-4 h-4 mr-2" />
+                  <Button
+                    variant="primary"
+                    className="w-full rounded-2xl !border-white/30 !bg-gradient-to-r !from-fuchsia-600 !via-rose-500 !to-indigo-600 !text-white shadow-lg shadow-fuchsia-500/30 transition hover:brightness-105"
+                    size="sm"
+                    disabled={!activity.available}
+                  >
+                    <Play className="mr-2 h-4 w-4" />
                     {activity.status === 'in_progress' ? 'Continuar' : 'Iniciar'}
                   </Button>
                 )}
@@ -449,17 +535,15 @@ export const PatientActivities: React.FC = () => {
       )}
 
       {filteredActivities.length === 0 && !isLoading && !error && (
-        <Card>
-          <div className="text-center py-12">
-            <FileText className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No se encontraron instrumentos</h3>
-            <p className="text-gray-600">
-              {activeTab === 'pending' && 'No tienes instrumentos pendientes por el momento.'}
-              {activeTab === 'completed' && 'Aún no has completado ningún instrumento.'}
-              {activeTab === 'all' && 'Todavía no se han asignado instrumentos para ti.'}
-            </p>
-          </div>
-        </Card>
+        <div className="rounded-[30px] border border-dashed border-fuchsia-100 bg-white/90 px-6 py-12 text-center shadow-[0_35px_75px_-55px_rgba(136,19,55,0.45)] backdrop-blur-xl">
+          <FileText className="mx-auto mb-4 h-12 w-12 text-slate-300" />
+          <h3 className="text-lg font-semibold text-slate-900 mb-2">No se encontraron instrumentos</h3>
+          <p className="text-slate-500">
+            {activeTab === 'pending' && 'No tienes instrumentos pendientes por el momento.'}
+            {activeTab === 'completed' && 'Aún no has completado ningún instrumento.'}
+            {activeTab === 'all' && 'Todavía no se han asignado instrumentos para ti.'}
+          </p>
+        </div>
       )}
     </section>
   );

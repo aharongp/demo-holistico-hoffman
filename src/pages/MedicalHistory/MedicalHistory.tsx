@@ -1238,7 +1238,7 @@ export const MedicalHistoryViewModal: React.FC<MedicalHistoryViewModalProps> = (
       title={title}
       size="xl"
     >
-      <div className="space-y-4">
+      <div className="medical-history-view space-y-5">
         {exportError && (
           <div className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
             {exportError}
@@ -1948,44 +1948,55 @@ export const MedicalHistory: React.FC = () => {
 
   return (
     <>
-      <section className="space-y-6 px-4 py-8 sm:px-6">
+      <section className="relative space-y-8 px-4 py-10 sm:px-6">
+      <div className="pointer-events-none absolute inset-0 opacity-70">
+        <div className="absolute inset-x-0 top-0 h-56 bg-gradient-to-b from-white via-white/80 to-transparent" />
+        <div className="absolute -left-10 top-16 h-72 w-72 rounded-full bg-[#c7d2fe]/40 blur-[120px]" />
+        <div className="absolute right-0 bottom-0 h-64 w-64 rounded-full bg-[#e0f2fe]/70 blur-[140px]" />
+      </div>
+      <div className="relative space-y-6">
       {isLoadingHistory && (
-        <div className="rounded-md bg-blue-50 px-3 py-2 text-sm text-blue-700">
+        <div className="rounded-2xl border border-slate-100/80 bg-white/80 px-4 py-3 text-sm text-slate-700 shadow-lg shadow-slate-200/60 backdrop-blur">
           Cargando historia médica...
         </div>
       )}
 
       {historyError && (
-        <div className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
+        <div className="rounded-2xl border border-rose-100 bg-rose-50/90 px-4 py-3 text-sm text-rose-700 shadow-lg shadow-rose-100/60">
           {historyError}
         </div>
       )}
 
       {saveSuccess && (
-        <div className="rounded-md bg-green-50 px-3 py-2 text-sm text-green-700">
+        <div className="rounded-2xl border border-emerald-100 bg-emerald-50/90 px-4 py-3 text-sm text-emerald-700 shadow-lg shadow-emerald-100/60">
           {saveSuccess}
         </div>
       )}
 
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-5 rounded-[28px] border border-white/60 bg-white/80 p-6 shadow-2xl shadow-slate-200/80 backdrop-blur-xl ring-1 ring-slate-100 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Medical History</h1>
-          <p className="text-gray-600">Manage your medical documents and files</p>
+          <p className="text-[11px] uppercase tracking-[0.35em] text-slate-400">Historia clínica</p>
+          <h1 className="mt-2 text-2xl font-semibold text-slate-900 sm:text-3xl">Medical History Hub</h1>
+          <p className="mt-2 text-sm text-slate-500">
+            Centraliza tus documentos, antecedentes y respaldos médicos en un espacio seguro y elegante.
+          </p>
         </div>
-        <div className="flex space-x-3">
+        <div className="flex flex-col gap-3 sm:flex-row">
           <Button
             variant="outline"
             onClick={() => setIsViewHistoryModalOpen(true)}
+            className="bg-white/70 text-slate-700 shadow-sm hover:bg-white"
           >
-            <Eye className="w-4 h-4 mr-2" />
-            Visualizar historia médica
+            <Eye className="w-4 h-4" />
+            <span className="ml-2">Visualizar historia</span>
           </Button>
           <Button 
             variant="secondary"
             onClick={handleOpenHistoryModal}
+            className="bg-gradient-to-r from-[#c084fc] to-[#818cf8] text-white"
           >
-            <Edit className="w-4 h-4 mr-2" />
-            Update Medical History
+            <Edit className="w-4 h-4" />
+            <span className="ml-2">Editar historia</span>
           </Button>
           <div className="relative">
             <input
@@ -1995,70 +2006,88 @@ export const MedicalHistory: React.FC = () => {
               onChange={handleFileUpload}
               accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
             />
-            <Button onClick={() => document.getElementById('file-upload')?.click()}>
-              <Plus className="w-4 h-4 mr-2" />
-              Upload File
+            <Button 
+              onClick={() => document.getElementById('file-upload')?.click()}
+              className="bg-white/80 text-slate-700 shadow-sm hover:bg-white"
+            >
+              <Plus className="w-4 h-4" />
+              <span className="ml-2">Subir archivo</span>
             </Button>
           </div>
         </div>
       </div>
+      </div>
 
       {/* Upload Area */}
-      <Card>
+      <Card className="rounded-[24px] border-white/60 bg-white/80 shadow-xl shadow-slate-200/70 backdrop-blur">
         <div
-          className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-gray-400 transition-colors cursor-pointer"
+          className="rounded-[22px] border-2 border-dashed border-slate-200/70 bg-gradient-to-br from-white via-white/70 to-slate-50/70 p-8 text-center transition-all hover:border-[#c4b5fd] hover:shadow-lg hover:shadow-slate-200/80 cursor-pointer"
           onClick={() => document.getElementById('file-upload')?.click()}
         >
-          <Upload className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">Upload Medical Files</h3>
-          <p className="text-gray-600">
-            Drag and drop files here, or click to browse
+          <span className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-[#c084fc]/20 to-[#818cf8]/20 text-[#7c3aed]">
+            <Upload className="h-7 w-7" />
+          </span>
+          <h3 className="text-xl font-semibold text-slate-900">Carga tus documentos médicos</h3>
+          <p className="mt-2 text-sm text-slate-500">
+            Arrastra y suelta archivos o haz clic para buscarlos en tu dispositivo.
           </p>
-          <p className="text-sm text-gray-500 mt-2">
-            Supported formats: PDF, JPG, PNG, DOC, DOCX (Max 10MB)
+          <p className="mt-3 text-xs uppercase tracking-[0.2em] text-slate-400">
+            PDF · JPG · PNG · DOC · DOCX · Máx 10MB
           </p>
         </div>
       </Card>
 
       {/* Filters */}
-      <Card padding="sm">
-        <div className="flex items-center space-x-4">
-          <select
-            value={selectedCategory}
-            onChange={(e) => setSelectedCategory(e.target.value)}
-            className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-          >
-            <option value="all">All Categories</option>
-            <option value="lab_results">Lab Results</option>
-            <option value="imaging">Medical Imaging</option>
-            <option value="prescription">Prescriptions</option>
-            <option value="consultation">Consultations</option>
-            <option value="other">Other</option>
-          </select>
+      <Card
+        padding="sm"
+        className="rounded-[22px] border-white/60 bg-white/75 shadow-lg shadow-slate-200/60 backdrop-blur"
+      >
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Filtrar archivos</p>
+          <div className="flex items-center gap-3">
+            <select
+              value={selectedCategory}
+              onChange={(e) => setSelectedCategory(e.target.value)}
+              className="rounded-2xl border border-slate-200/70 bg-white/80 px-4 py-2.5 text-sm text-slate-600 shadow-inner shadow-white/40 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[#c084fc]"
+            >
+              <option value="all">Todas las categorías</option>
+              <option value="lab_results">Resultados de laboratorio</option>
+              <option value="imaging">Imágenes médicas</option>
+              <option value="prescription">Recetas</option>
+              <option value="consultation">Consultas</option>
+              <option value="other">Otros</option>
+            </select>
+          </div>
         </div>
       </Card>
 
       {/* Files List */}
       <div className="space-y-4">
         {filteredFiles.map((file) => (
-          <Card key={file.id} padding="sm">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-4">
-                <File className="w-8 h-8 text-gray-400" />
+          <Card
+            key={file.id}
+            padding="sm"
+            className="rounded-[20px] border-white/60 bg-white/80 shadow-lg shadow-slate-200/70 backdrop-blur"
+          >
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-start gap-4">
+                <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-slate-100 to-white text-slate-500">
+                  <File className="h-6 w-6" />
+                </span>
                 <div>
-                  <h4 className="text-sm font-medium text-gray-900">{file.name}</h4>
-                  <div className="flex items-center space-x-2 text-xs text-gray-500">
+                  <h4 className="text-sm font-semibold text-slate-900">{file.name}</h4>
+                  <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500">
                     <span>{formatFileSize(file.size)}</span>
                     <span>•</span>
                     <span>{file.uploadedAt.toLocaleDateString()}</span>
-                    <span className={`px-2 py-1 rounded-full font-medium ${getCategoryColor(file.category)}`}>
+                    <span className={`rounded-full px-2 py-1 text-[11px] font-semibold ${getCategoryColor(file.category)}`}>
                       {getCategoryLabel(file.category)}
                     </span>
                   </div>
                 </div>
               </div>
-              
-              <div className="flex items-center space-x-2">
+
+              <div className="flex items-center gap-2">
                 <Button
                   variant="outline"
                   size="sm"
@@ -2072,15 +2101,17 @@ export const MedicalHistory: React.FC = () => {
                       ? 'El archivo aún no está disponible para descargar'
                       : 'Descargar archivo'
                   }
+                  className="border-slate-200/80 text-slate-600 hover:border-[#c084fc] hover:text-[#6d28d9]"
                 >
-                  <Download className="w-4 h-4" />
+                  <Download className="h-4 w-4" />
                 </Button>
                 <Button 
                   variant="danger" 
                   size="sm"
                   onClick={() => handleDelete(file.id)}
+                  className="bg-gradient-to-r from-rose-500 to-rose-600 text-white"
                 >
-                  <Trash2 className="w-4 h-4" />
+                  <Trash2 className="h-4 w-4" />
                 </Button>
               </div>
             </div>
@@ -2089,17 +2120,17 @@ export const MedicalHistory: React.FC = () => {
       </div>
 
       {filteredFiles.length === 0 && (
-        <Card>
-          <div className="text-center py-12">
-            <File className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No files found</h3>
-            <p className="text-gray-600">
-              {selectedCategory === 'all' 
-                ? 'Upload your first medical document to get started.'
-                : `No files found in the ${getCategoryLabel(selectedCategory)} category.`
-              }
-            </p>
-          </div>
+        <Card className="rounded-[24px] border-white/60 bg-white/80 py-12 text-center shadow-xl shadow-slate-200/70">
+          <span className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-slate-100 to-white text-slate-400">
+            <File className="h-8 w-8" />
+          </span>
+          <h3 className="text-lg font-semibold text-slate-900">No encontramos archivos</h3>
+          <p className="mt-2 text-sm text-slate-500">
+            {selectedCategory === 'all' 
+              ? 'Carga tu primer documento médico para comenzar a organizar tu historial.'
+              : `Sin resultados en la categoría ${getCategoryLabel(selectedCategory)}.`
+            }
+          </p>
         </Card>
       )}
       </section>
@@ -2170,7 +2201,7 @@ export const MedicalHistory: React.FC = () => {
         title="Update Medical History"
         size="xl"
       >
-        <form onSubmit={handleHistorySubmit} className="space-y-6">
+        <form onSubmit={handleHistorySubmit} className="medical-history-form space-y-6">
           {saveError && (
             <div className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
               {saveError}

@@ -486,10 +486,14 @@ export const Chart: React.FC<ChartProps> = ({
     }
   };
 
+  const hasTitle = typeof title === 'string' ? title.trim().length > 0 : Boolean(title);
+
   return (
     <Card>
-      <h3 className="text-base sm:text-lg font-medium text-gray-900 mb-3 sm:mb-4">{title}</h3>
-      <div ref={chartContainerRef} className="w-full">
+      {hasTitle && (
+        <h3 className="mb-3 text-base font-medium text-gray-900 sm:mb-4 sm:text-lg">{title}</h3>
+      )}
+      <div ref={chartContainerRef} className={`w-full${hasTitle ? '' : ' pt-2'}`}>
         {renderChart()}
       </div>
     </Card>

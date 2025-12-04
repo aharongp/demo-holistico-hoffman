@@ -28,27 +28,27 @@ export const Modal: React.FC<ModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto p-4 sm:p-0">
-      <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+      <div className="flex min-h-screen items-center justify-center px-4 pt-4 pb-20 text-center sm:block sm:p-0">
         <div
-          className="fixed inset-0 transition-opacity bg-gray-500 bg-opacity-75"
+          className="fixed inset-0 bg-gradient-to-br from-white/70 via-slate-200/60 to-slate-900/20 backdrop-blur"
           onClick={onClose}
         />
 
         <div className={clsx(
-          'inline-block w-full overflow-hidden text-left align-bottom transition-all transform bg-white rounded-lg shadow-xl sm:my-8 sm:align-middle mx-auto',
+          'relative mx-auto inline-block w-full overflow-hidden rounded-[24px] border border-white/60 bg-white/90 text-left align-bottom shadow-2xl shadow-slate-200/80 backdrop-blur-xl transition-all sm:my-8 sm:align-middle',
           sizeClasses[size]
         )}>
-          <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200">
-            <h3 className="text-base sm:text-lg font-medium text-gray-900 truncate pr-4">{title}</h3>
+          <div className="flex items-center justify-between border-b border-white/60 bg-white/70 px-4 py-3 sm:px-6 sm:py-4">
+            <h3 className="pr-4 text-base font-semibold text-slate-900 sm:text-lg">{title}</h3>
             <button
               onClick={onClose}
-              className="text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0"
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-white/60 text-slate-400 transition hover:text-slate-700"
             >
-              <X className="w-5 h-5" />
+              <X className="h-5 w-5" />
             </button>
           </div>
-          
-          <div className="px-4 sm:px-6 py-4 max-h-96 sm:max-h-none overflow-y-auto">
+
+          <div className="max-h-96 overflow-y-auto px-4 py-4 sm:max-h-none sm:px-6">
             {children}
           </div>
         </div>

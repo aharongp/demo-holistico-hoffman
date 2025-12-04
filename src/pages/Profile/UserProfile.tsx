@@ -122,218 +122,215 @@ export const UserProfile: React.FC = () => {
   if (!user) return null;
 
   return (
-    <section className="space-y-6 px-4 py-8 sm:px-6">
-      <div>
-        <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Perfil de usuario</h1>
-        <p className="text-sm sm:text-base text-gray-600">Administra tu información personal y configuraciones</p>
+    <section className="relative space-y-8 px-4 py-10 sm:px-6">
+      <div className="relative overflow-hidden rounded-[32px] border border-white/70 bg-gradient-to-br from-[#dff7ff] via-white to-[#e0e7ff] p-6 sm:p-10 shadow-2xl">
+        <div className="absolute -right-12 top-0 h-48 w-48 rounded-full bg-sky-200/60 blur-3xl" aria-hidden />
+        <div className="absolute -left-10 bottom-0 h-40 w-40 rounded-full bg-cyan-100/40 blur-3xl" aria-hidden />
+        <div className="relative z-10 max-w-3xl">
+          <p className="text-[11px] uppercase tracking-[0.4em] text-sky-500">Identidad digital</p>
+          <h1 className="mt-3 text-3xl font-semibold text-slate-900 sm:text-[2.5rem]">Perfil de usuario</h1>
+          <p className="mt-3 text-sm text-slate-600 sm:text-base">
+            Administra tu fotografía, datos principales y credenciales dentro de un entorno minimalista y seguro.
+          </p>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Profile Picture */}
-        <Card>
-          <div className="text-center">
-            <div className="relative inline-block">
-              <div className="w-24 h-24 sm:w-32 sm:h-32 mx-auto mb-4 relative">
-                {profileImage ? (
-                  <img
-                    src={profileImage}
-                    alt="Profile"
-                    className="w-full h-full rounded-full object-cover border-4 border-gray-200"
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <Card
+          padding="lg"
+          className="rounded-[28px] border-white/60 bg-white/85 text-center shadow-xl shadow-sky-100/70 backdrop-blur"
+        >
+          <div className="relative inline-block">
+            <div className="relative mx-auto mb-5 h-24 w-24 rounded-full border border-sky-100 bg-gradient-to-br from-white to-sky-50 p-1 sm:h-32 sm:w-32">
+              {profileImage ? (
+                <img
+                  src={profileImage}
+                  alt="Profile"
+                  className="h-full w-full rounded-full object-cover"
+                />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center rounded-full bg-gradient-to-br from-sky-500 to-cyan-400 text-white">
+                  <User className="h-10 w-10 sm:h-12 sm:w-12" />
+                </div>
+              )}
+              {isEditing && (
+                <label className="absolute bottom-2 right-2 flex h-9 w-9 cursor-pointer items-center justify-center rounded-full bg-sky-500 text-white shadow-lg shadow-sky-200/70 transition hover:bg-sky-600">
+                  <Camera className="h-4 w-4" />
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageUpload}
+                    className="hidden"
                   />
-                ) : (
-                  <div className="w-full h-full rounded-full bg-blue-500 flex items-center justify-center border-4 border-gray-200">
-                    <User className="w-12 h-12 sm:w-16 sm:h-16 text-white" />
-                  </div>
-                )}
-                
-                {isEditing && (
-                  <label className="absolute bottom-0 right-0 bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-full cursor-pointer transition-colors">
-                    <Camera className="w-4 h-4" />
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={handleImageUpload}
-                      className="hidden"
-                    />
-                  </label>
-                )}
-              </div>
+                </label>
+              )}
             </div>
-            
-            {errors.image && (
-              <p className="text-red-600 text-xs sm:text-sm mb-2">{errors.image}</p>
-            )}
-            
-            <h3 className="text-lg font-medium text-gray-900">
-              {user.firstName} {user.lastName}
-            </h3>
-            <p className="text-sm text-gray-500 capitalize">{user.role}</p>
-            
-            {!isEditing && (
-              <Button
-                onClick={() => setIsEditing(true)}
-                className="mt-4 w-full sm:w-auto"
-                size="sm"
-              >
-                Editar perfil
-              </Button>
-            )}
           </div>
+
+          {errors.image && (
+            <p className="mb-2 text-xs text-rose-500">{errors.image}</p>
+          )}
+
+          <h3 className="text-lg font-semibold text-slate-900">
+            {user.firstName} {user.lastName}
+          </h3>
+          <p className="text-sm capitalize text-slate-500">{user.role}</p>
+
+          {!isEditing && (
+            <Button
+              onClick={() => setIsEditing(true)}
+              className="mt-5 w-full bg-gradient-to-r from-sky-500 to-cyan-500 text-white shadow-lg shadow-cyan-200/70 hover:opacity-95"
+              size="sm"
+            >
+              Editar perfil
+            </Button>
+          )}
         </Card>
 
-        {/* Profile Information */}
         <div className="lg:col-span-2">
-          <Card>
-            <form onSubmit={handleSubmit} className="space-y-6">
+          <Card
+            padding="lg"
+            className="rounded-[28px] border-white/60 bg-white/90 shadow-xl shadow-sky-100/60 backdrop-blur"
+          >
+            <form onSubmit={handleSubmit} className="space-y-8">
               <div>
-                <h3 className="text-lg font-medium text-gray-900 mb-4">Información personal</h3>
-                
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Datos básicos</p>
+                <h3 className="mt-2 text-xl font-semibold text-slate-900">Información personal</h3>
+
+                <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Nombre
-                    </label>
+                    <label className="mb-2 block text-sm font-medium text-slate-600">Nombre</label>
                     <input
                       type="text"
                       value={formData.firstName}
                       onChange={(e) => setFormData(prev => ({ ...prev, firstName: e.target.value }))}
                       disabled={!isEditing}
-                      className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                        !isEditing ? 'bg-gray-50 text-gray-500' : ''
+                      className={`w-full rounded-2xl border border-transparent bg-white/80 px-4 py-3 text-sm text-slate-700 shadow-inner focus:ring-2 focus:ring-sky-200 focus:border-sky-200 ${
+                        !isEditing ? 'cursor-not-allowed opacity-60' : ''
                       }`}
                     />
                     {errors.firstName && (
-                      <p className="text-red-600 text-xs sm:text-sm mt-1">{errors.firstName}</p>
+                      <p className="mt-1 text-xs text-rose-500">{errors.firstName}</p>
                     )}
                   </div>
-                  
+
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Apellido
-                    </label>
+                    <label className="mb-2 block text-sm font-medium text-slate-600">Apellido</label>
                     <input
                       type="text"
                       value={formData.lastName}
                       onChange={(e) => setFormData(prev => ({ ...prev, lastName: e.target.value }))}
                       disabled={!isEditing}
-                      className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                        !isEditing ? 'bg-gray-50 text-gray-500' : ''
+                      className={`w-full rounded-2xl border border-transparent bg-white/80 px-4 py-3 text-sm text-slate-700 shadow-inner focus:ring-2 focus:ring-sky-200 focus:border-sky-200 ${
+                        !isEditing ? 'cursor-not-allowed opacity-60' : ''
                       }`}
                     />
                     {errors.lastName && (
-                      <p className="text-red-600 text-xs sm:text-sm mt-1">{errors.lastName}</p>
+                      <p className="mt-1 text-xs text-rose-500">{errors.lastName}</p>
                     )}
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Correo electrónico
-                  </label>
+                <div className="mt-4">
+                  <label className="mb-2 block text-sm font-medium text-slate-600">Correo electrónico</label>
                   <input
                     type="email"
                     value={formData.email}
                     onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
                     disabled={!isEditing}
-                    className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                      !isEditing ? 'bg-gray-50 text-gray-500' : ''
+                    className={`w-full rounded-2xl border border-transparent bg-white/80 px-4 py-3 text-sm text-slate-700 shadow-inner focus:ring-2 focus:ring-sky-200 focus:border-sky-200 ${
+                      !isEditing ? 'cursor-not-allowed opacity-60' : ''
                     }`}
                   />
                   {errors.email && (
-                    <p className="text-red-600 text-xs sm:text-sm mt-1">{errors.email}</p>
+                    <p className="mt-1 text-xs text-rose-500">{errors.email}</p>
                   )}
                 </div>
               </div>
 
-              {/* Password Change Section */}
               {isEditing && (
                 <div>
-                  <h3 className="text-lg font-medium text-gray-900 mb-4">Cambiar contraseña</h3>
-                  <p className="text-sm text-gray-600 mb-4">Déjalo en blanco si no deseas actualizarla</p>
-                  
-                  <div className="space-y-4">
+                  <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Seguridad</p>
+                  <h3 className="mt-2 text-xl font-semibold text-slate-900">Actualizar contraseña</h3>
+                  <p className="mt-2 text-sm text-slate-500">Déjalo en blanco si no deseas actualizarla</p>
+
+                  <div className="mt-6 space-y-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Contraseña actual
-                      </label>
+                      <label className="mb-2 block text-sm font-medium text-slate-600">Contraseña actual</label>
                       <div className="relative">
                         <input
                           type={showCurrentPassword ? 'text' : 'password'}
                           value={formData.currentPassword}
                           onChange={(e) => setFormData(prev => ({ ...prev, currentPassword: e.target.value }))}
-                          className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          className="w-full rounded-2xl border border-transparent bg-white/80 px-4 py-3 pr-12 text-sm text-slate-700 shadow-inner focus:ring-2 focus:ring-sky-200 focus:border-sky-200"
                         />
                         <button
                           type="button"
                           onClick={() => setShowCurrentPassword(!showCurrentPassword)}
-                          className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                          className="absolute inset-y-0 right-3 flex items-center text-slate-400"
                         >
                           {showCurrentPassword ? (
-                            <EyeOff className="w-4 h-4 text-gray-400" />
+                            <EyeOff className="h-4 w-4" />
                           ) : (
-                            <Eye className="w-4 h-4 text-gray-400" />
+                            <Eye className="h-4 w-4" />
                           )}
                         </button>
                       </div>
                       {errors.currentPassword && (
-                        <p className="text-red-600 text-xs sm:text-sm mt-1">{errors.currentPassword}</p>
+                        <p className="mt-1 text-xs text-rose-500">{errors.currentPassword}</p>
                       )}
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Nueva contraseña
-                        </label>
+                        <label className="mb-2 block text-sm font-medium text-slate-600">Nueva contraseña</label>
                         <div className="relative">
                           <input
                             type={showNewPassword ? 'text' : 'password'}
                             value={formData.newPassword}
                             onChange={(e) => setFormData(prev => ({ ...prev, newPassword: e.target.value }))}
-                            className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            className="w-full rounded-2xl border border-transparent bg-white/80 px-4 py-3 pr-12 text-sm text-slate-700 shadow-inner focus:ring-2 focus:ring-sky-200 focus:border-sky-200"
                           />
                           <button
                             type="button"
                             onClick={() => setShowNewPassword(!showNewPassword)}
-                            className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                            className="absolute inset-y-0 right-3 flex items-center text-slate-400"
                           >
                             {showNewPassword ? (
-                              <EyeOff className="w-4 h-4 text-gray-400" />
+                              <EyeOff className="h-4 w-4" />
                             ) : (
-                              <Eye className="w-4 h-4 text-gray-400" />
+                              <Eye className="h-4 w-4" />
                             )}
                           </button>
                         </div>
                         {errors.newPassword && (
-                          <p className="text-red-600 text-xs sm:text-sm mt-1">{errors.newPassword}</p>
+                          <p className="mt-1 text-xs text-rose-500">{errors.newPassword}</p>
                         )}
                       </div>
 
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Confirmar nueva contraseña
-                        </label>
+                        <label className="mb-2 block text-sm font-medium text-slate-600">Confirmar nueva contraseña</label>
                         <div className="relative">
                           <input
                             type={showConfirmPassword ? 'text' : 'password'}
                             value={formData.confirmPassword}
                             onChange={(e) => setFormData(prev => ({ ...prev, confirmPassword: e.target.value }))}
-                            className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            className="w-full rounded-2xl border border-transparent bg-white/80 px-4 py-3 pr-12 text-sm text-slate-700 shadow-inner focus:ring-2 focus:ring-sky-200 focus:border-sky-200"
                           />
                           <button
                             type="button"
                             onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                            className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                            className="absolute inset-y-0 right-3 flex items-center text-slate-400"
                           >
                             {showConfirmPassword ? (
-                              <EyeOff className="w-4 h-4 text-gray-400" />
+                              <EyeOff className="h-4 w-4" />
                             ) : (
-                              <Eye className="w-4 h-4 text-gray-400" />
+                              <Eye className="h-4 w-4" />
                             )}
                           </button>
                         </div>
                         {errors.confirmPassword && (
-                          <p className="text-red-600 text-xs sm:text-sm mt-1">{errors.confirmPassword}</p>
+                          <p className="mt-1 text-xs text-rose-500">{errors.confirmPassword}</p>
                         )}
                       </div>
                     </div>
@@ -341,24 +338,25 @@ export const UserProfile: React.FC = () => {
                 </div>
               )}
 
-              {/* Action Buttons */}
               {isEditing && (
-                <div className="flex flex-col sm:flex-row justify-end space-y-3 sm:space-y-0 sm:space-x-3 pt-6 border-t border-gray-200">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={handleCancel}
-                    className="w-full sm:w-auto"
-                  >
-                    Cancelar
-                  </Button>
-                  <Button
-                    type="submit"
-                    className="w-full sm:w-auto"
-                  >
-                    <Save className="w-4 h-4 mr-2" />
-                    Guardar cambios
-                  </Button>
+                <div className="rounded-3xl border-t border-dashed border-sky-100 pt-6">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={handleCancel}
+                      className="w-full border-sky-100 bg-white/80 text-slate-700 hover:bg-white sm:w-auto"
+                    >
+                      Cancelar
+                    </Button>
+                    <Button
+                      type="submit"
+                      className="w-full bg-gradient-to-r from-sky-500 via-cyan-500 to-blue-500 text-white shadow-lg shadow-sky-200/70 hover:opacity-95 sm:w-auto"
+                    >
+                      <Save className="mr-2 h-4 w-4" />
+                      Guardar cambios
+                    </Button>
+                  </div>
                 </div>
               )}
             </form>

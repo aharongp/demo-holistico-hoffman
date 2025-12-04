@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Activity, Clock, TrendingUp, Calendar, AlertTriangle, RefreshCw } from 'lucide-react';
+import { Activity, Clock, TrendingUp, Calendar, AlertTriangle, RefreshCw, Sparkles } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { StatsCard } from '../../components/Dashboard/StatsCard';
 import { Chart } from '../../components/Dashboard/Chart';
@@ -228,6 +228,22 @@ export const PatientDashboard: React.FC = () => {
     [assignments],
   );
 
+  const completedInstrumentCount = useMemo(
+    () => assignments.filter((assignment) => assignment.completed || assignment.evaluated).length,
+    [assignments],
+  );
+
+  const totalAssignmentsCount = assignments.length;
+
+  const heroHighlights = useMemo(
+    () => [
+      { label: 'Pendientes', value: pendingInstrumentCount },
+      { label: 'Completados', value: completedInstrumentCount },
+      { label: 'Asignados', value: totalAssignmentsCount },
+    ],
+    [pendingInstrumentCount, completedInstrumentCount, totalAssignmentsCount],
+  );
+
   const expiringInstruments = useMemo(() => {
     const now = Date.now();
 
@@ -262,60 +278,102 @@ export const PatientDashboard: React.FC = () => {
 
   const patientNameRaw = user?.firstName ?? user?.username ?? 'paciente';
   const patientName = patientNameRaw.trim();
+  const formattedLastUpdated = formatUpdatedAt(lastUpdated);
 
   return (
-    <section className="space-y-6 px-4 py-8 sm:px-6">
-      <div>
-        <h1 className="text-xl sm:text-2xl font-bold text-gray-900">{`¡Bienvenid@ de nuevo, ${patientName}!`}</h1>
-        <p className="text-sm sm:text-base text-gray-600">Este es tu resumen de progreso</p>
+    <section className="space-y-12 from-slate-950/5 via-white to-cyan-50/50 px-4 py-8 sm:px-8">
+      <div className="relative overflow-hidden rounded-[32px] border border-white/40 bg-gradient-to-r from-white/90 via-cyan-50/70 to-white/90 shadow-[0_40px_80px_-60px_rgba(15,23,42,0.6)] backdrop-blur-xl">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(14,165,233,0.18),_transparent_60%)]" aria-hidden />
+        <div className="relative z-10 flex flex-col gap-8 p-6 sm:p-10 lg:flex-row lg:items-end lg:justify-between">
+          <div className="space-y-4">
+            <div className="inline-flex items-center gap-2 rounded-full border border-white/60 bg-white/70 px-4 py-1.5 text-[0.65rem] font-semibold uppercase tracking-[0.45em] text-cyan-500">
+              <Sparkles className="h-3 w-3" /> Ritmo personal
+            </div>
+            <div className="space-y-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.35em] text-slate-500/70">Panel del paciente</p>
+              <h1 className="text-3xl font-semibold leading-tight text-slate-900 sm:text-4xl lg:text-5xl">
+                {`¡Bienvenid@ de nuevo ${patientName}!`}
+              </h1>
+              <p className="max-w-2xl text-base text-slate-500">
+                Visualiza tu avance, mantén tus hábitos y atiende tus instrumentos desde esta consola minimalista inspirada en la matriz ejecutiva.
+              </p>
+            </div>
+          </div>
+          <div className="flex w-full flex-col gap-3 rounded-3xl border border-white/60 bg-white/80 px-4 py-4 text-center text-xs font-semibold uppercase tracking-[0.4em] text-slate-500 shadow-inner shadow-white/40 sm:flex-row sm:items-center sm:justify-between lg:w-auto lg:flex-col">
+            <span>{formattedLastUpdated ? 'Actualizado' : 'Sincronización'}</span>
+            <span className="text-base tracking-[0.1em] text-slate-900">{formattedLastUpdated ?? 'Pendiente'}</span>
+          </div>
+        </div>
+        <div className="relative z-10 grid gap-3 border-t border-white/40 px-6 py-4 text-[0.65rem] uppercase tracking-[0.4em] text-slate-500 sm:grid-cols-3">
+          {heroHighlights.map((item) => (
+            <span
+              key={item.label}
+              className="rounded-2xl border border-white/60 bg-white/70 px-3 py-3 text-center text-slate-600"
+            >
+              <strong className="block text-2xl font-semibold tracking-normal text-slate-900">{item.value}</strong>
+              {item.label}
+            </span>
+          ))}
+        </div>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6">
-        <StatsCard
-          title="Avance del programa"
-          value="85%"
-          icon={TrendingUp}
-          change={{ value: 5, positive: true }}
-          color="green"
-        />
-        <StatsCard
-          title="Instrumentos pendientes"
-          value={pendingInstrumentCount}
-          icon={Clock}
-          color="yellow"
-        />
-        <StatsCard
-          title="Completadas esta semana"
-          value={7}
-          icon={Activity}
-          color="blue"
-        />
-        <StatsCard
-          title="Días consecutivos"
-          value={12}
-          icon={Calendar}
-          color="purple"
-        />
+      <div className="rounded-[28px] border border-white/50 bg-white/80 p-4 shadow-[0_30px_70px_-60px_rgba(15,23,42,0.8)] backdrop-blur-xl">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <StatsCard
+            title="Avance del programa"
+            value="85%"
+            icon={TrendingUp}
+            change={{ value: 5, positive: true }}
+            color="green"
+          />
+          <StatsCard
+            title="Instrumentos pendientes"
+            value={pendingInstrumentCount}
+            icon={Clock}
+            color="yellow"
+          />
+          <StatsCard
+            title="Completadas esta semana"
+            value={7}
+            icon={Activity}
+            color="blue"
+          />
+          <StatsCard
+            title="Días consecutivos"
+            value={12}
+            icon={Calendar}
+            color="purple"
+          />
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
-        {/* Progress Chart */}
-        <Chart
-          title="Tu progreso a lo largo del tiempo"
-          data={PROGRESS_DATA}
-          type="line"
-          dataKey="value"
-          xAxisKey="name"
-        />
-
-        {/* Upcoming Activities */}
-        <Card>
-          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 mb-4">
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card className="overflow-hidden rounded-[28px] border border-white/50 bg-white/85 shadow-[0_30px_60px_-50px_rgba(15,23,42,0.8)] backdrop-blur-xl">
+          <div className="flex items-center justify-between border-b border-white/50 pb-4">
             <div>
-              <h3 className="text-base sm:text-lg font-medium text-gray-900">Instrumentos por vencer</h3>
-              {formatUpdatedAt(lastUpdated) && (
-                <p className="text-xs text-gray-500 mt-1">Actualizado {formatUpdatedAt(lastUpdated)}</p>
+              <p className="text-[0.65rem] font-semibold uppercase tracking-[0.45em] text-slate-400">Evolución</p>
+              <h2 className="text-xl font-semibold text-slate-900">Tu progreso a lo largo del tiempo</h2>
+            </div>
+            <span className="text-[0.65rem] font-semibold uppercase tracking-[0.4em] text-slate-400">6 semanas</span>
+          </div>
+          <div className="mt-4">
+            <Chart
+              title=""
+              data={PROGRESS_DATA}
+              type="line"
+              dataKey="value"
+              xAxisKey="name"
+            />
+          </div>
+        </Card>
+
+        <Card className="overflow-hidden rounded-[28px] border border-white/50 bg-white/85 shadow-[0_30px_60px_-50px_rgba(15,23,42,0.8)] backdrop-blur-xl">
+          <div className="flex flex-col gap-4 border-b border-white/50 pb-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-[0.65rem] font-semibold uppercase tracking-[0.45em] text-slate-400">Agenda</p>
+              <h3 className="text-lg font-semibold text-slate-900">Instrumentos por vencer</h3>
+              {formattedLastUpdated && (
+                <p className="text-xs text-slate-500 mt-1">Actualizado {formattedLastUpdated}</p>
               )}
             </div>
             <div className="flex items-center gap-2">
@@ -325,87 +383,116 @@ export const PatientDashboard: React.FC = () => {
                 onClick={handleRefresh}
                 disabled={isLoadingInstruments}
                 aria-label="Actualizar instrumentos"
+                className="rounded-xl border-white/60 bg-white/70 text-slate-600 shadow-inner shadow-white/40 hover:bg-white"
               >
                 <RefreshCw className={`w-4 h-4 ${isLoadingInstruments ? 'animate-spin' : ''}`} />
               </Button>
-              <Button variant="outline" size="sm" onClick={() => navigate('/activities')}>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => navigate('/activities')}
+                className="rounded-xl border-white/60 bg-white/70 text-slate-600 shadow-inner shadow-white/40 hover:bg-white"
+              >
                 Ver todos
               </Button>
             </div>
           </div>
+
           {isLoadingInstruments && (
-            <div className="space-y-2 sm:space-y-3">
+            <div className="space-y-3 py-4">
               {Array.from({ length: 3 }).map((_, index) => (
                 <div
                   key={index}
-                  className="animate-pulse p-3 border border-gray-200 rounded-lg bg-gray-50"
+                  className="animate-pulse rounded-2xl border border-white/60 bg-slate-50/80 p-4"
                 >
-                  <div className="h-4 bg-gray-200 rounded w-3/4 mb-2" />
-                  <div className="h-3 bg-gray-200 rounded w-1/2" />
+                  <div className="mb-2 h-4 w-3/4 rounded bg-slate-200/80" />
+                  <div className="h-3 w-1/2 rounded bg-slate-200/60" />
                 </div>
               ))}
             </div>
           )}
 
           {!isLoadingInstruments && instrumentsError && (
-            <div className="text-sm text-red-600">{instrumentsError}</div>
+            <div className="py-4 text-sm text-rose-500">{instrumentsError}</div>
           )}
 
           {!isLoadingInstruments && !instrumentsError && expiringInstruments.length === 0 && (
-            <div className="text-sm text-gray-600">No hay instrumentos próximos a vencer.</div>
+            <div className="py-4 text-sm text-slate-500">No hay instrumentos próximos a vencer.</div>
           )}
 
           {!isLoadingInstruments && !instrumentsError && expiringInstruments.length > 0 && (
-            <div className="space-y-2 sm:space-y-3">
-              {expiringInstruments.map((instrument) => (
-                <div
-                  key={instrument.id}
-                  className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 border rounded-lg ${instrument.isOverdue ? 'bg-red-50 border-red-200' : 'bg-yellow-50 border-yellow-200'}`}
-                >
-                  <div className="flex items-start gap-3">
-                    <AlertTriangle
-                      className={`w-5 h-5 ${instrument.isOverdue ? 'text-red-500' : 'text-yellow-500'}`}
-                    />
-                    <div>
-                      <p className="font-medium text-gray-900 text-sm sm:text-base">{instrument.name}</p>
-                      {instrument.description && (
-                        <p className="text-xs text-gray-600 mt-1">{instrument.description}</p>
-                      )}
-                      <p className="text-xs text-gray-500 mt-1">
-                        {instrument.dueLabel} · {instrument.relativeLabel}
-                      </p>
-                    </div>
-                  </div>
-                  <Button
-                    variant={instrument.isOverdue ? 'danger' : 'secondary'}
-                    size="sm"
-                    className="w-full sm:w-auto"
-                    onClick={() => navigate('/activities')}
-                    disabled={!instrument.available}
+            <div className="space-y-3 py-4">
+              {expiringInstruments.map((instrument) => {
+                const cardTone = instrument.isOverdue
+                  ? 'from-rose-50/90 via-white to-white/95 border-rose-100/80'
+                  : 'from-amber-50/90 via-white to-white/95 border-amber-100/80';
+
+                return (
+                  <div
+                    key={instrument.id}
+                    className={`flex flex-col gap-3 rounded-2xl border bg-gradient-to-br ${cardTone} p-4 text-slate-700 shadow-lg shadow-slate-900/5 sm:flex-row sm:items-center sm:justify-between`}
                   >
-                    {instrument.available ? 'Ver instrumento' : 'No disponible'}
-                  </Button>
-                </div>
-              ))}
+                    <div className="flex items-start gap-3">
+                      <AlertTriangle
+                        className={`h-5 w-5 ${instrument.isOverdue ? 'text-rose-500' : 'text-amber-500'}`}
+                      />
+                      <div>
+                        <p className="text-sm font-semibold text-slate-900 sm:text-base">{instrument.name}</p>
+                        {instrument.description && (
+                          <p className="mt-1 text-xs text-slate-500">{instrument.description}</p>
+                        )}
+                        <p className="mt-1 text-xs text-slate-400">
+                          {instrument.dueLabel} · {instrument.relativeLabel}
+                        </p>
+                      </div>
+                    </div>
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      className={`w-full rounded-xl border border-white/30 text-white shadow-lg shadow-slate-900/10 sm:w-auto ${
+                        instrument.isOverdue
+                          ? 'bg-gradient-to-r from-rose-500 via-rose-600 to-rose-700 hover:brightness-105'
+                          : 'bg-gradient-to-r from-amber-500 via-amber-600 to-amber-700 hover:brightness-105'
+                      }`}
+                      onClick={() => navigate('/activities')}
+                      disabled={!instrument.available}
+                    >
+                      {instrument.available ? 'Ver instrumento' : 'No disponible'}
+                    </Button>
+                  </div>
+                );
+              })}
             </div>
           )}
         </Card>
       </div>
 
-      {/* Quick Actions */}
-      <Card>
-        <h3 className="text-base sm:text-lg font-medium text-gray-900 mb-4">Acciones rápidas</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
-          <Button variant="primary" className="w-full">
-            <Activity className="w-4 h-4 mr-2" />
+      <Card className="rounded-[28px] border border-white/40 bg-white/85 shadow-[0_35px_70px_-55px_rgba(15,23,42,0.95)] backdrop-blur-xl">
+        <div className="mb-6">
+          <p className="text-[0.65rem] font-semibold uppercase tracking-[0.45em] text-slate-400">Acciones rápidas</p>
+          <h3 className="text-lg font-semibold text-slate-900">Mantén tu plan al día</h3>
+          <p className="text-sm text-slate-500">Registra tus hábitos o programa la siguiente sesión en segundos.</p>
+        </div>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
+          <Button
+            variant="primary"
+            className="w-full rounded-2xl border border-white/20 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-700 text-base font-semibold text-white shadow-lg shadow-slate-900/20 transition hover:translate-y-0.5"
+          >
+            <Activity className="mr-2 h-4 w-4" />
             Registrar chequeo diario
           </Button>
-          <Button variant="outline" className="w-full">
-            <TrendingUp className="w-4 h-4 mr-2" />
+          <Button
+            variant="outline"
+            className="w-full rounded-2xl border border-slate-200/70 bg-white/70 text-slate-700 shadow-inner shadow-white/40 transition hover:bg-white"
+          >
+            <TrendingUp className="mr-2 h-4 w-4" />
             Ver progreso
           </Button>
-          <Button variant="outline" className="w-full">
-            <Calendar className="w-4 h-4 mr-2" />
+          <Button
+            variant="outline"
+            className="w-full rounded-2xl border border-slate-200/70 bg-white/70 text-slate-700 shadow-inner shadow-white/40 transition hover:bg-white"
+          >
+            <Calendar className="mr-2 h-4 w-4" />
             Agendar sesión
           </Button>
         </div>

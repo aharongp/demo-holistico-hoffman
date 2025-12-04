@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link, NavLink, useLocation } from 'react-router-dom';
+import { Link, NavLink } from 'react-router-dom';
 import { 
   LayoutDashboard, 
   Users, 
@@ -135,12 +135,29 @@ const SECTION_THEMES: Record<string, {
     iconActive: 'border-[#E0E7FF] bg-white text-[#4F46E5]',
     subLabelActive: 'text-[#6366F1]',
   },
+  '/activities': {
+    sidebarBg: 'bg-gradient-to-b from-[#fff5fb] via-white to-[#ffe8ff]',
+    navActive: 'bg-[#EBC9F0] text-[#685573] ring-1 ring-[#F2D8E7] shadow-sm shadow-orange-100/40',
+    iconActive: 'border-[#F2D8E7] bg-white text-[#8F65A8]',
+    subLabelActive: 'text-[#8F65A8]',
+  },
+  '/profile': {
+    sidebarBg: 'bg-gradient-to-b from-[#dff7ff] via-white to-[#e0f2fe]',
+    navActive: 'bg-gradient-to-r from-[#dbeafe] to-[#bae6fd] text-[#0f4c81] ring-1 ring-[#bfdbfe] shadow-md shadow-sky-100/60',
+    iconActive: 'border-[#bfdbfe] bg-white text-[#0ea5e9]',
+    subLabelActive: 'text-[#0ea5e9]',
+  },
+  '/medical-history': {
+    sidebarBg: 'bg-gradient-to-b from-[#f4f4f5] via-white to-[#e4e4e7]',
+    navActive: 'bg-gradient-to-r from-[#f4f4f5] to-[#e4e4e7] text-[#27272a] ring-1 ring-[#d4d4d8] shadow-md shadow-slate-300/50',
+    iconActive: 'border-[#d4d4d8] bg-white text-[#3f3f46]',
+    subLabelActive: 'text-[#71717a]',
+  },
 };
 
 export const Sidebar: React.FC<SidebarProps> = ({ onClose }) => {
   const { user, logout } = useAuth();
   const [showUserMenu, setShowUserMenu] = useState(false);
-  const location = useLocation();
 
   if (!user) return null;
 
@@ -168,7 +185,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ onClose }) => {
       </div>
 
       <nav className="flex-1 space-y-2 overflow-y-auto px-4 py-6">
-        <div className="rounded-2xl border border-white/60 bg-white/70 p-4 shadow-inner backdrop-blur">
+        <div className="rounded-2xl border border-gray-200/60 bg-white/70 p-4 shadow-inner backdrop-blur">
           <div className="flex flex-col gap-2">
           {filteredNavigation.map((item) => {
             const Icon = item.icon;
