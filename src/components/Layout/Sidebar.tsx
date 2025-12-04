@@ -141,12 +141,6 @@ const SECTION_THEMES: Record<string, {
     iconActive: 'border-[#F2D8E7] bg-white text-[#8F65A8]',
     subLabelActive: 'text-[#8F65A8]',
   },
-  '/profile': {
-    sidebarBg: 'bg-gradient-to-b from-[#dff7ff] via-white to-[#e0f2fe]',
-    navActive: 'bg-gradient-to-r from-[#dbeafe] to-[#bae6fd] text-[#0f4c81] ring-1 ring-[#bfdbfe] shadow-md shadow-sky-100/60',
-    iconActive: 'border-[#bfdbfe] bg-white text-[#0ea5e9]',
-    subLabelActive: 'text-[#0ea5e9]',
-  },
   '/medical-history': {
     sidebarBg: 'bg-gradient-to-b from-[#f4f4f5] via-white to-[#e4e4e7]',
     navActive: 'bg-gradient-to-r from-[#f4f4f5] to-[#e4e4e7] text-[#27272a] ring-1 ring-[#d4d4d8] shadow-md shadow-slate-300/50',
