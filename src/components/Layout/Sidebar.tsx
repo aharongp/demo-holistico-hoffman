@@ -1,20 +1,21 @@
 import React, { useState } from 'react';
 import { Link, NavLink } from 'react-router-dom';
-import { 
-  LayoutDashboard, 
-  Users, 
-  ClipboardList, 
-  FileText, 
+import {
+  LayoutDashboard,
+  Users,
+  ClipboardList,
+  FileText,
   TrendingUp,
   Calendar,
   Upload,
   UserCheck,
   Activity,
+  BarChart3,
   X,
   Settings,
   Bell,
   User,
-  LogOut
+  LogOut,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { UserRole } from '../../types';
@@ -59,6 +60,12 @@ const navigation: NavItem[] = [
     to: '/activities',
     icon: Activity,
     label: 'Actividades',
+    roles: ['patient', 'student'],
+  },
+  {
+    to: '/results',
+    icon: BarChart3,
+    label: 'Resultados',
     roles: ['patient', 'student'],
   },
   {
@@ -140,6 +147,12 @@ const SECTION_THEMES: Record<string, {
     navActive: 'bg-[#EBC9F0] text-[#685573] ring-1 ring-[#F2D8E7] shadow-sm shadow-orange-100/40',
     iconActive: 'border-[#F2D8E7] bg-white text-[#8F65A8]',
     subLabelActive: 'text-[#8F65A8]',
+  },
+  '/results': {
+    sidebarBg: 'bg-gradient-to-b from-[#f4f9ff] via-white to-[#e0f2fe]',
+    navActive: 'bg-gradient-to-r from-[#DBEAFE] to-[#C7D2FE] text-[#1E3A8A] ring-1 ring-[#BFDBFE] shadow-sm shadow-sky-200/60',
+    iconActive: 'border-[#BFDBFE] bg-white text-[#2563EB]',
+    subLabelActive: 'text-[#1D4ED8]',
   },
   '/medical-history': {
     sidebarBg: 'bg-gradient-to-b from-[#f4f4f5] via-white to-[#e4e4e7]',

@@ -3,6 +3,13 @@ import { Play, Clock, CheckCircle, FileText, RefreshCw, Sparkles } from 'lucide-
 import { Card } from '../../components/UI/Card';
 import { Button } from '../../components/UI/Button';
 import { useAuth } from '../../context/AuthContext';
+import { useApp } from '../../context/AppContext';
+import { Instrument } from '../../types';
+import {
+  InstrumentResponseModal,
+  BackendInstrumentResponse,
+  PreparedInstrumentAnswer,
+} from './components/InstrumentResponseModal';
 
 type ActivityStatus = 'pending' | 'in_progress' | 'completed';
 
@@ -39,6 +46,7 @@ interface Activity {
   available: boolean;
   evaluated: boolean;
   createdAt: string | null;
+  rawAssignment: BackendPatientInstrumentAssignment;
 }
 
 const resolveTimestamp = (value: string | null): number => {
@@ -137,6 +145,7 @@ const mapAssignmentToActivity = (assignment: BackendPatientInstrumentAssignment)
     available: assignment.available,
     evaluated: assignment.evaluated,
     createdAt: assignment.createdAt,
+    rawAssignment: assignment,
   };
 };
 
@@ -185,11 +194,24 @@ const getStatusIcon = (status: ActivityStatus) => {
 
 export const PatientActivities: React.FC = () => {
   const { user, token } = useAuth();
+  const { getInstrumentDetails } = useApp();
   const [activities, setActivities] = useState<Activity[]>([]);
   const [activeTab, setActiveTab] = useState<'all' | 'pending' | 'completed'>('all');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
+  const [instrumentCache, setInstrumentCache] = useState<Record<number, Instrument>>({});
+  const [responsesByAssignment, setResponsesByAssignment] = useState<Record<number, BackendInstrumentResponse[]>>({});
+  const [responsesError, setResponsesError] = useState<string | null>(null);
+  const [isLoadingResponses, setIsLoadingResponses] = useState(false);
+  const [activeActivity, setActiveActivity] = useState<Activity | null>(null);
+  const [activeInstrument, setActiveInstrument] = useState<Instrument | null>(null);
+  const [modalMode, setModalMode] = useState<'form' | 'readonly'>('form');
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [modalError, setModalError] = useState<string | null>(null);
+  const [modalInfoMessage, setModalInfoMessage] = useState<string | null>(null);
+  const [isLoadingInstrumentDetail, setIsLoadingInstrumentDetail] = useState(false);
+  const [isSubmittingResponses, setIsSubmittingResponses] = useState(false);
 
   const apiBase = (import.meta as any).env?.VITE_API_BASE ?? 'http://localhost:3000';
   const normalizedApiBase = useMemo(() => sanitizeApiBase(apiBase), [apiBase]);
@@ -278,13 +300,296 @@ export const PatientActivities: React.FC = () => {
     }
   }, [normalizedApiBase, resolvedUserId, token]);
 
+  const loadResponses = useCallback(async () => {
+    if (!token) {
+      setResponsesByAssignment({});
+      setResponsesError('Debes iniciar sesión para ver tus respuestas.');
+      return;
+    }
+
+    if (resolvedUserId === null) {
+      setResponsesByAssignment({});
+      setResponsesError('No se encontró un paciente asociado al usuario actual.');
+      return;
+    }
+
+    setIsLoadingResponses(true);
+    setResponsesError(null);
+
+    try {
+      const res = await fetch(`${normalizedApiBase}/patient-instruments/responses/user/${resolvedUserId}`, {
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!res.ok) {
+        throw new Error(`Error al obtener respuestas (${res.status})`);
+      }
+
+      const payload: BackendInstrumentResponse[] = await res.json();
+      const grouped: Record<number, BackendInstrumentResponse[]> = {};
+
+      if (Array.isArray(payload)) {
+        payload.forEach((item) => {
+          const assignmentId = typeof item.patientInstrumentId === 'number' ? item.patientInstrumentId : null;
+          if (assignmentId === null) {
+            return;
+          }
+          if (!grouped[assignmentId]) {
+            grouped[assignmentId] = [];
+          }
+          grouped[assignmentId].push(item);
+        });
+      }
+
+      Object.values(grouped).forEach((list) => {
+        list.sort((a, b) => {
+          const orderDiff = (a.order ?? 0) - (b.order ?? 0);
+          if (orderDiff !== 0) {
+            return orderDiff;
+          }
+          return a.id - b.id;
+        });
+      });
+
+      setResponsesByAssignment(grouped);
+    } catch (fetchError) {
+      console.error('Error fetching patient responses', fetchError);
+      const message = fetchError instanceof Error ? fetchError.message : 'No se pudieron cargar tus respuestas.';
+      setResponsesError(message);
+      setResponsesByAssignment({});
+    } finally {
+      setIsLoadingResponses(false);
+    }
+  }, [normalizedApiBase, resolvedUserId, token]);
+
+  const loadInstrumentForAssignment = useCallback(
+    async (assignment: BackendPatientInstrumentAssignment): Promise<Instrument | null> => {
+      if (!assignment.instrumentTypeId) {
+        throw new Error('La asignación no tiene un tipo de instrumento asociado.');
+      }
+
+      const cached = instrumentCache[assignment.instrumentTypeId];
+      if (cached) {
+        return cached;
+      }
+
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+
+      if (token) {
+        headers.Authorization = `Bearer ${token}`;
+      }
+
+      const instrumentsResponse = await fetch(
+        `${normalizedApiBase}/instruments/by-type/${assignment.instrumentTypeId}`,
+        { headers },
+      );
+
+      if (!instrumentsResponse.ok) {
+        const message = await instrumentsResponse.text();
+        throw new Error(message || 'No se pudo cargar el instrumento asociado.');
+      }
+
+      const instrumentsPayload = await instrumentsResponse.json();
+
+      if (!Array.isArray(instrumentsPayload) || !instrumentsPayload.length) {
+        throw new Error('No se encontraron instrumentos configurados para esta asignación.');
+      }
+
+      const instrumentCandidate = instrumentsPayload[0];
+      const rawInstrumentId = instrumentCandidate?.id ?? instrumentCandidate?.instrumento_id ?? instrumentCandidate?.instrumentId;
+
+      if (!Number.isFinite(Number(rawInstrumentId))) {
+        throw new Error('No se pudo determinar el identificador del instrumento.');
+      }
+
+      const instrumentId = String(rawInstrumentId);
+      const detailedInstrument = await getInstrumentDetails(instrumentId);
+
+      if (!detailedInstrument) {
+        throw new Error('No se pudo obtener el detalle del instrumento.');
+      }
+
+      setInstrumentCache((prev) => ({
+        ...prev,
+        [assignment.instrumentTypeId!]: detailedInstrument,
+      }));
+
+      return detailedInstrument;
+    },
+    [getInstrumentDetails, instrumentCache, normalizedApiBase, token],
+  );
+
+  const handleOpenInstrument = useCallback(
+    async (activity: Activity, desiredMode?: 'form' | 'readonly') => {
+      setActiveActivity(activity);
+      const nextMode: 'form' | 'readonly' = desiredMode ?? (activity.status === 'completed' || activity.evaluated ? 'readonly' : 'form');
+      setModalMode(nextMode);
+      setModalError(null);
+      setModalInfoMessage(nextMode === 'readonly' ? 'Este instrumento ya fue respondido y no puede editarse.' : null);
+      setIsModalOpen(true);
+
+      if (!activity.rawAssignment.instrumentTypeId) {
+        setModalError('La asignación no tiene un instrumento asociado.');
+        setActiveInstrument(null);
+        return;
+      }
+
+      try {
+        setIsLoadingInstrumentDetail(true);
+        const instrument = await loadInstrumentForAssignment(activity.rawAssignment);
+        setActiveInstrument(instrument);
+        setModalError(null);
+      } catch (loadingError) {
+        console.error('Error al cargar el instrumento asignado', loadingError);
+        const message = loadingError instanceof Error ? loadingError.message : 'No se pudo cargar el instrumento asociado.';
+        setActiveInstrument(null);
+        setModalError(message);
+      } finally {
+        setIsLoadingInstrumentDetail(false);
+      }
+    },
+    [loadInstrumentForAssignment],
+  );
+
+  const handleCloseModal = useCallback(() => {
+    setIsModalOpen(false);
+    setActiveActivity(null);
+    setActiveInstrument(null);
+    setModalError(null);
+    setModalInfoMessage(null);
+    setModalMode('form');
+  }, []);
+
+  const handleSubmitInstrumentResponses = useCallback(
+    async (answers: PreparedInstrumentAnswer[]) => {
+      if (!activeActivity) {
+        throw new Error('No hay una asignación activa para registrar respuestas.');
+      }
+
+      if (!token) {
+        throw new Error('Debes iniciar sesión para guardar tus respuestas.');
+      }
+
+      const assignment = activeActivity.rawAssignment;
+      const rawInstrumentId = activeInstrument ? Number(activeInstrument.id) : NaN;
+      const numericInstrumentId = Number.isFinite(rawInstrumentId) ? rawInstrumentId : null;
+
+      setIsSubmittingResponses(true);
+
+      try {
+        const payload = {
+          instrumentId: numericInstrumentId,
+          instrumentTypeId: assignment.instrumentTypeId ?? null,
+          patientId: assignment.patientId ?? null,
+          instrumentTypeName: assignment.instrumentTypeName ?? null,
+          instrumentName: activeInstrument?.description ?? activeInstrument?.name ?? null,
+          theme: activeInstrument?.subjectName ?? null,
+          answers: answers.map((answer) => ({
+            questionId: answer.questionNumericId,
+            questionText: answer.questionText,
+            value: answer.value,
+            label: answer.label,
+            selections: answer.selections ?? [],
+            order: answer.order ?? null,
+            theme: answer.theme ?? null,
+          })),
+        };
+
+        const response = await fetch(`${normalizedApiBase}/patient-instruments/${assignment.id}/responses`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(payload),
+        });
+
+        if (!response.ok) {
+          const message = await response.text();
+          throw new Error(message || 'No se pudieron guardar las respuestas.');
+        }
+
+        const savedResponses: BackendInstrumentResponse[] = await response.json();
+        const normalizedSaved = Array.isArray(savedResponses) ? [...savedResponses] : [];
+        normalizedSaved.sort((a, b) => {
+          const orderDiff = (a.order ?? 0) - (b.order ?? 0);
+          if (orderDiff !== 0) {
+            return orderDiff;
+          }
+          return a.id - b.id;
+        });
+
+        setResponsesByAssignment((prev) => ({
+          ...prev,
+          [assignment.id]: normalizedSaved,
+        }));
+
+        setActivities((prev) =>
+          prev.map((item) => {
+            if (item.id !== activeActivity.id) {
+              return item;
+            }
+
+            return {
+              ...item,
+              status: 'completed',
+              completedAt: new Date().toISOString(),
+              available: false,
+              rawAssignment: {
+                ...item.rawAssignment,
+                completed: true,
+                evaluated: item.rawAssignment.evaluated,
+                available: false,
+              },
+            };
+          }),
+        );
+
+        setActiveActivity((prev) => {
+          if (!prev) {
+            return prev;
+          }
+          return {
+            ...prev,
+            status: 'completed',
+            completedAt: new Date().toISOString(),
+            available: false,
+            rawAssignment: {
+              ...prev.rawAssignment,
+              completed: true,
+              evaluated: prev.rawAssignment.evaluated,
+              available: false,
+            },
+          };
+        });
+
+        setModalMode('readonly');
+        setModalInfoMessage('Tus respuestas han sido registradas.');
+      } catch (submitError) {
+        const message = submitError instanceof Error ? submitError.message : 'No se pudieron guardar las respuestas.';
+        throw new Error(message);
+      } finally {
+        setIsSubmittingResponses(false);
+      }
+    },
+    [activeActivity, activeInstrument, normalizedApiBase, token],
+  );
+
   useEffect(() => {
     if (hasAuthContext) {
       void loadActivities();
+      void loadResponses();
     } else {
       setActivities([]);
+      setResponsesByAssignment({});
+      setResponsesError(null);
     }
-  }, [hasAuthContext, loadActivities]);
+  }, [hasAuthContext, loadActivities, loadResponses]);
 
   const handleRefresh = useCallback(() => {
     void loadActivities();
@@ -344,6 +649,13 @@ export const PatientActivities: React.FC = () => {
 
   const showSkeleton = isLoading && activities.length === 0;
   const formattedLastUpdated = lastUpdated ? formatDate(lastUpdated, 'Pendiente') : null;
+  const currentResponses = useMemo(() => {
+    if (!activeActivity) {
+      return [] as BackendInstrumentResponse[];
+    }
+    const assignmentId = activeActivity.rawAssignment.id;
+    return responsesByAssignment[assignmentId] ?? [];
+  }, [activeActivity, responsesByAssignment]);
 
   return (
     <section className="space-y-10 from-fuchsia-50/60 via-white to-slate-50/70 px-4 py-10 sm:px-8">
@@ -423,6 +735,12 @@ export const PatientActivities: React.FC = () => {
       {error && (
         <div className="rounded-[24px] border border-rose-100 bg-rose-50/85 p-4 text-sm text-rose-600 shadow-[0_25px_55px_-45px_rgba(190,24,93,0.6)]">
           {error}
+        </div>
+      )}
+
+      {responsesError && !error && (
+        <div className="rounded-[24px] border border-amber-100 bg-amber-50/85 p-4 text-sm text-amber-600 shadow-[0_25px_55px_-45px_rgba(217,119,6,0.3)]">
+          {responsesError}
         </div>
       )}
 
@@ -514,6 +832,7 @@ export const PatientActivities: React.FC = () => {
                     variant="outline"
                     className="w-full rounded-2xl !border-fuchsia-100 !bg-white/85 !text-fuchsia-700 shadow-inner shadow-white/60 hover:!bg-white"
                     size="sm"
+                    onClick={() => handleOpenInstrument(activity, 'readonly')}
                   >
                     Ver resultados
                   </Button>
@@ -523,6 +842,7 @@ export const PatientActivities: React.FC = () => {
                     className="w-full rounded-2xl !border-white/30 !bg-gradient-to-r !from-fuchsia-600 !via-rose-500 !to-indigo-600 !text-white shadow-lg shadow-fuchsia-500/30 transition hover:brightness-105"
                     size="sm"
                     disabled={!activity.available}
+                    onClick={() => handleOpenInstrument(activity, 'form')}
                   >
                     <Play className="mr-2 h-4 w-4" />
                     {activity.status === 'in_progress' ? 'Continuar' : 'Iniciar'}
@@ -545,6 +865,24 @@ export const PatientActivities: React.FC = () => {
           </p>
         </div>
       )}
+
+      <InstrumentResponseModal
+        isOpen={isModalOpen}
+        onClose={handleCloseModal}
+        instrument={activeInstrument}
+        assignmentName={activeActivity?.name ?? 'Instrumento asignado'}
+        mode={modalMode}
+        responses={currentResponses}
+        onSubmit={handleSubmitInstrumentResponses}
+        isSubmitting={isSubmittingResponses}
+        error={modalError}
+        isLoadingInstrument={isLoadingInstrumentDetail}
+        infoMessage={
+          modalMode === 'readonly' && isLoadingResponses
+            ? 'Cargando respuestas guardadas...'
+            : modalInfoMessage
+        }
+      />
     </section>
   );
 };
