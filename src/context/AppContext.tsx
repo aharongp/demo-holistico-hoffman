@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback, useMemo, useRef } from 'react';
-import { Patient, Instrument, Assignment, Program, ProgramActivity, ProgramDetails, EvolutionEntry, DashboardStats, GenderDistributionSlice, PatientsByProgramSlice, InstrumentType, Question, QuestionAnswer } from '../types';
+import { Patient, Instrument, Assignment, Program, ProgramActivity, ProgramDetails, EvolutionEntry, DashboardStats, GenderDistributionSlice, PatientsByProgramSlice, InstrumentType, Question, QuestionAnswer, QuestionOption } from '../types';
 import { useAuth } from './AuthContext';
 
 type ProgramInput = {
@@ -224,8 +224,36 @@ const mapQuestionFromApi = (raw: any): Question => {
 
   const optionList = Array.isArray(optionsValue)
     ? optionsValue
-        .map((option: any) => (option === null || typeof option === 'undefined') ? null : String(option))
-        .filter((option: string | null): option is string => option !== null && option.length > 0)
+        .map((option: any) => {
+          if (option === null || typeof option === 'undefined') {
+            return null;
+          }
+
+          if (typeof option === 'string') {
+            const trimmed = option.trim();
+            if (!trimmed) {
+              return null;
+            }
+            return { label: trimmed, value: trimmed } as QuestionOption;
+          }
+
+          if (typeof option === 'object') {
+            const rawLabel = option?.label ?? option?.nombre ?? option?.name ?? option?.texto ?? option?.text ?? option?.valor ?? option?.value;
+            const rawValue = option?.value ?? option?.valor ?? rawLabel;
+            const label = typeof rawLabel === 'string' ? rawLabel.trim() : '';
+            let value = typeof rawValue === 'string' ? rawValue.trim() : '';
+            if (!value && label) {
+              value = label;
+            }
+            if (!label || !value) {
+              return null;
+            }
+            return { label, value } as QuestionOption;
+          }
+
+          return null;
+        })
+        .filter((option): option is QuestionOption => Boolean(option))
     : undefined;
 
   const order = Number(orderValue);
@@ -238,15 +266,24 @@ const mapQuestionFromApi = (raw: any): Question => {
     .map((answer: any) => mapAnswerFromApi(answer))
     .filter((answer: QuestionAnswer): answer is QuestionAnswer => Boolean(answer.label));
 
-  const mergedOptions = mappedAnswers.length
-    ? mappedAnswers.map((answer) => answer.label)
-    : optionList;
+  const optionsFromAnswers = mappedAnswers.length
+    ? normalizeQuestionOptions(
+        mappedAnswers.map((answer) => ({
+          label: typeof answer.label === 'string' ? answer.label : '',
+          value: typeof answer.value === 'string' && answer.value ? answer.value : (answer.label ?? ''),
+        })),
+      )
+    : [];
+
+  const fallbackOptions = optionList ? normalizeQuestionOptions(optionList) : [];
+
+  const mergedOptions = optionsFromAnswers.length ? optionsFromAnswers : fallbackOptions;
 
   return {
     id: String(idValue ?? ''),
     text: text.length ? text : `Pregunta ${idValue ?? ''}`,
     type: normalizeQuestionType(raw?.tipo_respuesta ?? raw?.responseType ?? raw?.tipo ?? raw?.type),
-    options: mergedOptions && mergedOptions.length ? mergedOptions : undefined,
+    options: mergedOptions.length ? mergedOptions : undefined,
     answers: mappedAnswers,
     required,
     order: normalizedOrder,
@@ -258,38 +295,62 @@ const QUESTION_TYPES_WITH_OPTIONS: ReadonlyArray<Question['type']> = ['multiple_
 const questionTypeRequiresOptions = (type: Question['type']): boolean =>
   QUESTION_TYPES_WITH_OPTIONS.includes(type);
 
-const normalizeQuestionOptionLabels = (options?: string[] | null): string[] => {
+const normalizeQuestionOptions = (options?: Array<Partial<QuestionOption> | string> | null): QuestionOption[] => {
   if (!Array.isArray(options)) {
     return [];
   }
 
-  const seen = new Set<string>();
-  const normalized: string[] = [];
+  const seenValues = new Set<string>();
+  const normalized: QuestionOption[] = [];
 
   for (const option of options) {
-    if (typeof option !== 'string') {
+    if (option === null || typeof option === 'undefined') {
       continue;
     }
-    const trimmed = option.trim();
-    if (!trimmed) {
+
+    let label = '';
+    let value = '';
+
+    if (typeof option === 'string') {
+      const trimmed = option.trim();
+      label = trimmed;
+      value = trimmed;
+    } else if (typeof option === 'object') {
+      const rawLabel = 'label' in option ? option.label : undefined;
+      const rawValue = 'value' in option ? option.value : undefined;
+      if (typeof rawLabel === 'string') {
+        label = rawLabel.trim();
+      }
+      if (typeof rawValue === 'string') {
+        value = rawValue.trim();
+      }
+
+      if (!value && label) {
+        value = label;
+      }
+    }
+
+    if (!label || !value) {
       continue;
     }
-    const key = trimmed.toLocaleLowerCase('es');
-    if (seen.has(key)) {
+
+    const valueKey = value.toLocaleLowerCase('es');
+    if (seenValues.has(valueKey)) {
       continue;
     }
-    seen.add(key);
-    normalized.push(trimmed);
+    seenValues.add(valueKey);
+
+    normalized.push({ label, value });
   }
 
   return normalized;
 };
 
-const buildAnswersFromLabels = (questionId: string, labels: string[]): QuestionAnswer[] =>
-  labels.map((label, index) => ({
+const buildAnswersFromOptions = (questionId: string, options: QuestionOption[]): QuestionAnswer[] =>
+  options.map((option, index) => ({
     id: `${questionId}-answer-${index}`,
-    label,
-    value: null,
+    label: option.label,
+    value: option.value,
     color: null,
     createdBy: null,
     createdAt: null,
@@ -307,7 +368,7 @@ type QuestionInput = {
   type: Question['type'];
   order?: number | null;
   required?: boolean;
-  options?: string[] | null;
+  options?: QuestionOption[] | null;
 };
 
 const mapInstrumentFromApi = (raw: any, overrides: InstrumentMappingOverrides = {}): Instrument => {
@@ -1539,7 +1600,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const createQuestion = useCallback(async (instrumentId: string, input: QuestionInput): Promise<Question> => {
     const targetInstrument = instrumentsRef.current.find((instrument) => instrument.id === String(instrumentId)) ?? null;
     const normalizedOptions = questionTypeRequiresOptions(input.type)
-      ? normalizeQuestionOptionLabels(input.options)
+      ? normalizeQuestionOptions(input.options ?? [])
       : [];
 
     const nextOrder = typeof input.order === 'number' && Number.isFinite(input.order)
@@ -1547,8 +1608,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       : (targetInstrument ? (targetInstrument.questions.length + 1) : 1);
 
     const buildQuestionFromInput = (idValue: string): Question => {
-      const baseAnswers = normalizedOptions.length ? buildAnswersFromLabels(idValue, normalizedOptions) : [];
-      const optionLabels = baseAnswers.length ? baseAnswers.map((answer) => answer.label) : normalizedOptions;
+      const baseAnswers = normalizedOptions.length ? buildAnswersFromOptions(idValue, normalizedOptions) : [];
 
       return {
         id: idValue,
@@ -1557,7 +1617,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         order: nextOrder,
         required: typeof input.required === 'boolean' ? input.required : true,
         answers: baseAnswers,
-        options: optionLabels.length ? optionLabels : undefined,
+        options: normalizedOptions.length ? normalizedOptions : undefined,
       };
     };
 
@@ -1583,20 +1643,20 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       isEnabled: typeof input.required === 'boolean' ? input.required : true,
     };
 
-    const createAnswersForQuestion = async (questionId: number, labels: string[]): Promise<QuestionAnswer[]> => {
+    const createAnswersForQuestion = async (questionId: number, options: QuestionOption[]): Promise<QuestionAnswer[]> => {
       const createdAnswers: QuestionAnswer[] = [];
-      for (const label of labels) {
+      for (const option of options) {
         const answerResponse = await fetch(`${apiBase}/questions/${questionId}/answers`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ name: label }),
+          body: JSON.stringify({ name: option.label, value: option.value }),
         });
 
         if (!answerResponse.ok) {
           const text = await answerResponse.text();
-          throw new Error(text || `No se pudo registrar la respuesta "${label}" (status ${answerResponse.status})`);
+          throw new Error(text || `No se pudo registrar la respuesta "${option.label}" (status ${answerResponse.status})`);
         }
 
         const payloadAnswer = await answerResponse.json();
@@ -1627,19 +1687,24 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         const numericQuestionId = Number(createdQuestion.id);
         if (!Number.isNaN(numericQuestionId)) {
           const createdAnswers = await createAnswersForQuestion(numericQuestionId, normalizedOptions);
-          const optionLabels = createdAnswers.map((answer) => answer.label).filter((label) => label.length > 0);
+          const optionPairs = normalizeQuestionOptions(
+            createdAnswers.map((answer) => ({
+              label: typeof answer.label === 'string' ? answer.label : '',
+              value: typeof answer.value === 'string' && answer.value ? answer.value : (answer.label ?? ''),
+            })),
+          );
           createdQuestion = {
             ...createdQuestion,
             answers: createdAnswers,
-            options: optionLabels.length ? optionLabels : undefined,
+            options: optionPairs.length ? optionPairs : undefined,
           };
         } else {
-          const fallbackAnswers = buildAnswersFromLabels(createdQuestion.id, normalizedOptions);
-          const optionLabels = fallbackAnswers.map((answer) => answer.label).filter((label) => label.length > 0);
+          const fallbackAnswers = buildAnswersFromOptions(createdQuestion.id, normalizedOptions);
+          const optionPairs = normalizedOptions;
           createdQuestion = {
             ...createdQuestion,
             answers: fallbackAnswers,
-            options: optionLabels.length ? optionLabels : undefined,
+            options: optionPairs.length ? optionPairs : undefined,
           };
         }
       }
@@ -1665,12 +1730,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const existingQuestion = targetInstrument?.questions.find((question) => question.id === String(questionId)) ?? null;
 
     const sanitizedOptions = questionTypeRequiresOptions(input.type)
-      ? normalizeQuestionOptionLabels(input.options)
+      ? normalizeQuestionOptions(input.options ?? [])
       : [];
 
     const buildLocalQuestion = (): Question => {
-      const answers = sanitizedOptions.length ? buildAnswersFromLabels(questionId, sanitizedOptions) : [];
-      const optionLabels = answers.length ? answers.map((answer) => answer.label) : sanitizedOptions;
+      const answers = sanitizedOptions.length ? buildAnswersFromOptions(questionId, sanitizedOptions) : [];
       return {
         id: questionId,
         text: input.text.trim(),
@@ -1682,7 +1746,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           ? input.required
           : (typeof existingQuestion?.required === 'boolean' ? existingQuestion.required : true),
         answers,
-        options: optionLabels.length ? optionLabels : undefined,
+        options: sanitizedOptions.length ? sanitizedOptions : undefined,
       };
     };
 
@@ -1729,7 +1793,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       payload.isEnabled = typeof input.required === 'boolean' ? input.required : undefined;
     }
 
-    const syncAnswersForQuestion = async (desiredLabels: string[]): Promise<QuestionAnswer[]> => {
+    const syncAnswersForQuestion = async (desiredOptions: QuestionOption[]): Promise<QuestionAnswer[]> => {
       const listResponse = await fetch(`${apiBase}/questions/${numericQuestionId}/answers`);
       if (!listResponse.ok) {
         const text = await listResponse.text();
@@ -1743,7 +1807,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             .filter((answer: QuestionAnswer) => Boolean(answer.label))
         : [];
 
-      if (!desiredLabels.length) {
+      if (!desiredOptions.length) {
         if (existingAnswers.length) {
           await Promise.all(existingAnswers.map(async (answer) => {
             const answerId = Number(answer.id);
@@ -1765,36 +1829,44 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       const remainingAnswers = [...existingAnswers];
       const nextAnswers: QuestionAnswer[] = [];
 
-      for (const label of desiredLabels) {
-        const normalizedLabel = label.toLocaleLowerCase('es');
-        const matchIndex = remainingAnswers.findIndex((answer) => (answer.label ?? '').toLocaleLowerCase('es') === normalizedLabel);
+      for (const option of desiredOptions) {
+        const targetLabel = option.label;
+        const targetValue = option.value;
+        const labelKey = targetLabel.toLocaleLowerCase('es');
+        const valueKey = targetValue.toLocaleLowerCase('es');
+
+        let matchIndex = remainingAnswers.findIndex((answer) => (answer.value ?? '').toLocaleLowerCase('es') === valueKey);
+        if (matchIndex < 0) {
+          matchIndex = remainingAnswers.findIndex((answer) => (answer.label ?? '').toLocaleLowerCase('es') === labelKey);
+        }
 
         if (matchIndex >= 0) {
           const [matchedAnswer] = remainingAnswers.splice(matchIndex, 1);
           const trimmedOriginal = (matchedAnswer.label ?? '').trim();
-          if (trimmedOriginal !== label) {
-            const answerId = Number(matchedAnswer.id);
-            if (!Number.isNaN(answerId)) {
-              const patchResponse = await fetch(`${apiBase}/questions/${numericQuestionId}/answers/${answerId}`, {
-                method: 'PATCH',
-                headers: {
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ name: label }),
-              });
+          const trimmedOriginalValue = typeof matchedAnswer.value === 'string' ? matchedAnswer.value.trim() : '';
+          const answerId = Number(matchedAnswer.id);
+          const needsUpdate = trimmedOriginal !== targetLabel || trimmedOriginalValue !== targetValue;
 
-              if (!patchResponse.ok) {
-                const text = await patchResponse.text();
-                throw new Error(text || `No se pudo actualizar la respuesta ${answerId} (status ${patchResponse.status})`);
-              }
+          if (!Number.isNaN(answerId) && needsUpdate) {
+            const patchResponse = await fetch(`${apiBase}/questions/${numericQuestionId}/answers/${answerId}`, {
+              method: 'PATCH',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ name: targetLabel, value: targetValue }),
+            });
 
-              const updatedPayload = await patchResponse.json();
-              nextAnswers.push(mapAnswerFromApi(updatedPayload));
-              continue;
+            if (!patchResponse.ok) {
+              const text = await patchResponse.text();
+              throw new Error(text || `No se pudo actualizar la respuesta ${answerId} (status ${patchResponse.status})`);
             }
+
+            const updatedPayload = await patchResponse.json();
+            nextAnswers.push(mapAnswerFromApi(updatedPayload));
+            continue;
           }
 
-          nextAnswers.push({ ...matchedAnswer, label });
+          nextAnswers.push({ ...matchedAnswer, label: targetLabel, value: targetValue });
           continue;
         }
 
@@ -1807,7 +1879,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
               headers: {
                 'Content-Type': 'application/json',
               },
-              body: JSON.stringify({ name: label }),
+              body: JSON.stringify({ name: targetLabel, value: targetValue }),
             });
 
             if (!patchResponse.ok) {
@@ -1826,12 +1898,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ name: label }),
+          body: JSON.stringify({ name: targetLabel, value: targetValue }),
         });
 
         if (!createResponse.ok) {
           const text = await createResponse.text();
-          throw new Error(text || `No se pudo registrar la respuesta "${label}" (status ${createResponse.status})`);
+          throw new Error(text || `No se pudo registrar la respuesta "${targetLabel}" (status ${createResponse.status})`);
         }
 
         const createdPayload = await createResponse.json();
@@ -1874,14 +1946,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       const data = await response.json();
       const normalizedQuestion = mapQuestionFromApi(data);
 
-      const desiredLabels = questionTypeRequiresOptions(normalizedQuestion.type) ? sanitizedOptions : [];
-      const updatedAnswers = await syncAnswersForQuestion(desiredLabels);
-      const optionLabels = updatedAnswers.map((answer) => answer.label).filter((label) => label.length > 0);
+      const desiredOptions = questionTypeRequiresOptions(normalizedQuestion.type) ? sanitizedOptions : [];
+      const updatedAnswers = await syncAnswersForQuestion(desiredOptions);
+      const optionPairs = normalizeQuestionOptions(
+        updatedAnswers.map((answer) => ({
+          label: typeof answer.label === 'string' ? answer.label : '',
+          value: typeof answer.value === 'string' && answer.value ? answer.value : (answer.label ?? ''),
+        })),
+      );
 
       const nextQuestion: Question = {
         ...normalizedQuestion,
         answers: updatedAnswers,
-        options: optionLabels.length ? optionLabels : undefined,
+        options: optionPairs.length ? optionPairs : undefined,
       };
 
       applyQuestionToState(nextQuestion);

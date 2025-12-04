@@ -6,7 +6,7 @@ import { Button } from '../../components/UI/Button';
 import { Table } from '../../components/UI/Table';
 import { Modal } from '../../components/UI/Modal';
 import { useApp } from '../../context/AppContext';
-import { Instrument, Question } from '../../types';
+import { Instrument, Question, QuestionOption } from '../../types';
 import { QuestionForm } from './components/QuestionForm';
 
 type PreviewOption = { key: string; label: string; color?: string | null };
@@ -741,19 +741,55 @@ export const InstrumentDetail: React.FC = () => {
               order: typeof selectedQuestion.order === 'number' ? selectedQuestion.order : undefined,
               required: selectedQuestion.required,
               options: (() => {
-                if (!selectedQuestion) {
-                  return [];
-                }
-                if (Array.isArray(selectedQuestion.answers) && selectedQuestion.answers.length) {
+                const normalizeOption = (option: QuestionOption | string | null | undefined): QuestionOption | null => {
+                  if (!option) {
+                    return null;
+                  }
+
+                  if (typeof option === 'string') {
+                    const trimmed = option.trim();
+                    if (!trimmed) {
+                      return null;
+                    }
+                    return { label: trimmed, value: trimmed };
+                  }
+
+                  const rawLabel = typeof option.label === 'string' ? option.label.trim() : '';
+                  const rawValue = typeof option.value === 'string' ? option.value.trim() : '';
+                  const resolvedLabel = rawLabel || rawValue;
+                  const resolvedValue = rawValue || rawLabel;
+
+                  if (!resolvedLabel || !resolvedValue) {
+                    return null;
+                  }
+
+                  return {
+                    label: resolvedLabel,
+                    value: resolvedValue,
+                  };
+                };
+
+                if (Array.isArray(selectedQuestion?.answers) && selectedQuestion?.answers.length) {
                   return selectedQuestion.answers
-                    .map((answer) => (typeof answer.label === 'string' ? answer.label.trim() : ''))
-                    .filter((label) => label.length > 0);
+                    .map((answer) => {
+                      const rawLabel = typeof answer.label === 'string' ? answer.label.trim() : '';
+                      const rawValue = typeof answer.value === 'string' ? answer.value.trim() : '';
+                      const label = rawLabel || rawValue;
+                      const value = rawValue || rawLabel;
+                      if (!label || !value) {
+                        return null;
+                      }
+                      return { label, value };
+                    })
+                    .filter((option): option is QuestionOption => Boolean(option));
                 }
-                if (Array.isArray(selectedQuestion.options) && selectedQuestion.options.length) {
+
+                if (Array.isArray(selectedQuestion?.options) && selectedQuestion?.options.length) {
                   return selectedQuestion.options
-                    .map((option) => (typeof option === 'string' ? option.trim() : ''))
-                    .filter((option) => option.length > 0);
+                    .map((option) => normalizeOption(option))
+                    .filter((option): option is QuestionOption => Boolean(option));
                 }
+
                 return [];
               })(),
             } : undefined}

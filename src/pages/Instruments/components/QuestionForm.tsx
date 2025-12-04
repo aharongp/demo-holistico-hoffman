@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import { Button } from '../../../components/UI/Button';
-import { Question } from '../../../types';
+import { Question, QuestionOption } from '../../../types';
 
 type QuestionFormMode = 'create' | 'edit';
 
@@ -10,7 +10,7 @@ type QuestionFormValues = {
   type: Question['type'];
   order: number | '';
   required: boolean;
-  options: string[];
+  options: QuestionOption[];
 };
 
 type QuestionFormSubmitPayload = {
@@ -18,7 +18,7 @@ type QuestionFormSubmitPayload = {
   type: Question['type'];
   order?: number;
   required: boolean;
-  options?: string[];
+  options?: QuestionOption[];
 };
 
 type QuestionFormProps = {
@@ -49,37 +49,42 @@ const MIN_OPTION_COUNT = 2;
 const requiresOptions = (type: Question['type']): boolean =>
   QUESTION_TYPES_WITH_OPTIONS.includes(type);
 
-const normalizeOptionLabels = (options?: string[]): string[] => {
+const normalizeOptionEntries = (options?: QuestionOption[] | null): QuestionOption[] => {
   if (!Array.isArray(options)) {
     return [];
   }
 
-  const seen = new Set<string>();
-  const normalized: string[] = [];
+  const seenValues = new Set<string>();
+  const normalized: QuestionOption[] = [];
 
   for (const option of options) {
-    if (typeof option !== 'string') {
+    if (!option || typeof option !== 'object') {
       continue;
     }
-    const trimmed = option.trim();
-    if (!trimmed) {
+
+    const label = typeof option.label === 'string' ? option.label.trim() : '';
+    const value = typeof option.value === 'string' ? option.value.trim() : '';
+
+    if (!label || !value) {
       continue;
     }
-    const key = trimmed.toLocaleLowerCase('es');
-    if (seen.has(key)) {
+
+    const valueKey = value.toLocaleLowerCase('es');
+    if (seenValues.has(valueKey)) {
       continue;
     }
-    seen.add(key);
-    normalized.push(trimmed);
+
+    seenValues.add(valueKey);
+    normalized.push({ label, value });
   }
 
   return normalized;
 };
 
-const ensureOptionFields = (list: string[], minCount = MIN_OPTION_COUNT): string[] => {
+const ensureOptionFields = (list: QuestionOption[], minCount = MIN_OPTION_COUNT): QuestionOption[] => {
   const next = [...list];
   while (next.length < minCount) {
-    next.push('');
+    next.push({ label: '', value: '' });
   }
   return next;
 };
@@ -93,7 +98,29 @@ export const QuestionForm: React.FC<QuestionFormProps> = ({
 }) => {
   const defaults: QuestionFormValues = useMemo(() => {
     const baseType = initialValues?.type ?? 'text';
-    const normalizedOptions = normalizeOptionLabels(initialValues?.options);
+
+    const rawOptions = (() => {
+      if (!initialValues?.options || !Array.isArray(initialValues.options)) {
+        return [] as QuestionOption[];
+      }
+
+      return initialValues.options.map((option) => {
+        if (!option) {
+          return { label: '', value: '' };
+        }
+
+        if (typeof (option as any) === 'string') {
+          const trimmed = String(option).trim();
+          return { label: trimmed, value: trimmed };
+        }
+
+        const label = typeof option.label === 'string' ? option.label : '';
+        const value = typeof option.value === 'string' ? option.value : label;
+        return { label, value };
+      });
+    })();
+
+    const normalizedOptions = normalizeOptionEntries(rawOptions);
     const preparedOptions = requiresOptions(baseType)
       ? ensureOptionFields(normalizedOptions)
       : normalizedOptions;
@@ -128,9 +155,13 @@ export const QuestionForm: React.FC<QuestionFormProps> = ({
     setValues(prev => {
       if (field === 'type' && target instanceof HTMLSelectElement) {
         const nextType = target.value as Question['type'];
+        const sanitizedOptions = prev.options.map(option => ({
+          label: option?.label ?? '',
+          value: option?.value ?? '',
+        }));
         const nextOptions = requiresOptions(nextType)
-          ? ensureOptionFields(prev.options)
-          : prev.options;
+          ? ensureOptionFields(sanitizedOptions)
+          : sanitizedOptions;
         return {
           ...prev,
           type: nextType,
@@ -158,31 +189,49 @@ export const QuestionForm: React.FC<QuestionFormProps> = ({
     });
   };
 
-  const handleOptionChange = (index: number) => (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleOptionChange = (index: number, field: keyof QuestionOption) => (
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) => {
     const { value } = event.target;
     setValues(prev => {
-      const nextOptions = [...prev.options];
-      nextOptions[index] = value;
+      const nextOptions = prev.options.map(option => ({
+        label: option?.label ?? '',
+        value: option?.value ?? '',
+      }));
+      const current = nextOptions[index] ?? { label: '', value: '' };
+      nextOptions[index] = {
+        ...current,
+        [field]: value,
+      };
       return { ...prev, options: nextOptions };
     });
   };
 
   const handleAddOption = () => {
-    setValues(prev => ({
-      ...prev,
-      options: [...prev.options, ''],
-    }));
+    setValues(prev => {
+      const sanitizedOptions = prev.options.map(option => ({
+        label: option?.label ?? '',
+        value: option?.value ?? '',
+      }));
+
+      return {
+        ...prev,
+        options: [...sanitizedOptions, { label: '', value: '' }],
+      };
+    });
   };
 
   const handleRemoveOption = (index: number) => () => {
     setValues(prev => {
-      const nextOptions = prev.options.filter((_, optionIndex) => optionIndex !== index);
-      if (!nextOptions.length) {
-        return {
-          ...prev,
-          options: [''],
-        };
-      }
+      const filteredOptions = prev.options
+        .filter((_, optionIndex) => optionIndex !== index)
+        .map(option => ({
+          label: option?.label ?? '',
+          value: option?.value ?? '',
+        }));
+
+      const nextOptions = ensureOptionFields(filteredOptions);
+
       return {
         ...prev,
         options: nextOptions,
@@ -209,27 +258,38 @@ export const QuestionForm: React.FC<QuestionFormProps> = ({
     }
 
     if (requiresOptions(values.type)) {
-      const trimmedOptions = values.options
-        .map(option => (typeof option === 'string' ? option.trim() : ''))
-        .filter(option => option.length > 0);
+      const trimmedOptions = values.options.map(option => ({
+        label: typeof option.label === 'string' ? option.label.trim() : '',
+        value: typeof option.value === 'string' ? option.value.trim() : '',
+      }));
 
-      if (trimmedOptions.length < MIN_OPTION_COUNT) {
+      const hasPartialOption = trimmedOptions.some(option =>
+        (!!option.label && !option.value) || (!option.label && !!option.value),
+      );
+
+      if (hasPartialOption) {
+        nextErrors.options = 'Completa cada opción con etiqueta y valor.';
+      }
+
+      const validOptions = trimmedOptions.filter(option => option.label && option.value);
+
+      if (!nextErrors.options && validOptions.length < MIN_OPTION_COUNT) {
         nextErrors.options = `Agrega al menos ${MIN_OPTION_COUNT} opciones.`;
       }
 
       if (!nextErrors.options) {
-        const seen = new Set<string>();
-        const hasDuplicates = trimmedOptions.some(option => {
-          const key = option.toLocaleLowerCase('es');
-          if (seen.has(key)) {
+        const seenValues = new Set<string>();
+        const hasDuplicateValues = validOptions.some(option => {
+          const key = option.value.toLocaleLowerCase('es');
+          if (seenValues.has(key)) {
             return true;
           }
-          seen.add(key);
+          seenValues.add(key);
           return false;
         });
 
-        if (hasDuplicates) {
-          nextErrors.options = 'No se permiten opciones duplicadas.';
+        if (hasDuplicateValues) {
+          nextErrors.options = 'El valor de cada opción debe ser único.';
         }
       }
     }
@@ -250,7 +310,7 @@ export const QuestionForm: React.FC<QuestionFormProps> = ({
       required: values.required,
     };
 
-    const sanitizedOptions = normalizeOptionLabels(values.options);
+    const sanitizedOptions = normalizeOptionEntries(values.options);
     if (requiresOptions(values.type) && sanitizedOptions.length) {
       payload.options = sanitizedOptions;
     }
@@ -350,25 +410,52 @@ export const QuestionForm: React.FC<QuestionFormProps> = ({
           </div>
           <div className="space-y-2">
             {values.options.map((option, index) => (
-              <div key={`question-option-${index}`} className="flex items-center gap-2">
-                <input
-                  id={`question-option-${index}`}
-                  type="text"
-                  className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder={`Opción ${index + 1}`}
-                  value={option}
-                  onChange={handleOptionChange(index)}
-                  disabled={isSubmitting}
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={handleRemoveOption(index)}
-                  disabled={isSubmitting}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
+              <div
+                key={`question-option-${index}`}
+                className="grid grid-cols-1 gap-2 rounded-lg border border-gray-200 p-3 sm:grid-cols-[1fr,1fr,auto] sm:items-center"
+              >
+                <div className="sm:col-span-1">
+                  <label className="sr-only" htmlFor={`question-option-label-${index}`}>
+                    Etiqueta de la opción {index + 1}
+                  </label>
+                  <input
+                    id={`question-option-label-${index}`}
+                    type="text"
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder={`Etiqueta ${index + 1}`}
+                    value={option.label}
+                    onChange={handleOptionChange(index, 'label')}
+                    disabled={isSubmitting}
+                    autoComplete="off"
+                  />
+                </div>
+                <div className="sm:col-span-1">
+                  <label className="sr-only" htmlFor={`question-option-value-${index}`}>
+                    Valor de la opción {index + 1}
+                  </label>
+                  <input
+                    id={`question-option-value-${index}`}
+                    type="text"
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder={`Valor ${index + 1}`}
+                    value={option.value}
+                    onChange={handleOptionChange(index, 'value')}
+                    disabled={isSubmitting}
+                    autoComplete="off"
+                  />
+                </div>
+                <div className="sm:col-span-1 flex justify-end">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleRemoveOption(index)}
+                    disabled={isSubmitting}
+                    aria-label={`Eliminar opción ${index + 1}`}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
             ))}
           </div>

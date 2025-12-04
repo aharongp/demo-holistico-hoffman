@@ -69,11 +69,16 @@ export interface QuestionAnswer {
   updatedAt?: Date | null;
 }
 
+export interface QuestionOption {
+  label: string;
+  value: string;
+}
+
 export interface Question {
   id: string;
   text: string;
   type: 'multiple_choice' | 'scale' | 'text' | 'boolean' | 'radio' | 'select';
-  options?: string[];
+  options?: QuestionOption[];
   answers?: QuestionAnswer[];
   required: boolean;
   order: number;
