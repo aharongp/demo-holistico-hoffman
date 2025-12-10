@@ -9,6 +9,7 @@ import {
   HealthDiagnosticResult,
   PatientAggregatedResults,
   TestResult,
+  WheelResult,
 } from '../../types/patientResults';
 
 type SummaryMetric = {
@@ -97,6 +98,15 @@ const parseNumericId = (value: unknown): number | null => {
 
   const numeric = Number(value);
   return Number.isFinite(numeric) ? numeric : null;
+};
+
+const wheelValueToPercent = (value: number): number => {
+  if (!Number.isFinite(value)) {
+    return 0;
+  }
+
+  const percent = (value / 10) * 100;
+  return Math.min(Math.max(percent, 0), 100);
 };
 
 const readStoredUserId = (): number | null => {
@@ -213,16 +223,18 @@ export const InstrumentResults: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const apiBase = (import.meta as any).env?.VITE_API_BASE ?? 'http://localhost:3000';
+  type ImportMetaWithEnv = { env?: Record<string, string | undefined> };
+  const apiBase = ((import.meta as unknown as ImportMetaWithEnv).env?.VITE_API_BASE ?? 'http://localhost:3000');
   const normalizedApiBase = useMemo(() => sanitizeApiBase(apiBase), [apiBase]);
   const storedUserId = useMemo(() => readStoredUserId(), []);
   const resolvedUserId = useMemo(() => {
-    const contextId = parseNumericId(user?.id ?? (user as { userId?: number } | null)?.userId);
+    const fallbackUser = user as { id?: number; userId?: number } | null;
+    const contextId = parseNumericId(user?.id ?? fallbackUser?.userId);
     if (contextId !== null) {
       return contextId;
     }
     return storedUserId;
-  }, [storedUserId, user?.id]);
+  }, [storedUserId, user]);
 
   const fetchAggregatedResults = useCallback(async () => {
     if (!token) {
@@ -274,8 +286,17 @@ export const InstrumentResults: React.FC = () => {
   const attitudinalStrengths = results?.attitudinal.strengths ?? [];
   const attitudinalSummary = results?.attitudinal.summary ?? null;
   const healthDiagnostics = results?.health.diagnostics ?? [];
-  const tests = results?.health.tests ?? {};
+  const tests = useMemo<Record<string, TestResult | null>>(
+    () => results?.health.tests ?? {},
+    [results],
+  );
+  const hasTestsData = useMemo(() => hasTestData(tests), [tests]);
   const dailyReview = results?.dailyReview ?? [];
+  const wheelOfLife = results?.wellness?.wheelOfLife ?? [];
+  const wheelOfHealth = results?.wellness?.wheelOfHealth ?? [];
+  const regiflex = results?.wellness?.regiflex ?? null;
+  const hasWellnessData = wheelOfLife.length > 0 || wheelOfHealth.length > 0 || Boolean(regiflex);
+  const regiflexTotal = regiflex?.entries?.reduce((acc, entry) => acc + entry.sum, 0) ?? 0;
 
   const hasMeaningfulData = useMemo(() => {
     if (!results) {
@@ -286,9 +307,18 @@ export const InstrumentResults: React.FC = () => {
       Boolean(attitudinalSummary) ||
       healthDiagnostics.length > 0 ||
       dailyReview.length > 0 ||
-      hasTestData(tests)
+      hasTestsData ||
+      hasWellnessData
     );
-  }, [results, attitudinalStrengths.length, attitudinalSummary, healthDiagnostics.length, dailyReview.length, tests]);
+  }, [
+    results,
+    attitudinalStrengths.length,
+    attitudinalSummary,
+    healthDiagnostics.length,
+    dailyReview.length,
+    hasTestsData,
+    hasWellnessData,
+  ]);
 
   const hasNoData = !hasMeaningfulData && !isLoading && !error;
 
@@ -594,6 +624,144 @@ export const InstrumentResults: React.FC = () => {
                 </Card>
               );
             })}
+          </div>
+        </div>
+      ) : null}
+
+      {hasWellnessData ? (
+        <div className="space-y-6">
+          <h2 className="text-xl font-semibold text-slate-900">Bienestar integral</h2>
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
+            {wheelOfLife.length ? (
+              <Card
+                className="relative overflow-hidden rounded-[28px] border border-white/35 bg-white/75 shadow-[0_34px_85px_-60px_rgba(251,146,60,0.35)] backdrop-blur"
+                padding="lg"
+              >
+                <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-br from-[#FDE68A]/70 via-white to-[#FB7185]/60 opacity-60" />
+                <div className="relative space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.35em] text-slate-500">Rueda</p>
+                      <h3 className="text-lg font-semibold text-slate-900">Dimensiones de vida</h3>
+                    </div>
+                    <span className="rounded-full border border-white/50 bg-white/70 px-3 py-1 text-xs font-semibold uppercase tracking-[0.35em] text-slate-500">
+                      {wheelOfLife.length} tópicos
+                    </span>
+                  </div>
+                  <p className="text-sm text-slate-600">Promedios generales por dimensión con escala 0-10.</p>
+                  <div className="rounded-2xl border border-white/60 bg-white/70 p-4">
+                    <ul className="space-y-3">
+                      {[...wheelOfLife]
+                        .sort((a: WheelResult, b: WheelResult) => b.average - a.average)
+                        .map((item, index) => {
+                          const width = wheelValueToPercent(item.average);
+                          return (
+                            <li key={`${item.topic ?? 'life'}-${index}`} className="space-y-2">
+                              <div className="flex items-center justify-between">
+                                <span className="text-sm font-medium text-slate-700">{item.topic ?? `Dimensión ${index + 1}`}</span>
+                                <span className="text-lg font-semibold text-slate-900">{item.average.toFixed(2)}</span>
+                              </div>
+                              <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+                                <div
+                                  className="h-full rounded-full bg-gradient-to-r from-[#FB7185]/70 to-[#F97316]/80"
+                                  style={{ width: `${width}%` }}
+                                />
+                              </div>
+                            </li>
+                          );
+                        })}
+                    </ul>
+                  </div>
+                </div>
+              </Card>
+            ) : null}
+
+            {wheelOfHealth.length ? (
+              <Card
+                className="relative overflow-hidden rounded-[28px] border border-white/35 bg-white/75 shadow-[0_34px_85px_-60px_rgba(16,185,129,0.35)] backdrop-blur"
+                padding="lg"
+              >
+                <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-br from-[#BBF7D0]/70 via-white to-[#34D399]/60 opacity-60" />
+                <div className="relative space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.35em] text-slate-500">Rueda</p>
+                      <h3 className="text-lg font-semibold text-slate-900">Dimensiones de salud</h3>
+                    </div>
+                    <span className="rounded-full border border-white/50 bg-white/70 px-3 py-1 text-xs font-semibold uppercase tracking-[0.35em] text-slate-500">
+                      {wheelOfHealth.length} tópicos
+                    </span>
+                  </div>
+                  <p className="text-sm text-slate-600">Referencias promediadas por dimensión de bienestar físico.</p>
+                  <div className="rounded-2xl border border-white/60 bg-white/70 p-4">
+                    <ul className="space-y-3">
+                      {[...wheelOfHealth]
+                        .sort((a: WheelResult, b: WheelResult) => b.average - a.average)
+                        .map((item, index) => {
+                          const width = wheelValueToPercent(item.average);
+                          return (
+                            <li key={`${item.topic ?? 'health'}-${index}`} className="space-y-2">
+                              <div className="flex items-center justify-between">
+                                <span className="text-sm font-medium text-slate-700">{item.topic ?? `Dimensión ${index + 1}`}</span>
+                                <span className="text-lg font-semibold text-slate-900">{item.average.toFixed(2)}</span>
+                              </div>
+                              <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+                                <div
+                                  className="h-full rounded-full bg-gradient-to-r from-[#34D399]/70 to-[#10B981]/80"
+                                  style={{ width: `${width}%` }}
+                                />
+                              </div>
+                            </li>
+                          );
+                        })}
+                    </ul>
+                  </div>
+                </div>
+              </Card>
+            ) : null}
+
+            {regiflex ? (
+              <Card
+                className="relative overflow-hidden rounded-[28px] border border-white/35 bg-white/75 shadow-[0_34px_85px_-60px_rgba(79,70,229,0.35)] backdrop-blur"
+                padding="lg"
+              >
+                <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-br from-[#C7D2FE]/70 via-white to-[#818CF8]/60 opacity-60" />
+                <div className="relative space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.35em] text-slate-500">Regiflex</p>
+                      <h3 className="text-lg font-semibold text-slate-900">Flexibilidad corporal</h3>
+                    </div>
+                    <span className="rounded-full border border-white/50 bg-white/70 px-3 py-1 text-xs font-semibold uppercase tracking-[0.35em] text-slate-500">
+                      {regiflex.predominant ?? 'Sin dato'}
+                    </span>
+                  </div>
+                  <p className="text-sm text-slate-600">Comparativo entre flexibilidad y rigidez según respuestas recientes.</p>
+                  <div className="rounded-2xl border border-white/60 bg-white/70 p-4">
+                    <ul className="space-y-3">
+                      {regiflex.entries.map((entry, index) => {
+                        const denominator = regiflexTotal > 0 ? regiflexTotal : 1;
+                        const width = Math.min(Math.max((entry.sum / denominator) * 100, 0), 100);
+                        return (
+                          <li key={`${entry.topic ?? 'regiflex'}-${index}`} className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm font-medium text-slate-700">{entry.topic ?? `Tendencia ${index + 1}`}</span>
+                              <span className="text-lg font-semibold text-slate-900">{entry.sum.toFixed(2)}</span>
+                            </div>
+                            <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+                              <div
+                                className="h-full rounded-full bg-gradient-to-r from-[#818CF8]/70 to-[#6366F1]/80"
+                                style={{ width: `${width}%` }}
+                              />
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                </div>
+              </Card>
+            ) : null}
           </div>
         </div>
       ) : null}

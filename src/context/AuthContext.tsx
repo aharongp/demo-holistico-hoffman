@@ -246,7 +246,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   useEffect(() => {
     let cancelled = false;
 
-    const bootstrap = async () => {
+    const bootstrap = () => {
       const storedToken = localStorage.getItem(TOKEN_STORAGE_KEY);
       const storedUserRaw = localStorage.getItem(USER_STORAGE_KEY);
       const expiresAtRaw = localStorage.getItem(TOKEN_EXP_STORAGE_KEY);
@@ -274,12 +274,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
       }
 
-      if (storedToken) {
-        await validateToken();
-      }
-
       if (!cancelled) {
         setIsLoading(false);
+      }
+
+      if (storedToken) {
+        void validateToken();
       }
     };
 

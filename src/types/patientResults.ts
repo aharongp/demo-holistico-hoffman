@@ -49,6 +49,21 @@ export interface DailyReviewResult {
   icono: string | null;
 }
 
+export interface WheelResult {
+  topic: string | null;
+  average: number;
+}
+
+export interface RegiflexEntry {
+  topic: string | null;
+  sum: number;
+}
+
+export interface RegiflexResult {
+  entries: RegiflexEntry[];
+  predominant: string | null;
+}
+
 export interface PatientAggregatedResults {
   attitudinal: {
     strengths: AttitudinalStrengthResult[];
@@ -59,4 +74,9 @@ export interface PatientAggregatedResults {
     tests: Record<string, TestResult | null>;
   };
   dailyReview: DailyReviewResult[];
+  wellness: {
+    wheelOfLife: WheelResult[];
+    wheelOfHealth: WheelResult[];
+    regiflex: RegiflexResult | null;
+  };
 }
