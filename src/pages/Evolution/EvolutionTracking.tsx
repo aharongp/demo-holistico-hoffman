@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Plus, TrendingUp, User, Heart, Scale, Droplets, RefreshCw, Edit, Trash2 } from 'lucide-react';
+import { Plus, TrendingUp, User, Heart, Scale, Droplets, RefreshCw, Edit, Trash2, Search } from 'lucide-react';
 import { Card } from '../../components/UI/Card';
 import { Button } from '../../components/UI/Button';
 import { Chart } from '../../components/Dashboard/Chart';
@@ -286,7 +286,7 @@ const parseDateInput = (value: string, endOfDay: boolean): number | null => {
 
 export const EvolutionTracking: React.FC = () => {
   const { user, token } = useAuth();
-  const { addEvolutionEntry, patients } = useApp();
+  const { addEvolutionEntry, patients, programs } = useApp();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
   const [activeTab, setActiveTab] = useState('mood');
@@ -298,6 +298,11 @@ export const EvolutionTracking: React.FC = () => {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedProgram, setSelectedProgram] = useState<string>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
+  const [assignmentFilter, setAssignmentFilter] = useState<'all' | 'assigned' | 'unassigned'>('all');
+  const [genderFilter, setGenderFilter] = useState<'all' | Patient['gender']>('all');
   const [editState, setEditState] = useState<EditState | null>(null);
   const [deleteState, setDeleteState] = useState<DeleteState | null>(null);
   const [expandedSections, setExpandedSections] = useState<Record<VitalSectionKey, boolean>>({
@@ -344,6 +349,110 @@ export const EvolutionTracking: React.FC = () => {
     }
     return storedUserId;
   }, [storedUserId, user?.id]);
+  const programNameById = useMemo(() => {
+    const lookup: Record<string, string> = {};
+    programs.forEach(program => {
+      lookup[program.id] = program.name;
+    });
+    return lookup;
+  }, [programs]);
+  const programOptions = useMemo(() => {
+    const sortedPrograms = [...programs]
+      .map(program => ({ value: program.id, label: program.name }))
+      .sort((a, b) => a.label.localeCompare(b.label, 'es'));
+    return [
+      { value: 'all', label: 'Todos los programas' },
+      { value: 'no-program', label: 'Sin programa asignado' },
+      ...sortedPrograms,
+    ];
+  }, [programs]);
+  const filteredPatients = useMemo(() => {
+    const normalizedTerm = searchTerm.trim().toLowerCase();
+
+    return patients.filter(patient => {
+      const firstName = patient.firstName ?? '';
+      const lastName = patient.lastName ?? '';
+      const fullName = `${firstName} ${lastName}`.trim().toLowerCase();
+      const email = (patient.email ?? '').toLowerCase();
+      const cedula = patient.cedula ? patient.cedula.toLowerCase() : '';
+
+      const matchesTerm =
+        !normalizedTerm ||
+        fullName.includes(normalizedTerm) ||
+        firstName.toLowerCase().includes(normalizedTerm) ||
+        lastName.toLowerCase().includes(normalizedTerm) ||
+        email.includes(normalizedTerm) ||
+        cedula.includes(normalizedTerm);
+
+      if (!matchesTerm) {
+        return false;
+      }
+
+      const matchesProgram =
+        selectedProgram === 'all'
+          ? true
+          : selectedProgram === 'no-program'
+            ? !patient.programId
+            : patient.programId === selectedProgram;
+
+      if (!matchesProgram) {
+        return false;
+      }
+
+      const matchesStatus =
+        statusFilter === 'all'
+          ? true
+          : statusFilter === 'active'
+            ? patient.isActive
+            : !patient.isActive;
+
+      if (!matchesStatus) {
+        return false;
+      }
+
+      const matchesAssignment =
+        assignmentFilter === 'all'
+          ? true
+          : assignmentFilter === 'assigned'
+            ? Boolean(patient.programId)
+            : !patient.programId;
+
+      if (!matchesAssignment) {
+        return false;
+      }
+
+      const matchesGender = genderFilter === 'all' ? true : patient.gender === genderFilter;
+
+      return matchesGender;
+    });
+  }, [assignmentFilter, genderFilter, patients, searchTerm, selectedProgram, statusFilter]);
+  const filteredPatientCount = filteredPatients.length;
+  const { totalPatients, assignedProgramCount } = useMemo(() => {
+    let assigned = 0;
+    for (const patient of patients) {
+      if (patient.programId) {
+        assigned += 1;
+      }
+    }
+    return {
+      totalPatients: patients.length,
+      assignedProgramCount: assigned,
+    };
+  }, [patients]);
+  const filteredProgramsCount = useMemo(() => {
+    const base = new Set<string>();
+    filteredPatients.forEach(patient => {
+      if (patient.programId) {
+        base.add(patient.programId);
+      }
+    });
+    return base.size;
+  }, [filteredPatients]);
+  const filteredAwaitingAssignmentCount = useMemo(
+    () => filteredPatients.filter(patient => !patient.programId).length,
+    [filteredPatients],
+  );
+  const filteredAssignedCount = filteredPatientCount - filteredAwaitingAssignmentCount;
   const dateFormatter = useMemo(
     () => new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium', timeStyle: 'short' }),
     []
@@ -1668,6 +1777,30 @@ export const EvolutionTracking: React.FC = () => {
       ),
     },
     {
+      key: 'program',
+      header: 'Programa',
+      render: (patient: Patient) => {
+        if (!patient.programId) {
+          return <span className="text-xs text-slate-400">Sin asignar</span>;
+        }
+        const programLabel = programNameById[patient.programId] ?? 'Programa sin nombre';
+        return <span className="text-xs font-medium text-[#B45309]">{programLabel}</span>;
+      },
+    },
+    {
+      key: 'status',
+      header: 'Estado',
+      render: (patient: Patient) => (
+        <span
+          className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${
+            patient.isActive ? 'bg-green-100 text-green-700' : 'bg-slate-200 text-slate-600'
+          }`}
+        >
+          {patient.isActive ? 'Activo' : 'Inactivo'}
+        </span>
+      ),
+    },
+    {
       key: 'lastEntry',
       header: 'Último registro',
       render: () => '2024-01-15', // Datos simulados
@@ -1717,9 +1850,9 @@ export const EvolutionTracking: React.FC = () => {
             </div>
             <div className="grid gap-3 sm:grid-cols-3">
               <div className="rounded-3xl border border-[#FFE4D6]/80 bg-white/70 px-5 py-4 text-slate-900 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.35em] text-[#B45309]">Pacientes</p>
-                <p className="text-3xl font-semibold">{patients.length}</p>
-                <span className="text-xs text-[#B45309]/70">Registrados</span>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.35em] text-[#B45309]">Coincidencias</p>
+                <p className="text-3xl font-semibold">{filteredPatientCount.toLocaleString()}</p>
+                <span className="text-xs text-[#B45309]/70">Total: {totalPatients.toLocaleString()}</span>
               </div>
               <div className="rounded-3xl border border-[#FFE4D6]/80 bg-white/70 px-5 py-4 text-slate-900 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.35em] text-[#B45309]">Métricas</p>
@@ -1750,8 +1883,104 @@ export const EvolutionTracking: React.FC = () => {
               Listado maestro
             </span>
           </div>
+          <div className="mb-5 space-y-4">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
+              <div className="relative md:col-span-2 xl:col-span-2">
+                <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-[#fb923c]" />
+                <input
+                  type="text"
+                  placeholder="Busca por nombre, cédula o correo"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full rounded-3xl border border-[#FBD6B3]/70 bg-white/75 pl-10 pr-4 py-2 text-sm text-slate-700 placeholder:text-slate-400 focus:border-[#fb923c] focus:outline-none focus:ring-2 focus:ring-[#fed7aa]"
+                />
+              </div>
+              <div>
+                <select
+                  value={selectedProgram}
+                  onChange={(e) => setSelectedProgram(e.target.value)}
+                  className="w-full rounded-3xl border border-[#FBD6B3]/70 bg-white/75 px-4 py-2 text-sm text-slate-700 focus:border-[#fb923c] focus:outline-none focus:ring-2 focus:ring-[#fed7aa]"
+                >
+                  {programOptions.map(option => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
+                  className="w-full rounded-3xl border border-[#FBD6B3]/70 bg-white/75 px-4 py-2 text-sm text-slate-700 focus:border-[#fb923c] focus:outline-none focus:ring-2 focus:ring-[#fed7aa]"
+                >
+                  <option value="all">Estado: todos</option>
+                  <option value="active">Solo activos</option>
+                  <option value="inactive">Solo inactivos</option>
+                </select>
+              </div>
+              <div>
+                <select
+                  value={assignmentFilter}
+                  onChange={(e) => setAssignmentFilter(e.target.value as typeof assignmentFilter)}
+                  className="w-full rounded-3xl border border-[#FBD6B3]/70 bg-white/75 px-4 py-2 text-sm text-slate-700 focus:border-[#fb923c] focus:outline-none focus:ring-2 focus:ring-[#fed7aa]"
+                >
+                  <option value="all">Asignación: todas</option>
+                  <option value="assigned">Con programa</option>
+                  <option value="unassigned">Sin programa</option>
+                </select>
+              </div>
+              <div>
+                <select
+                  value={genderFilter}
+                  onChange={(e) => setGenderFilter(e.target.value as typeof genderFilter)}
+                  className="w-full rounded-3xl border border-[#FBD6B3]/70 bg-white/75 px-4 py-2 text-sm text-slate-700 focus:border-[#fb923c] focus:outline-none focus:ring-2 focus:ring-[#fed7aa]"
+                >
+                  <option value="all">Género: todos</option>
+                  <option value="female">Femenino</option>
+                  <option value="male">Masculino</option>
+                  <option value="other">Otro / no binario</option>
+                </select>
+              </div>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              {[
+                {
+                  label: 'Con programa (filtro)',
+                  value: filteredAssignedCount.toLocaleString(),
+                  detail: 'Participando en planes',
+                },
+                {
+                  label: 'Sin asignación (filtro)',
+                  value: filteredAwaitingAssignmentCount.toLocaleString(),
+                  detail: 'Pendientes de programa',
+                },
+                {
+                  label: 'Programas filtrados',
+                  value: filteredProgramsCount.toLocaleString(),
+                  detail: 'Cobertura actual',
+                },
+                {
+                  label: 'Asignados totales',
+                  value: assignedProgramCount.toLocaleString(),
+                  detail: 'En toda la base',
+                },
+              ].map(item => (
+                <div
+                  key={item.label}
+                  className="rounded-3xl border border-[#FBD6B3]/70 bg-white/70 px-4 py-3 text-slate-900 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]"
+                >
+                  <p className="text-[0.65rem] font-semibold uppercase tracking-[0.45em] text-[#B45309]/80">
+                    {item.label}
+                  </p>
+                  <p className="text-2xl font-semibold text-slate-900">{item.value}</p>
+                  <p className="text-xs text-[#B45309]/70">{item.detail}</p>
+                </div>
+              ))}
+            </div>
+          </div>
           <div className="overflow-hidden rounded-2xl border border-[#FFE4D6]/70 shadow-inner">
-            <Table data={patients} columns={patientColumns} />
+            <Table data={filteredPatients} columns={patientColumns} />
           </div>
         </Card>
       </section>
