@@ -19,6 +19,7 @@ export interface Patient {
   firstName: string;
   lastName: string;
   email: string;
+  cedula?: string | null;
   dateOfBirth: Date;
   gender: 'male' | 'female' | 'other';
   phone?: string;

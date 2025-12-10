@@ -81,6 +81,76 @@ const normalizeDayCode = (value: any): string | null => {
   return null;
 };
 
+const normalizeGenderValue = (value: unknown): 'male' | 'female' | 'other' => {
+  if (value === null || typeof value === 'undefined') {
+    return 'other';
+  }
+
+  const normalized = String(value)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase();
+
+  if (!normalized) {
+    return 'other';
+  }
+
+  if (
+    [
+      'male',
+      'masculino',
+      'masculina',
+      'hombre',
+      'm',
+      'masc',
+      'varon',
+      'caballero',
+    ].includes(normalized)
+  ) {
+    return 'male';
+  }
+
+  if (
+    [
+      'female',
+      'femenino',
+      'femenina',
+      'mujer',
+      'f',
+      'feme',
+      'fem',
+      'dama',
+    ].includes(normalized)
+  ) {
+    return 'female';
+  }
+
+  if (
+    [
+      'other',
+      'otro',
+      'otra',
+      'otros',
+      'otras',
+      'sin especificar',
+      'no especificado',
+      'no especificada',
+      'n/a',
+      'na',
+      'desconocido',
+      'indefinido',
+      'no binario',
+      'non binary',
+      'non-binary',
+    ].includes(normalized)
+  ) {
+    return 'other';
+  }
+
+  return 'other';
+};
+
 const mapProgramFromApi = (program: any, fallbackCreatedBy: string | null = null): Program => {
   const createdAt = parseDate(program?.created_at ?? program?.createdAt) ?? new Date();
   const updatedAt = parseDate(program?.updated_at ?? program?.updatedAt);
@@ -574,6 +644,7 @@ const mockPatients: Patient[] = [
     firstName: 'Jane',
     lastName: 'Doe',
     email: 'jane.doe@email.com',
+    cedula: 'V-12345678',
     dateOfBirth: new Date('1990-05-15'),
     gender: 'female',
     phone: '+1234567890',
@@ -587,6 +658,7 @@ const mockPatients: Patient[] = [
     firstName: 'John',
     lastName: 'Smith',
     email: 'john.smith@email.com',
+    cedula: 'V-87654321',
     dateOfBirth: new Date('1985-10-20'),
     gender: 'male',
     phone: '+1234567891',
@@ -892,8 +964,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     firstName: p.nombres ?? '',
     lastName: p.apellidos ?? '',
     email: p.contacto_correo ?? p.contacto ?? '',
+    cedula: typeof p.cedula === 'string' && p.cedula.trim().length ? p.cedula.trim() : null,
     dateOfBirth: p.fecha_nacimiento ? new Date(p.fecha_nacimiento) : new Date(),
-    gender: (p.genero === 'male' || p.genero === 'female') ? p.genero : 'other',
+    gender: normalizeGenderValue(p.genero),
     phone: p.telefono ?? p.contacto_telefono ?? undefined,
     address: p.direccion ?? undefined,
     assignedTherapists: [],
@@ -1026,14 +1099,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   useEffect(() => {
     let mounted = true;
 
-    const normalizeGenderLabel = (value: string | null | undefined): 'male' | 'female' | 'other' => {
-      const normalized = (value ?? '').toString().trim().toLowerCase();
-      if (['male', 'masculino', 'hombre', 'm'].includes(normalized)) return 'male';
-      if (['female', 'femenino', 'mujer', 'f'].includes(normalized)) return 'female';
-      if (['other', 'otro', 'otros', 'otras', 'sin especificar', 'no especificado', 'n/a', ''].includes(normalized)) return 'other';
-      return 'other';
-    };
-
     (async () => {
       try {
         const res = await fetch(`${apiBase}/dashboard/summary`);
@@ -1068,7 +1133,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
         const sums = breakdown.reduce<Record<'male' | 'female' | 'other', number>>(
           (acc, slice) => {
-            const normalized = normalizeGenderLabel(slice.label);
+            const normalized = normalizeGenderValue(slice.label);
             acc[normalized] += slice.count;
             return acc;
           },
@@ -1130,6 +1195,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       headers.Authorization = `Bearer ${token}`;
     }
 
+    const normalizedCedula = typeof patientData.cedula === 'string' ? patientData.cedula.trim() : '';
+
     const payload = {
       nombres: patientData.firstName,
       apellidos: patientData.lastName,
@@ -1141,6 +1208,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       id_programa: patientData.programId ? Number(patientData.programId) : null,
       activo: patientData.isActive ? 1 : 0,
       user_role: 'patient',
+      cedula: normalizedCedula.length ? normalizedCedula : null,
     };
 
     const response = await fetch(`${apiBase}/patient`, {
@@ -1183,6 +1251,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       } else if (typeof programValue !== 'undefined') {
         const maybeNum = Number(programValue);
         payload.id_programa = Number.isNaN(maybeNum) ? programValue : maybeNum;
+      }
+    }
+    if (Object.prototype.hasOwnProperty.call(patientData, 'cedula')) {
+      const rawCedula = patientData.cedula;
+      if (rawCedula === null) {
+        payload.cedula = null;
+      } else if (typeof rawCedula !== 'undefined') {
+        const normalized = String(rawCedula).trim();
+        payload.cedula = normalized.length ? normalized : null;
       }
     }
 

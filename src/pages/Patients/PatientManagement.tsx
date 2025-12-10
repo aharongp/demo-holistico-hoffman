@@ -41,16 +41,83 @@ export const PatientManagement: React.FC = () => {
     gender: 'female' as 'male' | 'female' | 'other',
     phone: '',
     address: '',
+    cedula: '',
   });
+  const [selectedProgram, setSelectedProgram] = useState<string>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
+  const [assignmentFilter, setAssignmentFilter] = useState<'all' | 'assigned' | 'unassigned'>('all');
+  const [genderFilter, setGenderFilter] = useState<'all' | Patient['gender']>('all');
+
+  const programNameById = useMemo(() => {
+    const lookup: Record<string, string> = {};
+    programs.forEach((program) => {
+      lookup[program.id] = program.name;
+    });
+    return lookup;
+  }, [programs]);
+
+  const programOptions = useMemo(() => {
+    const sortedPrograms = [...programs]
+      .map((program) => ({ value: program.id, label: program.name }))
+      .sort((a, b) => a.label.localeCompare(b.label, 'es'));
+    return [
+      { value: 'all', label: 'Todos los programas' },
+      { value: 'no-program', label: 'Sin programa asignado' },
+      ...sortedPrograms,
+    ];
+  }, [programs]);
 
   const filteredPatients = useMemo(() => {
-    const normalizedTerm = searchTerm.toLowerCase();
-    return patients.filter((patient) =>
-      patient.firstName.toLowerCase().includes(normalizedTerm) ||
-      patient.lastName.toLowerCase().includes(normalizedTerm) ||
-      patient.email.toLowerCase().includes(normalizedTerm),
-    );
-  }, [patients, searchTerm]);
+    const normalizedTerm = searchTerm.trim().toLowerCase();
+
+    return patients.filter((patient) => {
+      const fullName = `${patient.firstName} ${patient.lastName}`.toLowerCase();
+      const matchesTerm = !normalizedTerm
+        || fullName.includes(normalizedTerm)
+        || patient.firstName.toLowerCase().includes(normalizedTerm)
+        || patient.lastName.toLowerCase().includes(normalizedTerm)
+        || patient.email.toLowerCase().includes(normalizedTerm)
+        || (patient.cedula?.toLowerCase().includes(normalizedTerm) ?? false);
+
+      if (!matchesTerm) {
+        return false;
+      }
+
+      const matchesProgram = selectedProgram === 'all'
+        ? true
+        : selectedProgram === 'no-program'
+          ? !patient.programId
+          : patient.programId === selectedProgram;
+
+      if (!matchesProgram) {
+        return false;
+      }
+
+      const matchesStatus = statusFilter === 'all'
+        ? true
+        : statusFilter === 'active'
+          ? patient.isActive
+          : !patient.isActive;
+
+      if (!matchesStatus) {
+        return false;
+      }
+
+      const matchesAssignment = assignmentFilter === 'all'
+        ? true
+        : assignmentFilter === 'assigned'
+          ? Boolean(patient.programId)
+          : !patient.programId;
+
+      if (!matchesAssignment) {
+        return false;
+      }
+
+      const matchesGender = genderFilter === 'all' ? true : patient.gender === genderFilter;
+
+      return matchesGender;
+    });
+  }, [patients, searchTerm, selectedProgram, statusFilter, assignmentFilter, genderFilter]);
 
   const { totalPatients, activePatients, assignedProgramCount } = useMemo(() => {
     let active = 0;
@@ -72,6 +139,17 @@ export const PatientManagement: React.FC = () => {
 
   const filteredPatientCount = filteredPatients.length;
   const awaitingAssignmentCount = Math.max(totalPatients - assignedProgramCount, 0);
+  const { filteredProgramsCount } = useMemo(() => {
+    const base = new Set<string>();
+    filteredPatients.forEach((patient) => {
+      if (patient.programId) {
+        base.add(patient.programId);
+      }
+    });
+    return {
+      filteredProgramsCount: base.size,
+    };
+  }, [filteredPatients]);
 
   const handleOpenModal = (patient?: Patient) => {
     setFormError(null);
@@ -85,6 +163,7 @@ export const PatientManagement: React.FC = () => {
         gender: patient.gender,
         phone: patient.phone || '',
         address: patient.address || '',
+        cedula: patient.cedula ?? '',
       });
     } else {
       setFormData({
@@ -95,6 +174,7 @@ export const PatientManagement: React.FC = () => {
         gender: 'female',
         phone: '',
         address: '',
+        cedula: '',
       });
     }
     setIsModalOpen(true);
@@ -177,6 +257,7 @@ export const PatientManagement: React.FC = () => {
       dateOfBirth: new Date(formData.dateOfBirth),
       assignedTherapists: editingPatient?.assignedTherapists || [],
       isActive: true,
+      cedula: formData.cedula ? formData.cedula.trim() : undefined,
     };
 
     try {
@@ -214,6 +295,11 @@ export const PatientManagement: React.FC = () => {
       render: (patient: Patient) => `${patient.firstName} ${patient.lastName}`,
     },
     {
+      key: 'cedula',
+      header: 'Cédula',
+      render: (patient: Patient) => patient.cedula ?? 'Sin registro',
+    },
+    {
       key: 'dateOfBirth',
       header: 'Edad',
       render: (patient: Patient) => {
@@ -237,6 +323,17 @@ export const PatientManagement: React.FC = () => {
       key: 'phone',
       header: 'Teléfono',
       render: (patient: Patient) => patient.phone || 'Sin registro',
+    },
+    {
+      key: 'program',
+      header: 'Programa',
+      render: (patient: Patient) => {
+        if (!patient.programId) {
+          return <span className="text-xs text-slate-400">Sin asignar</span>;
+        }
+        const programLabel = programNameById[patient.programId] ?? 'Programa sin nombre';
+        return <span className="text-xs font-medium text-violet-600">{programLabel}</span>;
+      },
     },
     {
       key: 'actions',
@@ -320,6 +417,7 @@ export const PatientManagement: React.FC = () => {
             { label: 'En seguimiento', value: totalPatients.toLocaleString() },
             { label: 'Coincidencias', value: filteredPatientCount.toLocaleString() },
             { label: 'Con programa activo', value: assignedProgramCount.toLocaleString() },
+            { label: 'Programas filtrados', value: filteredProgramsCount.toLocaleString() },
           ].map((item) => (
             <span key={item.label} className="rounded-2xl border border-white/60 bg-white/80 px-3 py-3 text-center text-slate-600">
               <strong className="block text-2xl font-semibold tracking-normal text-slate-900">{item.value}</strong>
@@ -370,18 +468,83 @@ export const PatientManagement: React.FC = () => {
       </div>
 
       <Card className="border border-white/40 bg-white/85 shadow-[0_30px_80px_-65px_rgba(109,40,217,0.75)] backdrop-blur-xl">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6">
-          <div className="relative w-full sm:max-w-xs">
-            <Search className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input
-              type="text"
-              placeholder="Filtra por nombre, correo o programa"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full rounded-3xl border border-slate-200/60 bg-slate-50/70 pl-10 pr-4 py-2 text-sm focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-200"
-            />
+        <div className="flex flex-col gap-4 sm:flex-col lg:flex-row lg:items-center lg:justify-between mb-6">
+          <div className="grid w-full gap-3 lg:grid-cols-[minmax(0,1.8fr)_repeat(3,minmax(0,1fr))] xl:grid-cols-[minmax(0,2fr)_repeat(4,minmax(0,1fr))]">
+            <div className="relative">
+              <Search className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Busca por nombre, cédula o correo"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full rounded-3xl border border-slate-200/60 bg-slate-50/70 pl-10 pr-4 py-2 text-sm focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-200"
+              />
+            </div>
+            <div>
+              <select
+                value={selectedProgram}
+                onChange={(e) => setSelectedProgram(e.target.value)}
+                className="w-full rounded-3xl border border-slate-200/60 bg-slate-50/70 px-4 py-2 text-sm focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-200"
+              >
+                {programOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
+                className="w-full rounded-3xl border border-slate-200/60 bg-slate-50/70 px-4 py-2 text-sm focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-200"
+              >
+                <option value="all">Estado: todos</option>
+                <option value="active">Solo activos</option>
+                <option value="inactive">Solo inactivos</option>
+              </select>
+            </div>
+            <div>
+              <select
+                value={assignmentFilter}
+                onChange={(e) => setAssignmentFilter(e.target.value as typeof assignmentFilter)}
+                className="w-full rounded-3xl border border-slate-200/60 bg-slate-50/70 px-4 py-2 text-sm focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-200"
+              >
+                <option value="all">Asignación: todas</option>
+                <option value="assigned">Con programa</option>
+                <option value="unassigned">Sin programa</option>
+              </select>
+            </div>
+            <div className="hidden xl:block">
+              <select
+                value={genderFilter}
+                onChange={(e) => setGenderFilter(e.target.value as typeof genderFilter)}
+                className="w-full rounded-3xl border border-slate-200/60 bg-slate-50/70 px-4 py-2 text-sm focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-200"
+              >
+                <option value="all">Género: todos</option>
+                <option value="female">Femenino</option>
+                <option value="male">Masculino</option>
+                <option value="other">Otro / no binario</option>
+              </select>
+            </div>
           </div>
-          <p className="text-xs uppercase tracking-[0.4em] text-slate-400">{filteredPatientCount.toLocaleString()} resultados</p>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between lg:gap-6">
+            <div className="xl:hidden">
+              <select
+                value={genderFilter}
+                onChange={(e) => setGenderFilter(e.target.value as typeof genderFilter)}
+                className="w-full rounded-3xl border border-slate-200/60 bg-slate-50/70 px-4 py-2 text-sm focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-200"
+              >
+                <option value="all">Género: todos</option>
+                <option value="female">Femenino</option>
+                <option value="male">Masculino</option>
+                <option value="other">Otro / no binario</option>
+              </select>
+            </div>
+            <p className="text-xs uppercase tracking-[0.4em] text-slate-400 text-center sm:text-right">
+              {filteredPatientCount.toLocaleString()} resultados
+            </p>
+          </div>
         </div>
 
         <Table data={filteredPatients} columns={columns} />
@@ -466,7 +629,7 @@ export const PatientManagement: React.FC = () => {
             />
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Fecha de nacimiento
@@ -476,6 +639,18 @@ export const PatientManagement: React.FC = () => {
                 required
                 value={formData.dateOfBirth}
                 onChange={(e) => setFormData(prev => ({ ...prev, dateOfBirth: e.target.value }))}
+                className="w-full rounded-2xl border border-slate-200 bg-slate-50/70 px-3 py-2 focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/10"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Cédula / Documento
+              </label>
+              <input
+                type="text"
+                value={formData.cedula}
+                onChange={(e) => setFormData(prev => ({ ...prev, cedula: e.target.value }))}
+                placeholder="Ej: V-12345678"
                 className="w-full rounded-2xl border border-slate-200 bg-slate-50/70 px-3 py-2 focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/10"
               />
             </div>
