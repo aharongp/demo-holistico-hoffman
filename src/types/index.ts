@@ -26,6 +26,7 @@ export interface Patient {
   address?: string;
   assignedTherapists: User[];
   programId?: string; // optional assigned program
+  ribbonId?: number | null;
   createdAt: Date;
   isActive: boolean;
 }
@@ -247,4 +248,20 @@ export interface Criterion {
   createdBy?: string | null;
   createdAt?: Date | null;
   updatedAt?: Date | null;
+}
+
+export interface Ribbon {
+  id: number;
+  name: string | null;
+  color: string | null;
+  order: number | null;
+  description: string | null;
+  userCreated: string | null;
+  createdAt: Date | null;
+  updatedAt: Date | null;
+  bgColor: string | null;
+  nextRibbonId: number | null;
+  hexColor: string | null;
+  thread: string | null;
+  layer: number | null;
 }

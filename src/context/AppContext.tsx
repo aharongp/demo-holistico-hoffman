@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback, useMemo, useRef } from 'react';
-import { Patient, Instrument, Assignment, Program, ProgramActivity, ProgramDetails, EvolutionEntry, DashboardStats, GenderDistributionSlice, PatientsByProgramSlice, InstrumentType, Question, QuestionAnswer, QuestionOption } from '../types';
+import { Patient, Instrument, Assignment, Program, ProgramActivity, ProgramDetails, EvolutionEntry, DashboardStats, GenderDistributionSlice, PatientsByProgramSlice, InstrumentType, Question, QuestionAnswer, QuestionOption, Ribbon } from '../types';
 import { useAuth } from './AuthContext';
 
 type ProgramInput = {
@@ -26,6 +26,19 @@ type InstrumentTypeInput = {
 };
 
 type InstrumentTypeUpdateInput = Partial<InstrumentTypeInput>;
+
+type RibbonInput = {
+  name?: string | null;
+  color?: string | null;
+  order?: number | null;
+  description?: string | null;
+  userCreated?: string | null;
+  bgColor?: string | null;
+  nextRibbonId?: number | null;
+  hexColor?: string | null;
+  thread?: string | null;
+  layer?: number | null;
+};
 
 const parseDate = (value: any): Date | null => {
   if (!value) return null;
@@ -203,6 +216,92 @@ const mapProgramDetailsFromApi = (program: any, fallbackCreatedBy: string | null
     ...base,
     activities: rawActivities.map((activity: any) => mapProgramActivityFromApi(activity)),
   };
+};
+
+const normalizeRibbonString = (value: unknown): string | null => {
+  if (value === null || typeof value === 'undefined') {
+    return null;
+  }
+  const normalized = String(value).trim();
+  return normalized.length ? normalized : null;
+};
+
+const normalizeRibbonNumber = (value: unknown): number | null => {
+  if (value === null || typeof value === 'undefined') {
+    return null;
+  }
+  const parsed = typeof value === 'number' ? value : Number(String(value).trim());
+  if (!Number.isFinite(parsed)) {
+    return null;
+  }
+  return Math.trunc(parsed);
+};
+
+const mapRibbonFromApi = (raw: any): Ribbon => {
+  const idValue = normalizeRibbonNumber(raw?.id);
+  return {
+    id: idValue ?? 0,
+    name: normalizeRibbonString(raw?.nombre ?? raw?.name),
+    color: normalizeRibbonString(raw?.color),
+    order: normalizeRibbonNumber(raw?.orden ?? raw?.order),
+    description: normalizeRibbonString(raw?.descripcion ?? raw?.description),
+    userCreated: normalizeRibbonString(raw?.user_created ?? raw?.userCreated),
+    createdAt: parseDate(raw?.created_at ?? raw?.createdAt),
+    updatedAt: parseDate(raw?.updated_at ?? raw?.updatedAt),
+    bgColor: normalizeRibbonString(raw?.bg_color ?? raw?.bgColor),
+    nextRibbonId: normalizeRibbonNumber(raw?.siguiente_cinta ?? raw?.siguienteCinta ?? raw?.nextRibbonId),
+    hexColor: normalizeRibbonString(raw?.hexadecimal ?? raw?.hexColor ?? raw?.hex),
+    thread: normalizeRibbonString(raw?.hilo ?? raw?.thread),
+    layer: normalizeRibbonNumber(raw?.cinta ?? raw?.layer),
+  };
+};
+
+const buildRibbonPayload = (input: RibbonInput) => {
+  const payload: Record<string, unknown> = {};
+
+  if ('name' in input) {
+    payload.nombre = normalizeRibbonString(input.name ?? null);
+  }
+  if ('color' in input) {
+    payload.color = normalizeRibbonString(input.color ?? null);
+  }
+  if ('order' in input) {
+    payload.orden = normalizeRibbonNumber(input.order ?? null);
+  }
+  if ('description' in input) {
+    payload.descripcion = normalizeRibbonString(input.description ?? null);
+  }
+  if ('userCreated' in input) {
+    payload.user_created = normalizeRibbonString(input.userCreated ?? null);
+  }
+  if ('bgColor' in input) {
+    payload.bg_color = normalizeRibbonString(input.bgColor ?? null);
+  }
+  if ('nextRibbonId' in input) {
+    payload.siguiente_cinta = normalizeRibbonNumber(input.nextRibbonId ?? null);
+  }
+  if ('hexColor' in input) {
+    payload.hexadecimal = normalizeRibbonString(input.hexColor ?? null);
+  }
+  if ('thread' in input) {
+    payload.hilo = normalizeRibbonString(input.thread ?? null);
+  }
+  if ('layer' in input) {
+    payload.cinta = normalizeRibbonNumber(input.layer ?? null);
+  }
+
+  return payload;
+};
+
+const sortRibbonsList = (list: Ribbon[]): Ribbon[] => {
+  return [...list].sort((a, b) => {
+    const orderA = typeof a.order === 'number' && Number.isFinite(a.order) ? a.order : Number.MAX_SAFE_INTEGER;
+    const orderB = typeof b.order === 'number' && Number.isFinite(b.order) ? b.order : Number.MAX_SAFE_INTEGER;
+    if (orderA !== orderB) {
+      return orderA - orderB;
+    }
+    return a.id - b.id;
+  });
 };
 
 const normalizeQuestionType = (value: any): Question['type'] => {
@@ -590,6 +689,7 @@ interface AppContextType {
   instruments: Instrument[];
   assignments: Assignment[];
   programs: Program[];
+  ribbons: Ribbon[];
   instrumentTypes: InstrumentType[];
   evolutionEntries: EvolutionEntry[];
   dashboardStats: DashboardStats;
@@ -606,9 +706,15 @@ interface AppContextType {
   createQuestion: (instrumentId: string, input: QuestionInput) => Promise<Question>;
   updateQuestion: (instrumentId: string, questionId: string, input: QuestionInput) => Promise<Question>;
   deleteQuestion: (instrumentId: string, questionId: string) => Promise<boolean>;
+  assignInstrumentToPatients: (instrumentTypeId: string, patientIds: string[]) => Promise<void>;
   
   addAssignment: (assignment: Omit<Assignment, 'id' | 'assignedAt'>) => void;
   updateAssignment: (id: string, assignment: Partial<Assignment>) => void;
+
+  reloadRibbons: () => Promise<void>;
+  addRibbon: (input: RibbonInput) => Promise<Ribbon>;
+  updateRibbon: (id: number, input: RibbonInput) => Promise<Ribbon>;
+  deleteRibbon: (id: number) => Promise<boolean>;
   
   addProgram: (program: ProgramInput) => Promise<Program>;
   updateProgram: (id: string, program: Partial<ProgramInput>) => Promise<Program | null>;
@@ -745,6 +851,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   ];
 
   const [programs, setPrograms] = useState<Program[]>(mockPrograms);
+  const [ribbons, setRibbons] = useState<Ribbon[]>([]);
   const [instrumentTypes, setInstrumentTypes] = useState<InstrumentType[]>([]);
   const [evolutionEntries, setEvolutionEntries] = useState<EvolutionEntry[]>([]);
   const [dashboardStats, setDashboardStats] = useState<DashboardStats>(mockDashboardStats);
@@ -957,6 +1064,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     [apiBase],
   );
 
+  const normalizePatientRibbonId = (value: unknown): number | null => {
+    if (value === null || typeof value === 'undefined') {
+      return null;
+    }
+
+    const numeric = typeof value === 'number' ? value : Number(String(value).trim());
+    if (!Number.isFinite(numeric)) {
+      return null;
+    }
+
+    return Math.trunc(numeric);
+  };
+
   // Map backend paciente -> frontend Patient
   const mapPacienteToPatient = (p: any): Patient => ({
     id: String(p.id),
@@ -971,6 +1091,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     address: p.direccion ?? undefined,
     assignedTherapists: [],
     programId: p.id_programa ? String(p.id_programa) : undefined,
+    ribbonId: normalizePatientRibbonId(p.id_cinta ?? p.ribbonId ?? p.cinta ?? p.idCinta ?? null),
     createdAt: p.created_at ? new Date(p.created_at) : new Date(),
     isActive: (typeof p.activo !== 'undefined') ? Boolean(p.activo) : true,
   });
@@ -1020,6 +1141,35 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     })();
     return () => { mounted = false; };
   }, [apiBase, currentUserDisplayName]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    (async () => {
+      try {
+        const headers: Record<string, string> = {};
+        if (token) {
+          headers.Authorization = `Bearer ${token}`;
+        }
+
+        const res = await fetch(`${apiBase}/patients/ribbon`, { headers });
+        if (!res.ok) {
+          throw new Error(`Failed to fetch ribbons: ${res.status}`);
+        }
+
+        const data = await res.json();
+        if (!mounted) return;
+        const mapped = Array.isArray(data) ? data.map(mapRibbonFromApi) : [];
+        setRibbons(sortRibbonsList(mapped));
+      } catch (err) {
+        console.error('Error loading ribbons from API.', err);
+      }
+    })();
+
+    return () => {
+      mounted = false;
+    };
+  }, [apiBase, token]);
 
   // Load instruments from backend on mount
   useEffect(() => {
@@ -1251,6 +1401,22 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       } else if (typeof programValue !== 'undefined') {
         const maybeNum = Number(programValue);
         payload.id_programa = Number.isNaN(maybeNum) ? programValue : maybeNum;
+      }
+    }
+    if (Object.prototype.hasOwnProperty.call(patientData, 'ribbonId')) {
+      const rawRibbonId = patientData.ribbonId;
+      if (rawRibbonId === null) {
+        payload.id_cinta = null;
+      } else if (typeof rawRibbonId !== 'undefined') {
+        const numericRibbon = typeof rawRibbonId === 'number'
+          ? rawRibbonId
+          : Number(String(rawRibbonId).trim());
+
+        if (!Number.isFinite(numericRibbon)) {
+          throw new Error('El identificador de la cinta es inválido');
+        }
+
+        payload.id_cinta = Math.trunc(numericRibbon);
       }
     }
     if (Object.prototype.hasOwnProperty.call(patientData, 'cedula')) {
@@ -2111,6 +2277,60 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   }, [apiBase]);
 
+  const assignInstrumentToPatients = useCallback(async (instrumentTypeId: string, patientIds: string[]): Promise<void> => {
+    const numericInstrumentTypeId = Number(instrumentTypeId);
+    if (Number.isNaN(numericInstrumentTypeId)) {
+      throw new Error('El tipo de instrumento es inválido.');
+    }
+
+    const uniquePatientIds = Array.from(
+      new Set(
+        patientIds
+          .map((value) => (value ?? '').toString().trim())
+          .filter((value) => value.length > 0),
+      ),
+    );
+
+    if (!uniquePatientIds.length) {
+      throw new Error('Selecciona al menos un paciente.');
+    }
+
+    const errors: string[] = [];
+
+    for (const patientId of uniquePatientIds) {
+      const numericPatientId = Number(patientId);
+      if (Number.isNaN(numericPatientId)) {
+        errors.push(`Paciente inválido (${patientId}).`);
+        continue;
+      }
+
+      try {
+        const res = await fetch(`${apiBase}/patient-instruments`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            id_paciente: numericPatientId,
+            id_instrumento_tipo: numericInstrumentTypeId,
+          }),
+        });
+
+        if (!res.ok) {
+          const text = await res.text().catch(() => null);
+          errors.push(text || `No se pudo asignar el instrumento al paciente ${patientId} (status ${res.status}).`);
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Error desconocido al asignar el instrumento';
+        errors.push(`${patientId}: ${message}`);
+      }
+    }
+
+    if (errors.length) {
+      throw new Error(errors.join(' | '));
+    }
+  }, [apiBase]);
+
   const addAssignment = (assignmentData: Omit<Assignment, 'id' | 'assignedAt'>) => {
     const newAssignment: Assignment = {
       ...assignmentData,
@@ -2123,6 +2343,100 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const updateAssignment = (id: string, assignmentData: Partial<Assignment>) => {
     setAssignments(prev => prev.map(a => a.id === id ? { ...a, ...assignmentData } : a));
   };
+
+  const reloadRibbons = useCallback(async (): Promise<void> => {
+    const headers: Record<string, string> = {};
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+
+    const res = await fetch(`${apiBase}/patients/ribbon`, { headers });
+    if (!res.ok) {
+      const text = await res.text().catch(() => null);
+      throw new Error(text || `No se pudieron obtener las cintas (status ${res.status})`);
+    }
+
+    const data = await res.json();
+    const mapped = Array.isArray(data) ? data.map(mapRibbonFromApi) : [];
+    setRibbons(sortRibbonsList(mapped));
+  }, [apiBase, token]);
+
+  const addRibbon = useCallback(async (input: RibbonInput): Promise<Ribbon> => {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+
+    const preparedInput: RibbonInput = { ...input };
+    if (!preparedInput.userCreated && currentUserDisplayName) {
+      preparedInput.userCreated = currentUserDisplayName;
+    }
+
+    const payload = buildRibbonPayload(preparedInput);
+    const res = await fetch(`${apiBase}/patients/ribbon`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => null);
+      throw new Error(text || `No se pudo crear la cinta (status ${res.status})`);
+    }
+
+    const data = await res.json();
+    const mapped = mapRibbonFromApi(data);
+    setRibbons(prev => sortRibbonsList([...prev, mapped]));
+    return mapped;
+  }, [apiBase, token, currentUserDisplayName]);
+
+  const updateRibbon = useCallback(async (id: number, input: RibbonInput): Promise<Ribbon> => {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+
+    const payload = buildRibbonPayload(input);
+    const res = await fetch(`${apiBase}/patients/ribbon/${id}`, {
+      method: 'PATCH',
+      headers,
+      body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => null);
+      throw new Error(text || `No se pudo actualizar la cinta (status ${res.status})`);
+    }
+
+    const data = await res.json();
+    const mapped = mapRibbonFromApi(data);
+    setRibbons(prev => sortRibbonsList(prev.map(ribbon => (ribbon.id === mapped.id ? mapped : ribbon))));
+    return mapped;
+  }, [apiBase, token]);
+
+  const deleteRibbon = useCallback(async (id: number): Promise<boolean> => {
+    const headers: Record<string, string> = {};
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+
+    const res = await fetch(`${apiBase}/patients/ribbon/${id}`, {
+      method: 'DELETE',
+      headers,
+    });
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => null);
+      throw new Error(text || `No se pudo eliminar la cinta (status ${res.status})`);
+    }
+
+    setRibbons(prev => prev.filter(ribbon => ribbon.id !== id));
+    return true;
+  }, [apiBase, token]);
 
   const addProgram = useCallback(async (programData: ProgramInput): Promise<Program> => {
     const payload = {
@@ -2465,6 +2779,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       instruments,
       assignments,
       programs,
+      ribbons,
       instrumentTypes,
       evolutionEntries,
       dashboardStats,
@@ -2474,12 +2789,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       addInstrument,
       updateInstrument,
       deleteInstrument,
-  getInstrumentDetails,
-  createQuestion,
-  updateQuestion,
-  deleteQuestion,
+      getInstrumentDetails,
+      createQuestion,
+      updateQuestion,
+      deleteQuestion,
+      assignInstrumentToPatients,
       addAssignment,
       updateAssignment,
+      reloadRibbons,
+      addRibbon,
+      updateRibbon,
+      deleteRibbon,
       addProgram,
       updateProgram,
       deleteProgram,

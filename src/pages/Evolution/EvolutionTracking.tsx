@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Plus, TrendingUp, User, Heart, Scale, Droplets, RefreshCw, Edit, Trash2, Search } from 'lucide-react';
+import { Plus, TrendingUp, User, Heart, Scale, Droplets, RefreshCw, Edit, Trash2, Search, LineChart, Ribbon } from 'lucide-react';
 import { Card } from '../../components/UI/Card';
 import { Button } from '../../components/UI/Button';
 import { Chart } from '../../components/Dashboard/Chart';
@@ -286,7 +286,7 @@ const parseDateInput = (value: string, endOfDay: boolean): number | null => {
 
 export const EvolutionTracking: React.FC = () => {
   const { user, token } = useAuth();
-  const { addEvolutionEntry, patients, programs } = useApp();
+  const { addEvolutionEntry, patients, programs, ribbons, reloadRibbons, updatePatient } = useApp();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
   const [activeTab, setActiveTab] = useState('mood');
@@ -323,7 +323,43 @@ export const EvolutionTracking: React.FC = () => {
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [isProcessingEdit, setIsProcessingEdit] = useState(false);
   const [isProcessingDelete, setIsProcessingDelete] = useState(false);
+  const [isRibbonModalOpen, setIsRibbonModalOpen] = useState(false);
+  const [patientForRibbon, setPatientForRibbon] = useState<Patient | null>(null);
+  const [selectedRibbonId, setSelectedRibbonId] = useState<string>('');
+  const [isUpdatingRibbon, setIsUpdatingRibbon] = useState(false);
+  const [isLoadingRibbonOptions, setIsLoadingRibbonOptions] = useState(false);
+  const [ribbonModalError, setRibbonModalError] = useState<string | null>(null);
   const apiBase = useMemo(() => (import.meta as any).env?.VITE_API_BASE ?? 'http://localhost:3000', []);
+
+  useEffect(() => {
+    if (!isRibbonModalOpen) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const fetchRibbonsList = async () => {
+      setIsLoadingRibbonOptions(true);
+      try {
+        await reloadRibbons();
+      } catch (error) {
+        if (!cancelled) {
+          console.error('No se pudieron cargar las cintas para la asignacion manual.', error);
+          setRibbonModalError('No se pudieron cargar las cintas. Intenta nuevamente.');
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoadingRibbonOptions(false);
+        }
+      }
+    };
+
+    void fetchRibbonsList();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isRibbonModalOpen, reloadRibbons]);
   const storedUserId = useMemo(() => {
     if (typeof window === 'undefined') {
       return null;
@@ -1761,6 +1797,77 @@ export const EvolutionTracking: React.FC = () => {
     }
   };
 
+  const resolveRibbonLabel = useCallback((id: number | null | undefined): string => {
+    if (typeof id !== 'number' || Number.isNaN(id)) {
+      return 'Sin cinta asignada';
+    }
+
+    const match = ribbons.find(ribbon => ribbon.id === id);
+    if (match) {
+      const name = match.name?.trim();
+      return name?.length ? name : `Cinta ${match.id}`;
+    }
+
+    return `Cinta ${id}`;
+  }, [ribbons]);
+
+  const handleOpenRibbonModal = useCallback((patient: Patient) => {
+    setPatientForRibbon(patient);
+    if (typeof patient.ribbonId === 'number' && Number.isFinite(patient.ribbonId)) {
+      setSelectedRibbonId(String(patient.ribbonId));
+    } else {
+      setSelectedRibbonId('');
+    }
+    setRibbonModalError(null);
+    setIsRibbonModalOpen(true);
+  }, []);
+
+  const handleCloseRibbonModal = useCallback(() => {
+    setIsRibbonModalOpen(false);
+    setPatientForRibbon(null);
+    setSelectedRibbonId('');
+    setRibbonModalError(null);
+    setIsLoadingRibbonOptions(false);
+    setIsUpdatingRibbon(false);
+  }, []);
+
+  const handleRibbonChangeSubmit = useCallback(async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (!patientForRibbon) {
+      return;
+    }
+
+    const trimmedId = selectedRibbonId.trim();
+    const nextRibbonId = trimmedId ? Number(trimmedId) : null;
+
+    if (trimmedId && Number.isNaN(nextRibbonId)) {
+      setRibbonModalError('Selecciona una cinta válida.');
+      return;
+    }
+
+    setIsUpdatingRibbon(true);
+    setRibbonModalError(null);
+
+    try {
+      await updatePatient(patientForRibbon.id, { ribbonId: nextRibbonId });
+
+      setSelectedPatient(prev =>
+        prev && prev.id === patientForRibbon.id ? { ...prev, ribbonId: nextRibbonId } : prev,
+      );
+
+      setPatientForRibbon(prev => (prev ? { ...prev, ribbonId: nextRibbonId } : prev));
+
+      handleCloseRibbonModal();
+    } catch (error) {
+      console.error('No se pudo actualizar la cinta del paciente.', error);
+      const message = error instanceof Error ? error.message : 'No se pudo actualizar la cinta. Intenta nuevamente.';
+      setRibbonModalError(message);
+    } finally {
+      setIsUpdatingRibbon(false);
+    }
+  }, [handleCloseRibbonModal, patientForRibbon, selectedRibbonId, updatePatient]);
+
   const patientColumns = [
     {
       key: 'firstName',
@@ -1809,13 +1916,31 @@ export const EvolutionTracking: React.FC = () => {
       key: 'actions',
       header: 'Acciones',
       render: (patient: Patient) => (
-        <Button
-          variant="primary"
-          size="sm"
-          onClick={() => setSelectedPatient(patient)}
-        >
-          Ver evolución
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={() => setSelectedPatient(patient)}
+            aria-label="Ver evolución"
+            className="gap-1"
+          >
+            <LineChart className="h-4 w-4" aria-hidden="true" />
+            <span className="sr-only">Ver evolución</span>
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={(event) => {
+              event.stopPropagation();
+              handleOpenRibbonModal(patient);
+            }}
+            aria-label="Cambiar cinta"
+            className="gap-1"
+          >
+            <Ribbon className="h-4 w-4" aria-hidden="true" />
+            <span className="sr-only">Cambiar cinta</span>
+          </Button>
+        </div>
       ),
     },
   ];
@@ -1827,9 +1952,86 @@ export const EvolutionTracking: React.FC = () => {
     { id: 'vitals', label: 'Signos vitales', icon: Heart },
   ];
 
+  const ribbonModal = (
+    <Modal
+      isOpen={isRibbonModalOpen}
+      onClose={handleCloseRibbonModal}
+      title={patientForRibbon ? `Cambiar cinta · ${patientForRibbon.firstName} ${patientForRibbon.lastName}` : 'Cambiar cinta'}
+      size="sm"
+    >
+      <form onSubmit={handleRibbonChangeSubmit} className="space-y-4">
+        <div className="space-y-1 text-sm text-slate-600">
+          <p>
+            Paciente:
+            <span className="ml-1 font-semibold text-slate-900">
+              {patientForRibbon ? `${patientForRibbon.firstName} ${patientForRibbon.lastName}` : 'Sin seleccionar'}
+            </span>
+          </p>
+          <p>
+            Cinta actual:
+            <span className="ml-1 font-semibold text-slate-900">
+              {resolveRibbonLabel(patientForRibbon?.ribbonId ?? null)}
+            </span>
+          </p>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-2">Nueva cinta</label>
+          <select
+            value={selectedRibbonId}
+            onChange={(event) => setSelectedRibbonId(event.target.value)}
+            disabled={isLoadingRibbonOptions || isUpdatingRibbon}
+            className="w-full rounded-2xl border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 disabled:cursor-not-allowed"
+          >
+            <option value="">Sin cinta asignada</option>
+            {patientForRibbon && typeof patientForRibbon.ribbonId === 'number' && Number.isFinite(patientForRibbon.ribbonId) &&
+              !ribbons.some(ribbon => ribbon.id === patientForRibbon.ribbonId) ? (
+                <option value={String(patientForRibbon.ribbonId)}>
+                  {resolveRibbonLabel(patientForRibbon.ribbonId)}
+                </option>
+              ) : null}
+            {ribbons.map((ribbon) => (
+              <option key={ribbon.id} value={String(ribbon.id)}>
+                {ribbon.name?.trim()?.length ? ribbon.name : `Cinta ${ribbon.id}`}
+              </option>
+            ))}
+          </select>
+          {isLoadingRibbonOptions ? (
+            <p className="mt-2 text-xs text-slate-500">Cargando cintas disponibles...</p>
+          ) : null}
+          {!isLoadingRibbonOptions && ribbons.length === 0 ? (
+            <p className="mt-2 text-xs text-slate-500">
+              No hay cintas registradas. Crea una desde Programas &gt; Cintas.
+            </p>
+          ) : null}
+        </div>
+
+        {ribbonModalError ? <p className="text-sm text-red-600">{ribbonModalError}</p> : null}
+
+        <div className="flex justify-end gap-3 pt-2">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={handleCloseRibbonModal}
+            disabled={isUpdatingRibbon}
+          >
+            Cancelar
+          </Button>
+          <Button
+            type="submit"
+            disabled={isUpdatingRibbon || isLoadingRibbonOptions}
+          >
+            {isUpdatingRibbon ? 'Guardando...' : 'Guardar cambios'}
+          </Button>
+        </div>
+      </form>
+    </Modal>
+  );
+
   if (isTherapist && !selectedPatient) {
     return (
-      <section className="space-y-8 px-4 py-8 sm:px-6">
+      <>
+        <section className="space-y-8 px-4 py-8 sm:px-6">
         <div className="relative overflow-hidden rounded-[32px] border border-white/40 bg-gradient-to-br from-[#FFF5EC] via-[#FFF8F3] to-[#FFE9F3] p-6 sm:p-10 shadow-[0_45px_110px_rgba(120,53,15,0.15)]">
           <div aria-hidden className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(249,115,22,0.12),_transparent_60%)]" />
           <div aria-hidden className="absolute -top-10 right-0 h-56 w-56 rounded-full bg-[#FED7AA] opacity-60 blur-3xl" />
@@ -1983,12 +2185,15 @@ export const EvolutionTracking: React.FC = () => {
             <Table data={filteredPatients} columns={patientColumns} />
           </div>
         </Card>
-      </section>
+        </section>
+        {ribbonModal}
+      </>
     );
   }
 
 
   return (
+    <>
     <section className="space-y-8 px-4 py-8 sm:px-6">
       <div className="relative overflow-hidden rounded-[32px] border border-white/35 bg-gradient-to-br from-[#FFF7ED] via-[#FFF0F5] to-[#FFE6E0] p-6 sm:p-10 shadow-[0_45px_110px_rgba(120,53,15,0.15)]">
         <div aria-hidden className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(251,146,60,0.14),_transparent_60%)]" />
@@ -2376,6 +2581,8 @@ export const EvolutionTracking: React.FC = () => {
           </div>
         </>
       )}
+
+      {ribbonModal}
 
       {editState && (
         <Modal
@@ -2828,5 +3035,6 @@ export const EvolutionTracking: React.FC = () => {
         </Modal>
       )}
     </section>
+    </>
   );
 };

@@ -1,12 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, BookOpen, ChevronDown, Edit3, Loader2, Plus, Trash2 } from 'lucide-react';
+import { ArrowLeft, BookOpen, ChevronDown, Edit3, Loader2, Plus, Search, Trash2, UserPlus2 } from 'lucide-react';
 import { Card } from '../../components/UI/Card';
 import { Button } from '../../components/UI/Button';
 import { Table } from '../../components/UI/Table';
 import { Modal } from '../../components/UI/Modal';
 import { useApp } from '../../context/AppContext';
-import { Instrument, Question, QuestionOption } from '../../types';
+import { Instrument, Patient, Question, QuestionOption } from '../../types';
 import { QuestionForm } from './components/QuestionForm';
 
 type PreviewOption = { key: string; label: string; color?: string | null };
@@ -121,7 +121,15 @@ const formatDuration = (minutes?: number): string => {
 export const InstrumentDetail: React.FC = () => {
   const { instrumentId } = useParams<InstrumentDetailParams>();
   const navigate = useNavigate();
-  const { getInstrumentDetails, createQuestion, updateQuestion, deleteQuestion } = useApp();
+  const {
+    getInstrumentDetails,
+    createQuestion,
+    updateQuestion,
+    deleteQuestion,
+    assignInstrumentToPatients,
+    patients,
+    programs,
+  } = useApp();
 
   const [instrument, setInstrument] = useState<Instrument | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -133,6 +141,16 @@ export const InstrumentDetail: React.FC = () => {
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [pendingQuestionId, setPendingQuestionId] = useState<string | null>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState<boolean>(false);
+  const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
+  const [assignSearchTerm, setAssignSearchTerm] = useState('');
+  const [selectedPatientIds, setSelectedPatientIds] = useState<string[]>([]);
+  const [isAssigning, setIsAssigning] = useState(false);
+  const [assignError, setAssignError] = useState<string | null>(null);
+  const [assignSuccessMessage, setAssignSuccessMessage] = useState<string | null>(null);
+  const [assignProgramFilter, setAssignProgramFilter] = useState<'all' | 'no-program' | string>('all');
+  const [assignStatusFilter, setAssignStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
+  const [assignAssignmentFilter, setAssignAssignmentFilter] = useState<'all' | 'assigned' | 'unassigned'>('all');
+  const [assignGenderFilter, setAssignGenderFilter] = useState<'all' | Patient['gender']>('all');
 
   const formatQuestionType = useCallback((type: Question['type']): string => {
     return QUESTION_TYPE_LABEL[type] ?? type;
@@ -152,6 +170,105 @@ export const InstrumentDetail: React.FC = () => {
     }
     return instrument.questions.filter((question) => question.required);
   }, [instrument]);
+
+  const programNameById = useMemo(() => {
+    const lookup: Record<string, string> = {};
+    programs.forEach((program) => {
+      lookup[program.id] = program.name;
+    });
+    return lookup;
+  }, [programs]);
+
+  const assignProgramOptions = useMemo(() => {
+    const sortedPrograms = [...programs]
+      .map((program) => ({ value: program.id, label: program.name }))
+      .sort((a, b) => a.label.localeCompare(b.label, 'es'));
+    return [
+      { value: 'all', label: 'Todos los programas' },
+      { value: 'no-program', label: 'Sin programa asignado' },
+      ...sortedPrograms,
+    ];
+  }, [programs]);
+
+  const orderedPatients = useMemo(() => {
+    return [...patients].sort((a, b) => {
+      const nameA = `${a.lastName ?? ''} ${a.firstName ?? ''}`.trim().toLocaleLowerCase('es');
+      const nameB = `${b.lastName ?? ''} ${b.firstName ?? ''}`.trim().toLocaleLowerCase('es');
+      return nameA.localeCompare(nameB);
+    });
+  }, [patients]);
+
+  const filteredPatients = useMemo(() => {
+    const term = assignSearchTerm.trim().toLocaleLowerCase('es');
+
+    return orderedPatients.filter((patient) => {
+      const fullName = `${patient.firstName ?? ''} ${patient.lastName ?? ''}`.trim().toLocaleLowerCase('es');
+      const email = (patient.email ?? '').toLocaleLowerCase('es');
+      const cedula = (patient.cedula ?? '').toLocaleLowerCase('es');
+      const programName = patient.programId ? (programNameById[patient.programId] ?? '').toLocaleLowerCase('es') : '';
+      const phone = (patient.phone ?? '').toLocaleLowerCase('es');
+      const address = (patient.address ?? '').toLocaleLowerCase('es');
+
+      const matchesTerm = !term.length
+        || fullName.includes(term)
+        || email.includes(term)
+        || cedula.includes(term)
+        || programName.includes(term)
+        || phone.includes(term)
+        || address.includes(term);
+
+      if (!matchesTerm) {
+        return false;
+      }
+
+      const matchesProgram = assignProgramFilter === 'all'
+        ? true
+        : assignProgramFilter === 'no-program'
+          ? !patient.programId
+          : patient.programId === assignProgramFilter;
+
+      if (!matchesProgram) {
+        return false;
+      }
+
+      const matchesStatus = assignStatusFilter === 'all'
+        ? true
+        : assignStatusFilter === 'active'
+          ? patient.isActive
+          : !patient.isActive;
+
+      if (!matchesStatus) {
+        return false;
+      }
+
+      const matchesAssignment = assignAssignmentFilter === 'all'
+        ? true
+        : assignAssignmentFilter === 'assigned'
+          ? Boolean(patient.programId)
+          : !patient.programId;
+
+      if (!matchesAssignment) {
+        return false;
+      }
+
+      const matchesGender = assignGenderFilter === 'all' ? true : patient.gender === assignGenderFilter;
+
+      return matchesGender;
+    });
+  }, [
+    assignAssignmentFilter,
+    assignGenderFilter,
+    assignProgramFilter,
+    assignSearchTerm,
+    assignStatusFilter,
+    orderedPatients,
+    programNameById,
+  ]);
+
+  const isAllFilteredSelected = useMemo(() => (
+    filteredPatients.length > 0
+    && filteredPatients.every((patient) => selectedPatientIds.includes(patient.id))
+  ), [filteredPatients, selectedPatientIds]);
 
   const renderQuestionPreview = useCallback((question: Question) => {
     const renderOptions = (options: PreviewOption[], inputType: 'checkbox' | 'radio') => (
@@ -422,6 +539,91 @@ export const InstrumentDetail: React.FC = () => {
     setIsPreviewOpen(false);
   }, []);
 
+  const handleOpenAssignModal = useCallback(() => {
+    setAssignSearchTerm('');
+    setSelectedPatientIds([]);
+    setAssignError(null);
+    setIsAssigning(false);
+    setAssignProgramFilter('all');
+    setAssignStatusFilter('all');
+    setAssignAssignmentFilter('all');
+    setAssignGenderFilter('all');
+    setAssignSuccessMessage(null);
+    setIsAssignModalOpen(true);
+  }, []);
+
+  const handleCloseAssignModal = useCallback(() => {
+    setIsAssignModalOpen(false);
+    setAssignSearchTerm('');
+    setSelectedPatientIds([]);
+    setAssignError(null);
+    setIsAssigning(false);
+    setAssignProgramFilter('all');
+    setAssignStatusFilter('all');
+    setAssignAssignmentFilter('all');
+    setAssignGenderFilter('all');
+  }, []);
+
+  const handleTogglePatient = useCallback((patientId: string) => {
+    setSelectedPatientIds((prev) => {
+      if (prev.includes(patientId)) {
+        return prev.filter((id) => id !== patientId);
+      }
+      return [...prev, patientId];
+    });
+  }, []);
+
+  const handleToggleSelectAll = useCallback(() => {
+    setSelectedPatientIds((prev) => {
+      if (filteredPatients.length === 0) {
+        return prev;
+      }
+
+      const filteredIds = new Set(filteredPatients.map((patient) => patient.id));
+      const everySelected = filteredPatients.every((patient) => prev.includes(patient.id));
+
+      if (everySelected) {
+        return prev.filter((id) => !filteredIds.has(id));
+      }
+
+      const next = new Set(prev);
+      filteredPatients.forEach((patient) => next.add(patient.id));
+      return Array.from(next);
+    });
+  }, [filteredPatients]);
+
+  const handleAssignSubmit = useCallback(async () => {
+    if (!instrument?.instrumentTypeId) {
+      setAssignError('Este instrumento no tiene un tipo de instrumento configurado.');
+      return;
+    }
+
+    if (selectedPatientIds.length === 0) {
+      setAssignError('Selecciona al menos un paciente.');
+      return;
+    }
+
+    setIsAssigning(true);
+    setAssignError(null);
+
+    try {
+      await assignInstrumentToPatients(instrument.instrumentTypeId, selectedPatientIds);
+      setAssignSuccessMessage(`Instrumento asignado a ${selectedPatientIds.length} paciente${selectedPatientIds.length === 1 ? '' : 's'}.`);
+      setIsAssignModalOpen(false);
+      setSelectedPatientIds([]);
+      setAssignSearchTerm('');
+      setAssignProgramFilter('all');
+      setAssignStatusFilter('all');
+      setAssignAssignmentFilter('all');
+      setAssignGenderFilter('all');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'No se pudo asignar el instrumento.';
+      setAssignError(message);
+    } finally {
+      setIsAssigning(false);
+    }
+  }, [assignInstrumentToPatients, instrument, selectedPatientIds]);
+
   const questionColumns = useMemo(() => [
     {
       key: 'order',
@@ -532,6 +734,9 @@ export const InstrumentDetail: React.FC = () => {
     { label: 'Duración', value: formatDuration(instrument.estimatedDuration) },
   ];
 
+  const canAssignInstrument = Boolean(instrument.instrumentTypeId);
+  const selectedCount = selectedPatientIds.length;
+
   const highlightBadges = [
     instrument.availability ? `Disponible: ${instrument.availability}` : null,
     instrument.resource ? `Recurso: ${instrument.resource}` : null,
@@ -587,16 +792,31 @@ export const InstrumentDetail: React.FC = () => {
               </div>
             ) : null}
           </div>
-          <div className="grid w-full gap-3 sm:grid-cols-3 lg:max-w-md">
-            {heroStats.map((stat) => (
-              <div
-                key={stat.label}
-                className="rounded-3xl border border-white/60 bg-white/75 px-5 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)] backdrop-blur"
+          <div className="flex w-full flex-col gap-4 lg:max-w-md">
+            <div className="flex justify-end">
+              <Button
+                type="button"
+                variant="primary"
+                onClick={handleOpenAssignModal}
+                disabled={!canAssignInstrument}
+                className="flex items-center gap-2 rounded-full bg-gradient-to-r from-[#1F2937] via-[#303A4A] to-[#4B5563] px-5 py-2 text-sm font-semibold text-white shadow-lg shadow-slate-900/30 transition hover:translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
+                title={canAssignInstrument ? undefined : 'Este instrumento no tiene un tipo configurado.'}
               >
-                <p className="text-[0.65rem] font-semibold uppercase tracking-[0.4em] text-slate-500">{stat.label}</p>
-                <p className="text-3xl font-semibold text-slate-900">{stat.value}</p>
-              </div>
-            ))}
+                <UserPlus2 className="h-4 w-4" />
+                Asignar instrumento
+              </Button>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-3">
+              {heroStats.map((stat) => (
+                <div
+                  key={stat.label}
+                  className="rounded-3xl border border-white/60 bg-white/75 px-5 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)] backdrop-blur"
+                >
+                  <p className="text-[0.65rem] font-semibold uppercase tracking-[0.4em] text-slate-500">{stat.label}</p>
+                  <p className="text-3xl font-semibold text-slate-900">{stat.value}</p>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </div>
@@ -670,6 +890,12 @@ export const InstrumentDetail: React.FC = () => {
 
       <Card className="border border-white/50 bg-white/85 shadow-[0_30px_90px_rgba(15,23,42,0.12)] backdrop-blur">
         <div className="p-6 space-y-4">
+          {assignSuccessMessage ? (
+            <div className="rounded-2xl border border-emerald-200/70 bg-emerald-50/80 px-4 py-3 text-sm text-emerald-700">
+              {assignSuccessMessage}
+            </div>
+          ) : null}
+
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <h2 className="text-xl font-semibold text-slate-900">Preguntas</h2>
@@ -719,6 +945,182 @@ export const InstrumentDetail: React.FC = () => {
           )}
         </div>
       </Card>
+
+      <Modal
+        isOpen={isAssignModalOpen}
+        onClose={handleCloseAssignModal}
+        title="Asignar instrumento"
+        size="lg"
+      >
+        <div className="space-y-4">
+          {assignError ? (
+            <div className="rounded-2xl border border-rose-200/70 bg-rose-50/80 px-4 py-3 text-sm text-rose-600">
+              {assignError}
+            </div>
+          ) : null}
+
+          <div className="rounded-2xl border border-slate-200/70 bg-slate-50/80 px-4 py-3 text-sm text-slate-600">
+            <p className="font-medium text-slate-900">{instrument.name}</p>
+            <p className="mt-1 text-xs text-slate-500">
+              Tipo de instrumento: <span className="font-semibold text-slate-700">{instrument.instrumentTypeId ?? '—'}</span>
+            </p>
+          </div>
+
+          <div>
+            <label htmlFor="assign-search" className="mb-2 block text-xs font-semibold uppercase tracking-[0.35em] text-slate-500">
+              Buscar pacientes
+            </label>
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <input
+                id="assign-search"
+                type="text"
+                value={assignSearchTerm}
+                onChange={(event) => setAssignSearchTerm(event.target.value)}
+                className="w-full rounded-2xl border border-slate-200/70 bg-white/90 py-2 pl-9 pr-3 text-sm text-slate-700 shadow-inner focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200"
+                placeholder="Nombre, correo, cédula o programa"
+              />
+            </div>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div>
+              <label htmlFor="assign-program-filter" className="mb-2 block text-xs font-semibold uppercase tracking-[0.35em] text-slate-500">
+                Programa
+              </label>
+              <select
+                id="assign-program-filter"
+                value={assignProgramFilter}
+                onChange={(event) => setAssignProgramFilter(event.target.value)}
+                className="w-full rounded-2xl border border-slate-200/70 bg-white/90 px-3 py-2 text-sm text-slate-700 focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200"
+              >
+                {assignProgramOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label htmlFor="assign-status-filter" className="mb-2 block text-xs font-semibold uppercase tracking-[0.35em] text-slate-500">
+                Estado
+              </label>
+              <select
+                id="assign-status-filter"
+                value={assignStatusFilter}
+                onChange={(event) => setAssignStatusFilter(event.target.value as 'all' | 'active' | 'inactive')}
+                className="w-full rounded-2xl border border-slate-200/70 bg-white/90 px-3 py-2 text-sm text-slate-700 focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200"
+              >
+                <option value="all">Estado: todos</option>
+                <option value="active">Solo activos</option>
+                <option value="inactive">Solo inactivos</option>
+              </select>
+            </div>
+            <div>
+              <label htmlFor="assign-assignment-filter" className="mb-2 block text-xs font-semibold uppercase tracking-[0.35em] text-slate-500">
+                Asignacion
+              </label>
+              <select
+                id="assign-assignment-filter"
+                value={assignAssignmentFilter}
+                onChange={(event) => setAssignAssignmentFilter(event.target.value as 'all' | 'assigned' | 'unassigned')}
+                className="w-full rounded-2xl border border-slate-200/70 bg-white/90 px-3 py-2 text-sm text-slate-700 focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200"
+              >
+                <option value="all">Asignacion: todas</option>
+                <option value="assigned">Con programa</option>
+                <option value="unassigned">Sin programa</option>
+              </select>
+            </div>
+            <div>
+              <label htmlFor="assign-gender-filter" className="mb-2 block text-xs font-semibold uppercase tracking-[0.35em] text-slate-500">
+                Genero
+              </label>
+              <select
+                id="assign-gender-filter"
+                value={assignGenderFilter}
+                onChange={(event) => setAssignGenderFilter(event.target.value as 'all' | Patient['gender'])}
+                className="w-full rounded-2xl border border-slate-200/70 bg-white/90 px-3 py-2 text-sm text-slate-700 focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200"
+              >
+                <option value="all">Genero: todos</option>
+                <option value="female">Femenino</option>
+                <option value="male">Masculino</option>
+                <option value="other">Otro / no binario</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between text-xs text-slate-500">
+            <span>{filteredPatients.length} paciente{filteredPatients.length === 1 ? '' : 's'} encontrados</span>
+            <button
+              type="button"
+              onClick={handleToggleSelectAll}
+              disabled={filteredPatients.length === 0}
+              className="font-semibold text-slate-600 transition hover:text-slate-900 disabled:cursor-not-allowed disabled:text-slate-300"
+            >
+              {isAllFilteredSelected ? 'Deseleccionar filtrados' : 'Seleccionar filtrados'}
+            </button>
+          </div>
+
+          <div className="max-h-72 overflow-y-auto rounded-2xl border border-slate-200/70 bg-white/90">
+            {filteredPatients.length ? (
+              <ul>
+                {filteredPatients.map((patient) => {
+                  const isSelected = selectedPatientIds.includes(patient.id);
+                  const fullName = `${patient.firstName ?? ''} ${patient.lastName ?? ''}`.trim() || 'Paciente sin nombre';
+                  const programLabel = patient.programId ? (programNameById[patient.programId] ?? 'Programa sin nombre') : 'Sin programa asignado';
+                  return (
+                    <li key={patient.id} className="border-b border-slate-200/50 last:border-0">
+                      <label className="flex cursor-pointer items-start justify-between gap-3 px-4 py-3">
+                        <div className="space-y-1">
+                          <p className="text-sm font-semibold text-slate-900">{fullName}</p>
+                          <p className="text-xs text-slate-500">{patient.email || 'Sin correo registrado'}</p>
+                          <p className="text-xs text-slate-400">{programLabel}</p>
+                        </div>
+                        <input
+                          type="checkbox"
+                          className="mt-1 h-4 w-4 rounded border-slate-300 text-slate-700 focus:ring-slate-400"
+                          checked={isSelected}
+                          onChange={() => handleTogglePatient(patient.id)}
+                        />
+                      </label>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <div className="px-4 py-8 text-center text-sm text-slate-500">
+                No hay pacientes que coincidan con tu búsqueda.
+              </div>
+            )}
+          </div>
+
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <span className="text-sm text-slate-600">
+              {selectedCount} paciente{selectedCount === 1 ? '' : 's'} seleccionado{selectedCount === 1 ? '' : 's'}
+            </span>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleCloseAssignModal}
+                disabled={isAssigning}
+                className="rounded-full px-5 py-2 text-sm"
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="button"
+                variant="primary"
+                onClick={handleAssignSubmit}
+                disabled={selectedCount === 0 || isAssigning}
+                className="rounded-full px-5 py-2 text-sm"
+              >
+                {isAssigning ? 'Asignando...' : 'Asignar'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      </Modal>
 
       <Modal
         isOpen={isFormOpen}
