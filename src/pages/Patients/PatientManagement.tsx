@@ -19,7 +19,7 @@ import {
 } from '../MedicalHistory/MedicalHistory';
 
 export const PatientManagement: React.FC = () => {
-  const { patients, addPatient, updatePatient, deletePatient, programs } = useApp();
+  const { patients, addPatient, updatePatient, assignProgramToPatient, deletePatient, programs } = useApp();
   const { token } = useAuth();
   const { isAdmin } = usePermissions();
   const apiBase = (import.meta as any).env?.VITE_API_BASE ?? 'http://localhost:3000';
@@ -190,10 +190,20 @@ export const PatientManagement: React.FC = () => {
   const handleAssignProgram = async (programId: string) => {
     if (!selectedPatientForAssign) return;
     try {
-      await updatePatient(selectedPatientForAssign.id, { programId });
+      await assignProgramToPatient(selectedPatientForAssign.id, programId);
       setIsAssignModalOpen(false);
     } catch (error) {
       console.error('No se pudo asignar el programa al paciente', error);
+    }
+  };
+
+  const handleRemoveProgram = async () => {
+    if (!selectedPatientForAssign) return;
+    try {
+      await assignProgramToPatient(selectedPatientForAssign.id, null);
+      setIsAssignModalOpen(false);
+    } catch (error) {
+      console.error('No se pudo quitar el programa del paciente', error);
     }
   };
 
@@ -570,6 +580,17 @@ export const PatientManagement: React.FC = () => {
         {selectedPatientForAssign && (
           <div className="space-y-4">
             <p className="text-sm text-slate-600">Selecciona el protocolo más adecuado para {selectedPatientForAssign.firstName}.</p>
+            {selectedPatientForAssign.programId && (
+              <div className="flex items-center justify-between rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.3em] text-amber-600">Programa actual</p>
+                  <p className="font-semibold text-amber-800">{programNameById[selectedPatientForAssign.programId] ?? 'Programa sin nombre'}</p>
+                </div>
+                <Button variant="outline" size="sm" onClick={handleRemoveProgram}>
+                  Quitar programa
+                </Button>
+              </div>
+            )}
             <div className="space-y-3">
               {programs.map((program) => (
                 <div key={program.id} className="flex items-start justify-between rounded-2xl border border-white/60 bg-white/70 p-4">

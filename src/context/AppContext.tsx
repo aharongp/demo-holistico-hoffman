@@ -9,6 +9,8 @@ type ProgramInput = {
   isActive?: boolean;
 };
 
+
+
 type ProgramActivityInput = {
   name: string;
   description?: string;
@@ -836,6 +838,7 @@ interface AppContextType {
   // Actions
   addPatient: (patient: Omit<Patient, 'id' | 'createdAt'>) => Promise<Patient>;
   updatePatient: (id: string, patient: Partial<Patient>) => Promise<void>;
+  assignProgramToPatient: (patientId: string, programId: string | null) => Promise<void>;
   deletePatient: (id: string) => Promise<void>;
   
   addInstrument: (instrument: Omit<Instrument, 'id' | 'createdAt'>) => Promise<Instrument>;
@@ -1585,6 +1588,28 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     if (!res.ok) {
       const errorBody = await res.json().catch(() => null);
       const message = errorBody?.message ?? errorBody?.error ?? `No se pudo actualizar el paciente (status ${res.status})`;
+      throw new Error(Array.isArray(message) ? message.join(', ') : message);
+    }
+
+    const updated = await res.json();
+    setPatients(prev => prev.map(p => (p.id === id ? mapPacienteToPatient(updated) : p)));
+  }, [apiBase, token]);
+
+  const assignProgramToPatient = useCallback(async (id: string, programId: string | null) => {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+
+    const res = await fetch(`${apiBase}/patient/${id}/program`, {
+      method: 'PATCH',
+      headers,
+      body: JSON.stringify({ programId }),
+    });
+
+    if (!res.ok) {
+      const errorBody = await res.json().catch(() => null);
+      const message = errorBody?.message ?? errorBody?.error ?? `No se pudo asignar el programa (status ${res.status})`;
       throw new Error(Array.isArray(message) ? message.join(', ') : message);
     }
 
@@ -3011,49 +3036,52 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setEvolutionEntries(prev => [...prev, newEntry]);
   };
 
+  const contextValue: AppContextType = {
+    patients,
+    instruments,
+    assignments,
+    programs,
+    ribbons,
+    instrumentTypes,
+    evolutionEntries,
+    dashboardStats,
+    addPatient,
+    updatePatient,
+    assignProgramToPatient,
+    deletePatient,
+    addInstrument,
+    updateInstrument,
+    deleteInstrument,
+    getInstrumentDetails,
+    createQuestion,
+    updateQuestion,
+    deleteQuestion,
+    assignInstrumentToPatients,
+    addAssignment,
+    updateAssignment,
+    reloadRibbons,
+    addRibbon,
+    updateRibbon,
+    deleteRibbon,
+    addProgram,
+    updateProgram,
+    deleteProgram,
+    getProgramDetails,
+    addProgramActivity,
+    updateProgramActivity,
+    deleteProgramActivity,
+    getPatientPunctuality,
+    createPatientPunctuality,
+    updatePatientPunctuality,
+    addEvolutionEntry,
+    refreshInstrumentTypes,
+    createInstrumentType,
+    updateInstrumentType,
+    deleteInstrumentType,
+  };
+
   return (
-    <AppContext.Provider value={{
-      patients,
-      instruments,
-      assignments,
-      programs,
-      ribbons,
-      instrumentTypes,
-      evolutionEntries,
-      dashboardStats,
-      addPatient,
-      updatePatient,
-      deletePatient,
-      addInstrument,
-      updateInstrument,
-      deleteInstrument,
-      getInstrumentDetails,
-      createQuestion,
-      updateQuestion,
-      deleteQuestion,
-      assignInstrumentToPatients,
-      addAssignment,
-      updateAssignment,
-      reloadRibbons,
-      addRibbon,
-      updateRibbon,
-      deleteRibbon,
-      addProgram,
-      updateProgram,
-      deleteProgram,
-      getProgramDetails,
-      addProgramActivity,
-      updateProgramActivity,
-      deleteProgramActivity,
-      getPatientPunctuality,
-      createPatientPunctuality,
-      updatePatientPunctuality,
-      addEvolutionEntry,
-      refreshInstrumentTypes,
-      createInstrumentType,
-      updateInstrumentType,
-      deleteInstrumentType,
-    }}>
+    <AppContext.Provider value={contextValue}>
       {children}
     </AppContext.Provider>
   );

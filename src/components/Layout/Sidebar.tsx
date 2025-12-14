@@ -55,7 +55,7 @@ const navigation: NavItem[] = [
     to: '/punctuality',
     icon: ListChecks,
     label: 'Actividades',
-    roles: ['administrator', 'trainer', 'therapist', 'doctor', 'coach', 'patient', 'student'],
+    roles: ['patient', 'student'],
   },
   {
     to: '/instruments',
