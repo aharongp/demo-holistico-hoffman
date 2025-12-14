@@ -16,6 +16,7 @@ import {
   Bell,
   User,
   LogOut,
+  ListChecks,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { UserRole } from '../../types';
@@ -51,6 +52,12 @@ const navigation: NavItem[] = [
     roles: ['administrator', 'trainer', 'therapist', 'doctor', 'coach'],
   },
   {
+    to: '/punctuality',
+    icon: ListChecks,
+    label: 'Actividades',
+    roles: ['administrator', 'trainer', 'therapist', 'doctor', 'coach', 'patient', 'student'],
+  },
+  {
     to: '/instruments',
     icon: ClipboardList,
     label: 'Instrumentos',
@@ -59,7 +66,7 @@ const navigation: NavItem[] = [
   {
     to: '/activities',
     icon: Activity,
-    label: 'Actividades',
+    label: 'Instrumentos',
     roles: ['patient', 'student'],
   },
   {
@@ -117,6 +124,12 @@ const SECTION_THEMES: Record<string, {
     navActive: 'bg-[#f5f3ff] text-[#7c3aed] ring-1 ring-purple-100 shadow-md shadow-purple-200/60',
     iconActive: 'border-purple-100 bg-white text-[#7c3aed]',
     subLabelActive: 'text-[#7c3aed]',
+  },
+  '/punctuality': {
+    sidebarBg: 'bg-gradient-to-b from-[#ecfeff] via-white to-[#cffafe]',
+    navActive: 'bg-[#cffafe] text-[#0f766e] ring-1 ring-[#a5f3fc] shadow-md shadow-teal-200/60',
+    iconActive: 'border-[#a5f3fc] bg-white text-[#115e59]',
+    subLabelActive: 'text-[#0f766e]',
   },
   '/instruments': {
     sidebarBg: 'bg-gradient-to-b from-[#f9fafb] via-white to-[#e5e7eb]',

@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
-import { Plus, Edit, Trash2, Search, Eye, Stethoscope, HeartPulse, Activity, ClipboardList } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Plus, Edit, Trash2, Search, Eye, Stethoscope, HeartPulse, Activity, ClipboardList, ListChecks } from 'lucide-react';
 import { Card } from '../../components/UI/Card';
 import { Button } from '../../components/UI/Button';
 import { Table } from '../../components/UI/Table';
@@ -22,6 +23,7 @@ export const PatientManagement: React.FC = () => {
   const { token } = useAuth();
   const { isAdmin } = usePermissions();
   const apiBase = (import.meta as any).env?.VITE_API_BASE ?? 'http://localhost:3000';
+  const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
@@ -366,6 +368,14 @@ export const PatientManagement: React.FC = () => {
             title={patient.userId ? 'Ver historia médica' : 'Paciente sin usuario vinculado'}
           >
             <Eye className="w-4 h-4" />
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => navigate(`/patients/${patient.id}`)}
+            title="Actividades del paciente"
+          >
+            <ListChecks className="w-4 h-4" />
           </Button>
           <Button
             variant="outline"

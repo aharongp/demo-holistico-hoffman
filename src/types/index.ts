@@ -130,6 +130,35 @@ export interface ProgramDetails extends Program {
   activities: ProgramActivity[];
 }
 
+export interface PatientPunctualityRecord {
+  id: number;
+  patientId: number | null;
+  date: Date | null;
+  activity: string | null;
+  punctuality: number | null;
+  effectiveness: number | null;
+  compliance: number | null;
+  roleEffectiveness: number | null;
+  evaluated: number | null;
+  createdAt: Date | null;
+  updatedAt: Date | null;
+}
+
+export interface CreatePatientPunctualityInput {
+  patientId: string;
+  activity?: string | null;
+  date?: string | Date | null;
+  punctuality?: number | string | null;
+  effectiveness?: number | string | null;
+  compliance?: number | string | null;
+  roleEffectiveness?: number | string | null;
+  evaluated?: boolean | number | null;
+}
+
+export interface UpdatePatientPunctualityInput extends CreatePatientPunctualityInput {
+  id: number;
+}
+
 export interface EvolutionEntry {
   id: string;
   patientId: string;

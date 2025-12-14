@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback, useMemo, useRef } from 'react';
-import { Patient, Instrument, Assignment, Program, ProgramActivity, ProgramDetails, EvolutionEntry, DashboardStats, GenderDistributionSlice, PatientsByProgramSlice, InstrumentType, Question, QuestionAnswer, QuestionOption, Ribbon } from '../types';
+import { Patient, Instrument, Assignment, Program, ProgramActivity, ProgramDetails, EvolutionEntry, DashboardStats, GenderDistributionSlice, PatientsByProgramSlice, InstrumentType, Question, QuestionAnswer, QuestionOption, Ribbon, PatientPunctualityRecord, CreatePatientPunctualityInput, UpdatePatientPunctualityInput } from '../types';
 import { useAuth } from './AuthContext';
 
 type ProgramInput = {
@@ -216,6 +216,145 @@ const mapProgramDetailsFromApi = (program: any, fallbackCreatedBy: string | null
     ...base,
     activities: rawActivities.map((activity: any) => mapProgramActivityFromApi(activity)),
   };
+};
+
+const parseNumeric = (value: any): number | null => {
+  if (value === null || typeof value === 'undefined') {
+    return null;
+  }
+
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : null;
+  }
+
+  if (typeof value === 'boolean') {
+    return value ? 1 : 0;
+  }
+
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return null;
+    }
+
+    const numeric = Number(trimmed.replace(/,/g, '.'));
+    return Number.isFinite(numeric) ? numeric : null;
+  }
+
+  return null;
+};
+
+const mapPatientPunctualityFromApi = (raw: any): PatientPunctualityRecord => {
+  const idValue = parseNumeric(raw?.id);
+  const patientIdValue = parseNumeric(raw?.patientId ?? raw?.id_paciente);
+  const punctualityValue = parseNumeric(raw?.punctuality ?? raw?.puntualidad);
+  const effectivenessValue = parseNumeric(raw?.effectiveness ?? raw?.efectividad);
+  const complianceValue = parseNumeric(raw?.compliance ?? raw?.cumplimiento);
+  const roleEffectivenessValue = parseNumeric(raw?.roleEffectiveness ?? raw?.efectividad_rol);
+  const evaluatedValue = parseNumeric(raw?.evaluated ?? raw?.evaluado);
+
+  const resolveActivity = (): string | null => {
+    const rawActivity = raw?.activity ?? raw?.actividad;
+    if (typeof rawActivity !== 'string') {
+      return null;
+    }
+    const trimmed = rawActivity.trim();
+    return trimmed.length ? trimmed : null;
+  };
+
+  return {
+    id: typeof idValue === 'number' ? Math.trunc(idValue) : 0,
+    patientId: typeof patientIdValue === 'number' ? Math.trunc(patientIdValue) : null,
+    date: parseDate(raw?.date ?? raw?.fecha),
+    activity: resolveActivity(),
+    punctuality: punctualityValue,
+    effectiveness: effectivenessValue,
+    compliance: complianceValue,
+    roleEffectiveness: roleEffectivenessValue,
+    evaluated: evaluatedValue === null ? null : (evaluatedValue ? 1 : 0),
+    createdAt: parseDate(raw?.createdAt ?? raw?.created_at),
+    updatedAt: parseDate(raw?.updatedAt ?? raw?.updated_at),
+  };
+};
+
+type PunctualityPayloadInput = CreatePatientPunctualityInput | UpdatePatientPunctualityInput;
+
+const buildPatientPunctualityPayload = (input: PunctualityPayloadInput): Record<string, unknown> => {
+  const payload: Record<string, unknown> = {};
+
+  const numericPatientId = Number(input.patientId);
+  if (!Number.isFinite(numericPatientId)) {
+    throw new Error('El paciente seleccionado es inválido para registrar puntualidad.');
+  }
+  payload.id_paciente = numericPatientId;
+
+  if (Object.prototype.hasOwnProperty.call(input, 'activity')) {
+    if (input.activity === null) {
+      payload.actividad = null;
+    } else if (typeof input.activity === 'string') {
+      const trimmed = input.activity.trim();
+      payload.actividad = trimmed.length ? trimmed : null;
+    }
+  }
+
+  if (Object.prototype.hasOwnProperty.call(input, 'date')) {
+    const value = input.date;
+    if (value === null) {
+      payload.fecha = null;
+    } else if (value instanceof Date) {
+      payload.fecha = value.toISOString();
+    } else if (typeof value === 'string') {
+      const trimmed = value.trim();
+      payload.fecha = trimmed.length ? trimmed : null;
+    }
+  }
+
+  const numericFields: Array<[keyof CreatePatientPunctualityInput, string]> = [
+    ['punctuality', 'puntualidad'],
+    ['effectiveness', 'efectividad'],
+    ['compliance', 'cumplimiento'],
+    ['roleEffectiveness', 'efectividad_rol'],
+  ];
+
+  numericFields.forEach(([sourceKey, targetKey]) => {
+    if (!Object.prototype.hasOwnProperty.call(input, sourceKey)) {
+      return;
+    }
+
+    const rawValue = input[sourceKey];
+    if (rawValue === null) {
+      payload[targetKey] = null;
+      return;
+    }
+
+    if (typeof rawValue === 'number') {
+      payload[targetKey] = rawValue;
+      return;
+    }
+
+    if (typeof rawValue === 'boolean') {
+      payload[targetKey] = rawValue ? 1 : 0;
+      return;
+    }
+
+    if (typeof rawValue === 'string') {
+      const trimmed = rawValue.trim();
+      payload[targetKey] = trimmed.length ? trimmed : null;
+    }
+  });
+
+  if (Object.prototype.hasOwnProperty.call(input, 'evaluated')) {
+    const rawValue = input.evaluated;
+    if (rawValue === null) {
+      payload.evaluado = null;
+    } else if (typeof rawValue === 'boolean') {
+      payload.evaluado = rawValue ? 1 : 0;
+    } else {
+      payload.evaluado = rawValue;
+    }
+  }
+
+  return payload;
 };
 
 const normalizeRibbonString = (value: unknown): string | null => {
@@ -723,6 +862,9 @@ interface AppContextType {
   addProgramActivity: (programId: string, activity: ProgramActivityInput) => Promise<ProgramActivity>;
   updateProgramActivity: (programId: string, activityId: string, activity: ProgramActivityUpdateInput) => Promise<ProgramActivity>;
   deleteProgramActivity: (programId: string, activityId: string) => Promise<boolean>;
+  getPatientPunctuality: (patientId: string) => Promise<PatientPunctualityRecord[]>;
+  createPatientPunctuality: (input: CreatePatientPunctualityInput) => Promise<PatientPunctualityRecord>;
+  updatePatientPunctuality: (input: UpdatePatientPunctualityInput) => Promise<PatientPunctualityRecord>;
   
   addEvolutionEntry: (entry: Omit<EvolutionEntry, 'id'>) => void;
 
@@ -2765,6 +2907,102 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   }, [apiBase]);
 
+  const getPatientPunctuality = useCallback(async (patientId: string): Promise<PatientPunctualityRecord[]> => {
+    const numericId = Number(patientId);
+    if (Number.isNaN(numericId)) {
+      return [];
+    }
+
+    const headers: Record<string, string> = {};
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+
+    try {
+      const res = await fetch(`${apiBase}/patient-punctuality/patient/${numericId}`, { headers });
+
+      if (res.status === 404) {
+        return [];
+      }
+
+      if (!res.ok) {
+        const text = await res.text().catch(() => null);
+        throw new Error(text || `No se pudo obtener la puntualidad del paciente (status ${res.status})`);
+      }
+
+      const data = await res.json();
+      return Array.isArray(data) ? data.map((item: any) => mapPatientPunctualityFromApi(item)) : [];
+    } catch (error) {
+      console.error(`Error fetching punctuality for patient ${patientId}`, error);
+      throw error instanceof Error ? error : new Error('Error desconocido al obtener la puntualidad del paciente');
+    }
+  }, [apiBase, token]);
+
+  const createPatientPunctuality = useCallback(async (input: CreatePatientPunctualityInput): Promise<PatientPunctualityRecord> => {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+
+    try {
+      const payload = buildPatientPunctualityPayload(input);
+      const res = await fetch(`${apiBase}/patient-punctuality`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const text = await res.text().catch(() => null);
+        throw new Error(text || `No se pudo registrar la puntualidad (status ${res.status})`);
+      }
+
+      const data = await res.json();
+      return mapPatientPunctualityFromApi(data);
+    } catch (error) {
+      console.error('Error creating patient punctuality record', error);
+      throw error instanceof Error ? error : new Error('Error desconocido al registrar la puntualidad');
+    }
+  }, [apiBase, token]);
+
+  const updatePatientPunctuality = useCallback(async (input: UpdatePatientPunctualityInput): Promise<PatientPunctualityRecord> => {
+    const numericId = Number(input.id);
+    if (!Number.isFinite(numericId)) {
+      throw new Error('El registro de puntualidad seleccionado es inválido.');
+    }
+
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+
+    try {
+      const payload = buildPatientPunctualityPayload(input);
+      const res = await fetch(`${apiBase}/patient-punctuality/${numericId}`, {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const text = await res.text().catch(() => null);
+        throw new Error(text || `No se pudo actualizar la puntualidad (status ${res.status})`);
+      }
+
+      const data = await res.json();
+      return mapPatientPunctualityFromApi(data);
+    } catch (error) {
+      console.error(`Error updating patient punctuality record ${numericId}`, error);
+      throw error instanceof Error ? error : new Error('Error desconocido al actualizar la puntualidad');
+    }
+  }, [apiBase, token]);
+
   const addEvolutionEntry = (entryData: Omit<EvolutionEntry, 'id'>) => {
     const newEntry: EvolutionEntry = {
       ...entryData,
@@ -2807,6 +3045,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       addProgramActivity,
       updateProgramActivity,
       deleteProgramActivity,
+      getPatientPunctuality,
+      createPatientPunctuality,
+      updatePatientPunctuality,
       addEvolutionEntry,
       refreshInstrumentTypes,
       createInstrumentType,
