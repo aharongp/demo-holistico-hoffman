@@ -1094,7 +1094,7 @@ const mapStringSection = <T extends Record<string, string>>(section: T): Nullabl
   }, {} as NullableStringSection<T>);
 };
 
-const buildUpdatePayload = (data: MedicalHistoryData): UpdateHistoryPayload => {
+export const buildUpdatePayload = (data: MedicalHistoryData): UpdateHistoryPayload => {
   const diseases = Object.keys(data.diseases).reduce((acc, key) => {
     const diseaseKey = key as DiseaseKey;
     acc[diseaseKey] = toNullableString(data.diseases[diseaseKey]);

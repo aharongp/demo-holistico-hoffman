@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Plus, TrendingUp, User, Heart, Scale, Droplets, RefreshCw, Edit, Trash2, Search, LineChart, Ribbon } from 'lucide-react';
+import { Plus, TrendingUp, User, Heart, Scale, Droplets, RefreshCw, Edit, Trash2, Search, LineChart, Ribbon, LayoutDashboard, Activity, ClipboardList } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { Card } from '../../components/UI/Card';
 import { Button } from '../../components/UI/Button';
 import { Chart } from '../../components/Dashboard/Chart';
@@ -7,6 +8,14 @@ import { Modal } from '../../components/UI/Modal';
 import { Table } from '../../components/UI/Table';
 import { useAuth } from '../../context/AuthContext';
 import { useApp } from '../../context/AppContext';
+import {
+  MedicalHistoryData,
+  RemotePatientMedicalHistory,
+  buildUpdatePayload,
+  createInitialMedicalHistory,
+  mapRemoteMedicalHistoryToState,
+} from '../MedicalHistory/MedicalHistory';
+import { PatientMedicalHistoryForm } from './components/PatientMedicalHistoryForm';
 import {
   Patient,
   PatientVitalsSummary,
@@ -109,6 +118,8 @@ type HeartRateFormKey =
   | 'heartRateAfter15Minutes'
   | 'heartRateAfter30Minutes'
   | 'heartRateAfter45Minutes';
+
+type DoctorTabId = 'summary' | 'charts' | 'records';
 
 const HEART_RATE_FIELDS = [
   { key: 'resting', label: 'Reposo' },
@@ -290,6 +301,7 @@ export const EvolutionTracking: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
   const [activeTab, setActiveTab] = useState('mood');
+  const [doctorActiveTab, setDoctorActiveTab] = useState<DoctorTabId>('summary');
   const [formData, setFormData] = useState<EvolutionFormData>(() => ({ ...INITIAL_FORM_DATA }));
   const [vitals, setVitals] = useState<PatientVitalsSummary | null>(null);
   const [isLoadingVitals, setIsLoadingVitals] = useState(false);
@@ -329,6 +341,12 @@ export const EvolutionTracking: React.FC = () => {
   const [isUpdatingRibbon, setIsUpdatingRibbon] = useState(false);
   const [isLoadingRibbonOptions, setIsLoadingRibbonOptions] = useState(false);
   const [ribbonModalError, setRibbonModalError] = useState<string | null>(null);
+  const [medicalHistoryData, setMedicalHistoryData] = useState<MedicalHistoryData>(() => createInitialMedicalHistory());
+  const [isLoadingMedicalHistory, setIsLoadingMedicalHistory] = useState(false);
+  const [medicalHistoryError, setMedicalHistoryError] = useState<string | null>(null);
+  const [medicalHistoryNotice, setMedicalHistoryNotice] = useState<string | null>(null);
+  const [isSavingMedicalHistory, setIsSavingMedicalHistory] = useState(false);
+  const [medicalHistorySuccess, setMedicalHistorySuccess] = useState<string | null>(null);
   const apiBase = useMemo(() => (import.meta as any).env?.VITE_API_BASE ?? 'http://localhost:3000', []);
 
   useEffect(() => {
@@ -582,6 +600,117 @@ export const EvolutionTracking: React.FC = () => {
   const isPatient = user?.role === 'patient' || user?.role === 'student';
   const isTherapist = ['administrator', 'trainer', 'therapist', 'doctor', 'coach'].includes(user?.role || '');
   const canManageRecords = isPatient || isTherapist;
+  const shouldShowDoctorTabs = Boolean(selectedPatient) && isTherapist && !isPatient;
+  const showSummarySection = !shouldShowDoctorTabs || doctorActiveTab === 'summary';
+  const showChartsSection = !shouldShowDoctorTabs || doctorActiveTab === 'charts';
+  const showRecordsSection = !shouldShowDoctorTabs || doctorActiveTab === 'records';
+  const showVitalsMessaging = !shouldShowDoctorTabs || doctorActiveTab !== 'summary';
+
+  useEffect(() => {
+    if (!shouldShowDoctorTabs) {
+      return;
+    }
+    setDoctorActiveTab('summary');
+  }, [shouldShowDoctorTabs, selectedPatient?.id]);
+
+  useEffect(() => {
+    if (!shouldShowDoctorTabs) {
+      setMedicalHistoryData(createInitialMedicalHistory());
+      setMedicalHistoryError(null);
+      setMedicalHistoryNotice(null);
+      setMedicalHistorySuccess(null);
+      setIsLoadingMedicalHistory(false);
+      return;
+    }
+
+    const patientUserId = selectedPatient?.userId;
+
+    if (!patientUserId) {
+      setMedicalHistoryData(createInitialMedicalHistory());
+      setMedicalHistoryNotice('El paciente no tiene un usuario vinculado para consultar la historia médica.');
+      setMedicalHistoryError(null);
+      setIsLoadingMedicalHistory(false);
+      return;
+    }
+
+    if (!token) {
+      setMedicalHistoryData(createInitialMedicalHistory());
+      setMedicalHistoryError('No se pudo autenticar la solicitud. Intenta iniciar sesión nuevamente.');
+      setMedicalHistoryNotice(null);
+      setIsLoadingMedicalHistory(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    let isCancelled = false;
+
+    const fetchMedicalHistory = async () => {
+      setIsLoadingMedicalHistory(true);
+      setMedicalHistoryError(null);
+      setMedicalHistoryNotice(null);
+      setMedicalHistorySuccess(null);
+
+      try {
+        const response = await fetch(`${apiBase}/patient/user/${patientUserId}/history`, {
+          method: 'GET',
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          signal: controller.signal,
+        });
+
+        if (response.status === 404) {
+          if (!isCancelled) {
+            setMedicalHistoryData(createInitialMedicalHistory());
+            setMedicalHistoryNotice('El paciente aún no registra una historia médica.');
+          }
+          return;
+        }
+
+        if (!response.ok) {
+          throw new Error(`Failed to fetch medical history (${response.status})`);
+        }
+
+        const payload = (await response.json()) as RemotePatientMedicalHistory | null;
+
+        if (!isCancelled) {
+          const mappedHistory = mapRemoteMedicalHistoryToState(payload);
+          setMedicalHistoryData(mappedHistory);
+        }
+      } catch (error: any) {
+        if (isCancelled || error?.name === 'AbortError') {
+          return;
+        }
+        console.error('Failed to load patient medical history', error);
+        setMedicalHistoryError('No se pudo cargar la historia médica. Intenta nuevamente.');
+      } finally {
+        if (!isCancelled) {
+          setIsLoadingMedicalHistory(false);
+        }
+      }
+    };
+
+    void fetchMedicalHistory();
+
+    return () => {
+      isCancelled = true;
+      controller.abort();
+    };
+  }, [apiBase, selectedPatient?.userId, shouldShowDoctorTabs, token]);
+
+  useEffect(() => {
+    if (!medicalHistorySuccess) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      setMedicalHistorySuccess(null);
+    }, 5000);
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [medicalHistorySuccess]);
 
   const vitalsUrl = useMemo(() => {
     if (!token) {
@@ -674,6 +803,58 @@ export const EvolutionTracking: React.FC = () => {
       }
     },
     [token, vitalsUrl]
+  );
+
+  const handleMedicalHistorySubmit = useCallback(
+    async (event: React.FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+
+      if (!selectedPatient) {
+        setMedicalHistoryError('Selecciona un paciente para actualizar la historia médica.');
+        return;
+      }
+
+      if (!selectedPatient.userId) {
+        setMedicalHistoryError('El paciente no tiene un usuario vinculado para actualizar la historia médica.');
+        return;
+      }
+
+      if (!token) {
+        setMedicalHistoryError('No se pudo autenticar la solicitud. Intenta iniciar sesión nuevamente.');
+        return;
+      }
+
+      setIsSavingMedicalHistory(true);
+      setMedicalHistoryError(null);
+      setMedicalHistoryNotice(null);
+
+      try {
+        const payload = buildUpdatePayload(medicalHistoryData);
+        const response = await fetch(`${apiBase}/patient/user/${selectedPatient.userId}/history`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(payload),
+        });
+
+        if (!response.ok) {
+          throw new Error(`Failed to update medical history (${response.status})`);
+        }
+
+        const updated = (await response.json()) as RemotePatientMedicalHistory | null;
+        const mappedHistory = mapRemoteMedicalHistoryToState(updated);
+        setMedicalHistoryData(mappedHistory);
+        setMedicalHistorySuccess('Historia médica guardada correctamente.');
+      } catch (error) {
+        console.error('Failed to save medical history', error);
+        setMedicalHistoryError('No se pudo guardar la historia médica. Intenta nuevamente.');
+      } finally {
+        setIsSavingMedicalHistory(false);
+      }
+    },
+    [apiBase, medicalHistoryData, selectedPatient, token]
   );
 
   const registerVital = useCallback(
@@ -1945,6 +2126,12 @@ export const EvolutionTracking: React.FC = () => {
     },
   ];
 
+  const doctorTabs = [
+    { id: 'summary', label: 'Resumen clínico', icon: LayoutDashboard },
+    { id: 'charts', label: 'Evolución', icon: Activity },
+    { id: 'records', label: 'Registros de evolución detallados', icon: ClipboardList },
+  ] as const satisfies ReadonlyArray<{ id: DoctorTabId; label: string; icon: LucideIcon }>;
+
   const healthTabs = [
     { id: 'mood', label: 'Estado y energía', icon: TrendingUp },
     { id: 'weight', label: 'Peso', icon: Scale },
@@ -2261,6 +2448,33 @@ export const EvolutionTracking: React.FC = () => {
             </div>
           </div>
 
+        {shouldShowDoctorTabs && (
+          <div className="rounded-[28px] border border-[#FFE4D6]/70 bg-white/70 px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)] backdrop-blur">
+            <nav className="flex flex-wrap gap-2 sm:gap-3">
+              {doctorTabs.map((tab) => {
+                const Icon = tab.icon;
+                const isActive = doctorActiveTab === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setDoctorActiveTab(tab.id)}
+                    className={`flex items-center gap-2 rounded-full px-4 py-2 text-xs font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FB923C]/40 sm:text-sm ${
+                      isActive
+                        ? 'bg-gradient-to-r from-[#F97316] via-[#FB7185] to-[#F472B6] text-white shadow-[0_15px_40px_rgba(249,115,22,0.25)]'
+                        : 'border border-transparent bg-white/70 text-[#B45309] hover:border-[#FDBA74] hover:bg-white/90 hover:text-[#7C2D12]'
+                    }`}
+                  >
+                    <Icon className="h-4 w-4" />
+                    <span>{tab.label}</span>
+                  </button>
+                );
+              })}
+            </nav>
+          </div>
+        )}
+
+        {showSummarySection && (
           <div className="grid gap-3 sm:grid-cols-3">
             <div className="rounded-3xl border border-[#FFE4D6]/80 bg-white/70 px-5 py-4 text-slate-900 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur">
               <p className="text-[11px] font-semibold uppercase tracking-[0.35em] text-[#B45309]">Registros</p>
@@ -2278,7 +2492,9 @@ export const EvolutionTracking: React.FC = () => {
               <span className="text-xs text-[#B45309]/70">Fecha exacta</span>
             </div>
           </div>
+        )}
 
+        {showSummarySection && (
           <div className="grid gap-4 lg:grid-cols-[repeat(3,minmax(0,1fr))]">
             <div className="flex flex-col">
               <label className="text-xs font-semibold uppercase tracking-[0.3em] text-[#C2410C]" htmlFor="evolution-date-from">
@@ -2316,16 +2532,46 @@ export const EvolutionTracking: React.FC = () => {
               </Button>
             </div>
           </div>
-        </div>
-      </div>
+        )}
 
-      {vitalsError && (
+        {shouldShowDoctorTabs && showSummarySection && (
+          <Card className="rounded-[28px] border border-[#FFE4D6]/70 bg-white/90 p-6 shadow-[0_30px_70px_rgba(124,45,18,0.08)] backdrop-blur">
+            <div className="space-y-6">
+              <div className="space-y-2">
+                <p className="text-[11px] uppercase tracking-[0.35em] text-[#B45309]">Historia médica</p>
+                <h2 className="text-xl font-semibold text-slate-900 sm:text-2xl">
+                  {selectedPatient
+                    ? `Historia clínica de ${selectedPatient.firstName} ${selectedPatient.lastName}`
+                    : 'Historia clínica del paciente'}
+                </h2>
+                <p className="text-sm text-slate-600">
+                  Revisa y actualiza los antecedentes médicos para mantener la información al día.
+                </p>
+              </div>
+
+              <PatientMedicalHistoryForm
+                data={medicalHistoryData}
+                setData={setMedicalHistoryData}
+                onSubmit={handleMedicalHistorySubmit}
+                isSaving={isSavingMedicalHistory}
+                errorMessage={medicalHistoryError}
+                successMessage={medicalHistorySuccess}
+                noticeMessage={medicalHistoryNotice}
+                isLoading={isLoadingMedicalHistory}
+              />
+            </div>
+          </Card>
+        )}
+      </div>
+    </div>
+
+      {showVitalsMessaging && vitalsError && (
         <Card className="rounded-2xl border border-[#FFE4D6]/80 bg-white/85 shadow-[0_30px_70px_rgba(120,53,15,0.08)] backdrop-blur">
           <p className="text-sm text-red-600">{vitalsError}</p>
         </Card>
       )}
 
-      {!vitalsError && !isLoadingVitals && !hasVitalsData && (
+      {showVitalsMessaging && !vitalsError && !isLoadingVitals && !hasVitalsData && (
         <Card className="rounded-2xl border border-[#FFE4D6]/80 bg-white/85 shadow-[0_30px_70px_rgba(120,53,15,0.08)] backdrop-blur">
           <p className="text-sm text-slate-600">
             {selectedPatient
@@ -2337,7 +2583,8 @@ export const EvolutionTracking: React.FC = () => {
 
       {hasVitalsData && (
         <>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+          {showChartsSection && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
             <Chart
               title="Peso"
               data={weightChartData}
@@ -2370,9 +2617,12 @@ export const EvolutionTracking: React.FC = () => {
               xAxisKey="label"
               colors={['#F97316']}
             />
-          </div>
+            </div>
+          )}
 
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6">
+          {showRecordsSection && (
+            <>
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6">
             <Card
               padding="sm"
               className="space-y-4 rounded-[28px] border border-[#FFE4D6]/70 bg-white/85 shadow-[0_30px_80px_rgba(124,45,18,0.08)] backdrop-blur"
@@ -2510,7 +2760,7 @@ export const EvolutionTracking: React.FC = () => {
             </Card>
           </div>
 
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6">
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6">
             <Card
               padding="sm"
               className="space-y-4 rounded-[28px] border border-[#FFE4D6]/70 bg-white/85 shadow-[0_30px_80px_rgba(124,45,18,0.08)] backdrop-blur"
@@ -2578,7 +2828,9 @@ export const EvolutionTracking: React.FC = () => {
                 <p className="text-sm text-gray-600">Haz clic en "Ver registros" para mostrar los datos.</p>
               )}
             </Card>
-          </div>
+              </div>
+            </>
+          )}
         </>
       )}
 
