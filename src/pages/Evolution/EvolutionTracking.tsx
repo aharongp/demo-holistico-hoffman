@@ -13,7 +13,27 @@ import {
   RemotePatientMedicalHistory,
   buildUpdatePayload,
   createInitialMedicalHistory,
+  createInitialOcularForm,
   mapRemoteMedicalHistoryToState,
+  createInitialDentalPresence,
+  createInitialDentalFindings,
+  DENTAL_FIELD_GROUPS,
+  DENTAL_FIELD_META,
+  DENTAL_FIELDS,
+  DENTAL_PRESENCE_OPTIONS,
+  normalizeOcularExamRecords,
+  toDisplayText,
+  presenceSelectionFromBoolean,
+  presenceSelectionToPayload,
+} from '../MedicalHistory/MedicalHistory';
+import type {
+  DentalField,
+  DentalFindingsState,
+  DentalPresenceSelection,
+  DentalPresenceState,
+  DentalQuadrantKey,
+  OcularExamRow,
+  OcularFormState,
 } from '../MedicalHistory/MedicalHistory';
 import { PatientMedicalHistoryForm } from './components/PatientMedicalHistoryForm';
 import {
@@ -347,7 +367,65 @@ export const EvolutionTracking: React.FC = () => {
   const [medicalHistoryNotice, setMedicalHistoryNotice] = useState<string | null>(null);
   const [isSavingMedicalHistory, setIsSavingMedicalHistory] = useState(false);
   const [medicalHistorySuccess, setMedicalHistorySuccess] = useState<string | null>(null);
+  const [dentalPresence, setDentalPresence] = useState<DentalPresenceState>(createInitialDentalPresence());
+  const [dentalFindings, setDentalFindings] = useState<DentalFindingsState>(createInitialDentalFindings());
+  const [dentalPresenceRecordId, setDentalPresenceRecordId] = useState<number | null>(null);
+  const [dentalExamRecordId, setDentalExamRecordId] = useState<number | null>(null);
+  const [isLoadingDental, setIsLoadingDental] = useState(false);
+  const [dentalLoadError, setDentalLoadError] = useState<string | null>(null);
+  const [isDentalModalOpen, setIsDentalModalOpen] = useState(false);
+  const [selectedTooth, setSelectedTooth] = useState<DentalField | null>(null);
+  const [pendingPresence, setPendingPresence] = useState<DentalPresenceSelection>('unknown');
+  const [pendingFinding, setPendingFinding] = useState('');
+  const [isSavingTooth, setIsSavingTooth] = useState(false);
+  const [dentalModalError, setDentalModalError] = useState<string | null>(null);
   const apiBase = useMemo(() => (import.meta as any).env?.VITE_API_BASE ?? 'http://localhost:3000', []);
+  const [ocularExams, setOcularExams] = useState<OcularExamRow[]>([]);
+  const [isLoadingOcular, setIsLoadingOcular] = useState(false);
+  const [ocularLoadError, setOcularLoadError] = useState<string | null>(null);
+  const [ocularRefreshKey, setOcularRefreshKey] = useState(0);
+  const [isOcularModalOpen, setIsOcularModalOpen] = useState(false);
+  const [ocularForm, setOcularForm] = useState<OcularFormState>(createInitialOcularForm());
+  const [isSavingOcularExam, setIsSavingOcularExam] = useState(false);
+  const [ocularModalError, setOcularModalError] = useState<string | null>(null);
+  const [ocularFormResetKey, setOcularFormResetKey] = useState(0);
+  const assetsBase = useMemo(() => {
+    const rawEnv = (import.meta as any).env?.VITE_ASSETS_BASE;
+    const normalizedEnv = typeof rawEnv === 'string' ? rawEnv.trim() : '';
+    if (normalizedEnv.length > 0) {
+      return normalizedEnv.replace(/\/+$/, '');
+    }
+
+    return apiBase.replace(/\/+$/, '');
+  }, [apiBase]);
+
+  const resetDentalState = useCallback((errorMessage: string | null = null) => {
+    setDentalPresence(createInitialDentalPresence());
+    setDentalFindings(createInitialDentalFindings());
+    setDentalPresenceRecordId(null);
+    setDentalExamRecordId(null);
+    setSelectedTooth(null);
+    setPendingPresence('unknown');
+    setPendingFinding('');
+    setDentalModalError(null);
+    setIsDentalModalOpen(false);
+    setIsSavingTooth(false);
+    setIsLoadingDental(false);
+    setDentalLoadError(errorMessage);
+  }, [
+    setDentalPresence,
+    setDentalFindings,
+    setDentalPresenceRecordId,
+    setDentalExamRecordId,
+    setSelectedTooth,
+    setPendingPresence,
+    setPendingFinding,
+    setDentalModalError,
+    setIsDentalModalOpen,
+    setIsSavingTooth,
+    setIsLoadingDental,
+    setDentalLoadError,
+  ]);
 
   useEffect(() => {
     if (!isRibbonModalOpen) {
@@ -699,6 +777,245 @@ export const EvolutionTracking: React.FC = () => {
   }, [apiBase, selectedPatient?.userId, shouldShowDoctorTabs, token]);
 
   useEffect(() => {
+    if (!shouldShowDoctorTabs) {
+      resetDentalState(null);
+      return;
+    }
+
+    const patientId = selectedPatient?.id ?? null;
+
+    if (!patientId) {
+      resetDentalState(null);
+      return;
+    }
+
+    if (!token) {
+      resetDentalState('No se pudo autenticar la solicitud. Intenta iniciar sesión nuevamente.');
+      return;
+    }
+
+    const controller = new AbortController();
+    let cancelled = false;
+
+    const loadDentalData = async () => {
+      setIsLoadingDental(true);
+      setDentalLoadError(null);
+
+      const headers = {
+        Authorization: `Bearer ${token}`,
+      };
+
+      try {
+        const presenceRes = await fetch(
+          `${apiBase}/patients/history/${patientId}/dental-exams/presence`,
+          {
+            method: 'GET',
+            headers,
+            signal: controller.signal,
+          },
+        );
+
+        let presenceRecord: any = null;
+        if (presenceRes.status === 404 || presenceRes.status === 204) {
+          presenceRecord = null;
+        } else if (!presenceRes.ok) {
+          throw new Error(`Failed to fetch dental presence (${presenceRes.status})`);
+        } else {
+          const payload = await presenceRes.json().catch(() => null);
+          if (Array.isArray(payload)) {
+            presenceRecord = payload[0] ?? null;
+          } else {
+            presenceRecord = payload;
+          }
+        }
+
+        const examRes = await fetch(
+          `${apiBase}/patients/history/${patientId}/dental-exams`,
+          {
+            method: 'GET',
+            headers,
+            signal: controller.signal,
+          },
+        );
+
+        let examRecord: any = null;
+        if (examRes.status === 404 || examRes.status === 204) {
+          examRecord = null;
+        } else if (!examRes.ok) {
+          throw new Error(`Failed to fetch dental findings (${examRes.status})`);
+        } else {
+          const payload = await examRes.json().catch(() => null);
+          if (Array.isArray(payload)) {
+            examRecord = payload[0] ?? null;
+          } else {
+            examRecord = payload;
+          }
+        }
+
+        if (cancelled) {
+          return;
+        }
+
+        if (presenceRecord && typeof presenceRecord === 'object') {
+          const nextPresence = createInitialDentalPresence();
+          if (presenceRecord.presence && typeof presenceRecord.presence === 'object') {
+            DENTAL_FIELDS.forEach((field) => {
+              const raw = presenceRecord.presence[field];
+              if (typeof raw === 'boolean') {
+                nextPresence[field] = raw;
+              } else if (typeof raw === 'number') {
+                nextPresence[field] = raw === 1;
+              } else if (raw === null) {
+                nextPresence[field] = null;
+              } else {
+                nextPresence[field] = null;
+              }
+            });
+          }
+
+          setDentalPresenceRecordId(
+            typeof presenceRecord.id === 'number' ? presenceRecord.id : null,
+          );
+          setDentalPresence(nextPresence);
+        } else {
+          setDentalPresenceRecordId(null);
+          setDentalPresence(createInitialDentalPresence());
+        }
+
+        if (examRecord && typeof examRecord === 'object') {
+          const nextFindings = createInitialDentalFindings();
+          if (examRecord.details && typeof examRecord.details === 'object') {
+            DENTAL_FIELDS.forEach((field) => {
+              const raw = examRecord.details[field];
+              if (typeof raw === 'string') {
+                nextFindings[field] = raw;
+              } else if (raw === null || typeof raw === 'undefined') {
+                nextFindings[field] = '';
+              } else {
+                nextFindings[field] = String(raw ?? '');
+              }
+            });
+          }
+
+          setDentalExamRecordId(
+            typeof examRecord.id === 'number' ? examRecord.id : null,
+          );
+          setDentalFindings(nextFindings);
+        } else {
+          setDentalExamRecordId(null);
+          setDentalFindings(createInitialDentalFindings());
+        }
+      } catch (error: any) {
+        if (cancelled || error?.name === 'AbortError') {
+          return;
+        }
+
+        console.error('Failed to load dental exam data', error);
+        resetDentalState('No se pudo cargar el examen dental. Intenta nuevamente.');
+      } finally {
+        if (!cancelled) {
+          setIsLoadingDental(false);
+        }
+      }
+    };
+
+    void loadDentalData();
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [apiBase, resetDentalState, selectedPatient?.id, shouldShowDoctorTabs, token]);
+
+  useEffect(() => {
+    if (!shouldShowDoctorTabs) {
+      setOcularExams([]);
+      setOcularLoadError(null);
+      setIsLoadingOcular(false);
+      return;
+    }
+
+    const patientId = selectedPatient?.id ?? null;
+
+    if (!patientId) {
+      setOcularExams([]);
+      setOcularLoadError(null);
+      setIsLoadingOcular(false);
+      return;
+    }
+
+    if (!token) {
+      setOcularLoadError('No se pudo autenticar la solicitud. Intenta iniciar sesión nuevamente.');
+      setOcularExams([]);
+      setIsLoadingOcular(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    let cancelled = false;
+
+    const loadOcularData = async () => {
+      setIsLoadingOcular(true);
+      setOcularLoadError(null);
+
+      try {
+        const response = await fetch(`${apiBase}/patients/history/${patientId}/ocular-exams`, {
+          method: 'GET',
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          signal: controller.signal,
+        });
+
+        if (response.status === 204 || response.status === 404) {
+          if (!cancelled) {
+            setOcularExams([]);
+          }
+          return;
+        }
+
+        if (!response.ok) {
+          throw new Error(`Failed to fetch ocular exams (${response.status})`);
+        }
+
+        const payload = await response.json().catch(() => null);
+
+        if (cancelled) {
+          return;
+        }
+
+        const records = Array.isArray(payload)
+          ? payload
+          : payload
+          ? [payload]
+          : [];
+
+        const normalized = normalizeOcularExamRecords(records, assetsBase);
+        setOcularExams(normalized);
+      } catch (error: any) {
+        if (cancelled || error?.name === 'AbortError') {
+          return;
+        }
+
+        console.error('Failed to load ocular exam data', error);
+        setOcularLoadError('No se pudo cargar el examen ocular. Intenta nuevamente.');
+        setOcularExams([]);
+      } finally {
+        if (!cancelled) {
+          setIsLoadingOcular(false);
+        }
+      }
+    };
+
+    void loadOcularData();
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [apiBase, assetsBase, ocularRefreshKey, selectedPatient?.id, shouldShowDoctorTabs, token]);
+
+  useEffect(() => {
     if (!medicalHistorySuccess) {
       return;
     }
@@ -711,6 +1028,351 @@ export const EvolutionTracking: React.FC = () => {
       window.clearTimeout(timeout);
     };
   }, [medicalHistorySuccess]);
+
+  const presenceOptionClass = (value: DentalPresenceSelection): string =>
+    `rounded-full border px-4 py-2 text-sm font-medium transition ${
+      value === pendingPresence
+        ? 'border-indigo-500 bg-indigo-500 text-white shadow-sm'
+        : 'border-slate-200 bg-white text-slate-600 hover:border-indigo-300 hover:text-indigo-600'
+    }`;
+
+  const getToothStatusClasses = (value: boolean | null): string => {
+    if (value === true) {
+      return 'bg-emerald-500 border-emerald-500 text-white hover:bg-emerald-600 hover:border-emerald-600';
+    }
+    if (value === false) {
+      return 'bg-rose-500 border-rose-500 text-white hover:bg-rose-600 hover:border-rose-600';
+    }
+    return 'bg-white border-slate-200 text-slate-500 hover:border-slate-400';
+  };
+
+  const formatToothTooltip = (field: DentalField): string => {
+    const meta = DENTAL_FIELD_META[field];
+    const presenceValue = dentalPresence[field];
+    const presenceLabel =
+      presenceValue === true
+        ? 'Presente'
+        : presenceValue === false
+        ? 'Ausente'
+        : 'Sin registro';
+    const finding = dentalFindings[field].trim();
+    return `${meta.quadrantLabel} ${meta.number} - ${presenceLabel}${finding ? ` - ${finding}` : ''}`;
+  };
+
+  const handleToothClick = (field: DentalField) => {
+    setSelectedTooth(field);
+    setPendingPresence(presenceSelectionFromBoolean(dentalPresence[field] ?? null));
+    setPendingFinding(dentalFindings[field] ?? '');
+    setDentalModalError(null);
+    setIsDentalModalOpen(true);
+  };
+
+  const handleDentalModalClose = () => {
+    if (isSavingTooth) {
+      return;
+    }
+
+    setIsDentalModalOpen(false);
+    setSelectedTooth(null);
+    setPendingPresence('unknown');
+    setPendingFinding('');
+    setDentalModalError(null);
+  };
+
+  const handleDentalSave = async () => {
+    const patientId = selectedPatient?.id ?? null;
+
+    if (!selectedTooth || !patientId || !token) {
+      setDentalModalError('No se pudo identificar la pieza o el paciente.');
+      return;
+    }
+
+    setIsSavingTooth(true);
+    setDentalModalError(null);
+
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    };
+
+    const payloadPresenceValue = presenceSelectionToPayload(pendingPresence);
+    const sanitizedFinding = pendingFinding.trim();
+
+    let nextPresenceState = { ...dentalPresence };
+    let nextFindingsState = { ...dentalFindings };
+    let nextPresenceId = dentalPresenceRecordId;
+    let nextExamId = dentalExamRecordId;
+
+    try {
+      if (payloadPresenceValue !== null || dentalPresenceRecordId !== null) {
+        const presencePayload: Record<string, number | null> = {
+          [selectedTooth]: payloadPresenceValue,
+        };
+        const presenceUrl =
+          dentalPresenceRecordId !== null
+            ? `${apiBase}/patients/history/${patientId}/dental-exams/presence/${dentalPresenceRecordId}`
+            : `${apiBase}/patients/history/${patientId}/dental-exams/presence`;
+        const presenceMethod = dentalPresenceRecordId !== null ? 'PUT' : 'POST';
+        const res = await fetch(presenceUrl, {
+          method: presenceMethod,
+          headers,
+          body: JSON.stringify(presencePayload),
+        });
+
+        if (!res.ok) {
+          throw new Error(`Failed to save dental presence (${res.status})`);
+        }
+
+        const payload = await res.json().catch(() => null);
+        if (payload && typeof payload === 'object') {
+          if (typeof payload.id === 'number') {
+            nextPresenceId = payload.id;
+          }
+
+          if (payload.presence && typeof payload.presence === 'object') {
+            const updatedPresence = createInitialDentalPresence();
+            DENTAL_FIELDS.forEach((field) => {
+              const raw = payload.presence[field];
+              if (typeof raw === 'boolean') {
+                updatedPresence[field] = raw;
+              } else if (typeof raw === 'number') {
+                updatedPresence[field] = raw === 1;
+              } else if (raw === null) {
+                updatedPresence[field] = null;
+              } else {
+                updatedPresence[field] = null;
+              }
+            });
+            nextPresenceState = updatedPresence;
+          } else {
+            nextPresenceState = {
+              ...dentalPresence,
+              [selectedTooth]:
+                payloadPresenceValue === null ? null : payloadPresenceValue === 1,
+            };
+          }
+        }
+      } else {
+        nextPresenceState = {
+          ...dentalPresence,
+          [selectedTooth]: null,
+        };
+      }
+
+      const hasExistingExam = dentalExamRecordId !== null;
+      if (hasExistingExam || sanitizedFinding.length > 0) {
+        const examPayload: Record<string, string | null> = {
+          [selectedTooth]: sanitizedFinding.length > 0 ? sanitizedFinding : null,
+        };
+        const examUrl =
+          hasExistingExam
+            ? `${apiBase}/patients/history/${patientId}/dental-exams/${dentalExamRecordId}`
+            : `${apiBase}/patients/history/${patientId}/dental-exams`;
+        const examMethod = hasExistingExam ? 'PUT' : 'POST';
+        const res = await fetch(examUrl, {
+          method: examMethod,
+          headers,
+          body: JSON.stringify(examPayload),
+        });
+
+        if (!res.ok) {
+          throw new Error(`Failed to save dental finding (${res.status})`);
+        }
+
+        const payload = await res.json().catch(() => null);
+        if (payload && typeof payload === 'object') {
+          if (typeof payload.id === 'number') {
+            nextExamId = payload.id;
+          }
+
+          if (payload.details && typeof payload.details === 'object') {
+            const updatedFindings = createInitialDentalFindings();
+            DENTAL_FIELDS.forEach((field) => {
+              const raw = payload.details[field];
+              if (typeof raw === 'string') {
+                updatedFindings[field] = raw;
+              } else if (raw === null || typeof raw === 'undefined') {
+                updatedFindings[field] = '';
+              } else {
+                updatedFindings[field] = String(raw ?? '');
+              }
+            });
+            nextFindingsState = updatedFindings;
+          } else {
+            nextFindingsState = {
+              ...dentalFindings,
+              [selectedTooth]: sanitizedFinding,
+            };
+          }
+        }
+      } else {
+        nextFindingsState = {
+          ...dentalFindings,
+          [selectedTooth]: '',
+        };
+      }
+
+      setDentalPresence(nextPresenceState);
+      setDentalFindings(nextFindingsState);
+      setDentalPresenceRecordId(nextPresenceId);
+      setDentalExamRecordId(nextExamId);
+      setIsDentalModalOpen(false);
+      setSelectedTooth(null);
+      setPendingPresence('unknown');
+      setPendingFinding('');
+    } catch (error) {
+      console.error('Failed to save dental exam data', error);
+      setDentalModalError('No se pudo guardar la información dental. Intenta nuevamente.');
+    } finally {
+      setIsSavingTooth(false);
+    }
+  };
+
+  const handleOpenOcularModal = () => {
+    setOcularModalError(null);
+    setOcularForm(createInitialOcularForm());
+    setOcularFormResetKey((value) => value + 1);
+    setIsOcularModalOpen(true);
+  };
+
+  const handleCloseOcularModal = () => {
+    if (isSavingOcularExam) {
+      return;
+    }
+
+    setIsOcularModalOpen(false);
+    setOcularModalError(null);
+  };
+
+  type OcularTextField = 'date' | 'reason' | 'rightObservation' | 'leftObservation' | 'comment';
+
+  const handleOcularFieldChange = (field: OcularTextField, value: string) => {
+    setOcularForm((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+  };
+
+  type OcularFileField = 'rightEyeFile' | 'leftEyeFile';
+
+  const handleOcularFileChange = (field: OcularFileField, file: File | null) => {
+    setOcularForm((prev) => ({
+      ...prev,
+      [field]: file,
+    }));
+  };
+
+  const handleSubmitOcularExam = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    const patientId = selectedPatient?.id ?? null;
+
+    if (!patientId || !token) {
+      setOcularModalError('No se pudo identificar al paciente autenticado. Intenta nuevamente.');
+      return;
+    }
+
+    setIsSavingOcularExam(true);
+    setOcularModalError(null);
+
+    const toNullable = (value: string): string | null => {
+      const trimmed = value.trim();
+      return trimmed.length > 0 ? trimmed : null;
+    };
+
+    const normalizedDate = ocularForm.date.trim();
+    const formData = new FormData();
+
+    if (normalizedDate) {
+      formData.append('fecha', normalizedDate);
+    }
+
+    const motivo = toNullable(ocularForm.reason);
+    if (motivo) {
+      formData.append('motivo', motivo);
+    }
+
+    const observacionDerecho = toNullable(ocularForm.rightObservation);
+    if (observacionDerecho) {
+      formData.append('observacion_derecho', observacionDerecho);
+    }
+
+    const observacionIzquierdo = toNullable(ocularForm.leftObservation);
+    if (observacionIzquierdo) {
+      formData.append('observacion_izquierdo', observacionIzquierdo);
+    }
+
+    const comentario = toNullable(ocularForm.comment);
+    if (comentario) {
+      formData.append('comentario', comentario);
+    }
+
+    if (ocularForm.rightEyeFile) {
+      formData.append('rightEyeImage', ocularForm.rightEyeFile);
+    }
+
+    if (ocularForm.leftEyeFile) {
+      formData.append('leftEyeImage', ocularForm.leftEyeFile);
+    }
+
+    try {
+      const response = await fetch(`${apiBase}/patients/history/${patientId}/ocular-exams`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to create ocular exam (${response.status})`);
+      }
+
+      setIsOcularModalOpen(false);
+      setOcularForm(createInitialOcularForm());
+      setOcularFormResetKey((value) => value + 1);
+      setOcularModalError(null);
+      setOcularRefreshKey((value) => value + 1);
+    } catch (error) {
+      console.error('Failed to create ocular exam', error);
+      setOcularModalError('No se pudo registrar el examen ocular. Intenta nuevamente.');
+    } finally {
+      setIsSavingOcularExam(false);
+    }
+  };
+
+  const renderQuadrant = (key: DentalQuadrantKey) => {
+    const config = DENTAL_FIELD_GROUPS[key];
+
+    return (
+      <div key={key} className="space-y-3">
+        <h4 className="text-sm font-semibold text-slate-600 uppercase tracking-[0.2em]">
+          {config.label}
+        </h4>
+        <div className="flex flex-wrap gap-2">
+          {config.order.map((field) => {
+            const meta = DENTAL_FIELD_META[field];
+            const status = dentalPresence[field];
+            const finding = dentalFindings[field].trim();
+            return (
+              <button
+                key={field}
+                type="button"
+                onClick={() => handleToothClick(field)}
+                title={formatToothTooltip(field)}
+                className={`relative h-10 w-10 rounded-full border text-sm font-semibold transition ${getToothStatusClasses(status)} focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:ring-offset-2`}
+              >
+                {meta.number}
+                {finding && (
+                  <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-amber-400" />
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
 
   const vitalsUrl = useMemo(() => {
     if (!token) {
@@ -2562,6 +3224,220 @@ export const EvolutionTracking: React.FC = () => {
             </div>
           </Card>
         )}
+
+        {shouldShowDoctorTabs && showSummarySection && selectedPatient && (
+          <Card className="rounded-[28px] border border-[#FFE4D6]/70 bg-white/90 p-6 shadow-[0_30px_70px_rgba(124,45,18,0.08)] backdrop-blur">
+            <div className="space-y-6">
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <h2 className="text-xl font-semibold text-slate-900">Examen dental</h2>
+                  <p className="text-sm text-slate-500">
+                    Marca la presencia de cada pieza dental y registra los hallazgos detectados.
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500">
+                  <span className="flex items-center gap-2">
+                    <span className="h-3 w-3 rounded-full bg-emerald-500" />
+                    Presente
+                  </span>
+                  <span className="flex items-center gap-2">
+                    <span className="h-3 w-3 rounded-full bg-rose-500" />
+                    Ausente
+                  </span>
+                  <span className="flex items-center gap-2">
+                    <span className="h-3 w-3 rounded-full border border-slate-300 bg-white" />
+                    Sin dato
+                  </span>
+                </div>
+              </div>
+
+              {dentalLoadError && (
+                <div className="rounded-lg border border-rose-100 bg-rose-50/80 px-3 py-2 text-sm text-rose-600">
+                  {dentalLoadError}
+                </div>
+              )}
+
+              {isLoadingDental ? (
+                <div className="rounded-xl border border-slate-100 bg-white/70 px-4 py-6 text-sm text-slate-600">
+                  Cargando información dental...
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  <div className="grid gap-6 lg:grid-cols-2">
+                    {renderQuadrant('superiorDerecha')}
+                    {renderQuadrant('superiorIzquierda')}
+                  </div>
+                  <div className="grid gap-6 lg:grid-cols-2">
+                    {renderQuadrant('inferiorDerecha')}
+                    {renderQuadrant('inferiorIzquierda')}
+                  </div>
+                </div>
+              )}
+
+              <div className="border-t border-slate-100 pt-6">
+                <h3 className="text-sm font-semibold uppercase tracking-[0.35em] text-slate-400">
+                  Detalle de los hallazgos
+                </h3>
+                <div className="mt-4 grid gap-6 md:grid-cols-2">
+                  {(Object.entries(DENTAL_FIELD_GROUPS) as Array<[
+                    DentalQuadrantKey,
+                    (typeof DENTAL_FIELD_GROUPS)[DentalQuadrantKey],
+                  ]>).map(([key, config]) => (
+                    <div key={key} className="space-y-2">
+                      <h4 className="text-sm font-semibold text-slate-600">{config.label}</h4>
+                      <div className="space-y-1 rounded-xl bg-slate-50/70 p-3">
+                        {config.order.map((field) => {
+                          const meta = DENTAL_FIELD_META[field];
+                          const rawFinding = dentalFindings[field];
+                          const trimmedFinding = rawFinding.trim();
+                          return (
+                            <div
+                              key={field}
+                              className="flex items-start gap-2 text-sm text-slate-600"
+                            >
+                              <span className="w-14 font-semibold text-slate-500">
+                                {`${meta.displayCode}${meta.number}:`}
+                              </span>
+                              <span className="flex-1 text-slate-500">
+                                {trimmedFinding ? trimmedFinding : '—'}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </Card>
+        )}
+
+        {shouldShowDoctorTabs && showSummarySection && selectedPatient && (
+          <Card className="rounded-[28px] border border-[#FFE4D6]/70 bg-white/90 p-6 shadow-[0_30px_70px_rgba(124,45,18,0.08)] backdrop-blur">
+            <div className="space-y-6">
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <h2 className="text-xl font-semibold text-slate-900">Examen ocular</h2>
+                  <p className="text-sm text-slate-500">
+                    Consulta el historial de evaluaciones oculares registradas por el equipo médico.
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="primary"
+                  onClick={handleOpenOcularModal}
+                  className="inline-flex items-center gap-2 self-start md:self-auto"
+                  disabled={!token || !selectedPatient}
+                  title={!token ? 'Inicia sesión nuevamente para registrar un examen ocular' : 'Registrar examen ocular'}
+                >
+                  <Plus className="h-4 w-4" />
+                  Registrar examen ocular
+                </Button>
+              </div>
+
+              {ocularLoadError && (
+                <div className="rounded-lg border border-rose-100 bg-rose-50/80 px-3 py-2 text-sm text-rose-600">
+                  {ocularLoadError}
+                </div>
+              )}
+
+              {isLoadingOcular ? (
+                <div className="rounded-xl border border-slate-100 bg-white/70 px-4 py-6 text-sm text-slate-600">
+                  Cargando historial ocular...
+                </div>
+              ) : (
+                <div className="overflow-x-auto rounded-xl border border-slate-100 bg-white/80">
+                  <table className="min-w-full divide-y divide-slate-100">
+                    <thead className="bg-slate-50/80">
+                      <tr className="text-left text-xs font-semibold uppercase tracking-[0.3em] text-slate-500">
+                        <th className="px-4 py-3">Fecha</th>
+                        <th className="px-4 py-3">Motivo</th>
+                        <th className="px-4 py-3">Observación ojo derecho</th>
+                        <th className="px-4 py-3">Imagen ojo derecho</th>
+                        <th className="px-4 py-3">Observación ojo izquierdo</th>
+                        <th className="px-4 py-3">Imagen ojo izquierdo</th>
+                        <th className="px-4 py-3">Comentario ojo izquierdo</th>
+                        <th className="px-4 py-3">Comentario ojo derecho</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {ocularExams.length > 0 ? (
+                        ocularExams.map((exam) => {
+                          const rightEyeDisplay = toDisplayText(exam.rightEye);
+                          const leftEyeDisplay = toDisplayText(exam.leftEye);
+                          return (
+                            <tr key={exam.id} className="text-sm text-slate-600">
+                              <td className="whitespace-nowrap px-4 py-3">{exam.dateLabel}</td>
+                              <td className="min-w-[10rem] px-4 py-3">{toDisplayText(exam.reason)}</td>
+                              <td className="min-w-[12rem] px-4 py-3">{toDisplayText(exam.rightObservation)}</td>
+                              <td className="min-w-[10rem] px-4 py-3">
+                                {exam.rightEyeImageUrl ? (
+                                  <div className="flex flex-col items-center gap-2">
+                                    <a
+                                      href={exam.rightEyeImageUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="flex items-center justify-center"
+                                      title="Abrir imagen del ojo derecho"
+                                    >
+                                      <img
+                                        src={exam.rightEyeImageUrl}
+                                        alt="Imagen del ojo derecho"
+                                        loading="lazy"
+                                        className="h-24 w-24 rounded-lg border border-slate-200 object-cover shadow-sm"
+                                      />
+                                    </a>
+                                  </div>
+                                ) : (
+                                  <span>{rightEyeDisplay}</span>
+                                )}
+                              </td>
+                              <td className="min-w-[12rem] px-4 py-3">{toDisplayText(exam.leftObservation)}</td>
+                              <td className="min-w-[10rem] px-4 py-3">
+                                {exam.leftEyeImageUrl ? (
+                                  <div className="flex flex-col items-center gap-2">
+                                    <a
+                                      href={exam.leftEyeImageUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="flex items-center justify-center"
+                                      title="Abrir imagen del ojo izquierdo"
+                                    >
+                                      <img
+                                        src={exam.leftEyeImageUrl}
+                                        alt="Imagen del ojo izquierdo"
+                                        loading="lazy"
+                                        className="h-24 w-24 rounded-lg border border-slate-200 object-cover shadow-sm"
+                                      />
+                                    </a>
+                                  </div>
+                                ) : (
+                                  <span>{leftEyeDisplay}</span>
+                                )}
+                              </td>
+                              <td className="min-w-[12rem] px-4 py-3">{toDisplayText(exam.leftComment)}</td>
+                              <td className="min-w-[12rem] px-4 py-3">{toDisplayText(exam.rightComment)}</td>
+                            </tr>
+                          );
+                        })
+                      ) : (
+                        <tr>
+                          <td
+                            colSpan={8}
+                            className="px-4 py-6 text-center text-sm text-slate-500"
+                          >
+                            No hay registros oculares disponibles.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </Card>
+        )}
       </div>
     </div>
 
@@ -2833,6 +3709,240 @@ export const EvolutionTracking: React.FC = () => {
           )}
         </>
       )}
+
+      <Modal
+        isOpen={isOcularModalOpen}
+        onClose={handleCloseOcularModal}
+        title="Registrar examen ocular"
+      >
+        <form className="space-y-5" onSubmit={handleSubmitOcularExam}>
+          {ocularModalError && (
+            <div className="rounded-md border border-rose-100 bg-rose-50/80 px-3 py-2 text-sm text-rose-600">
+              {ocularModalError}
+            </div>
+          )}
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className="block text-sm font-medium text-slate-700">
+                Fecha del examen
+              </label>
+              <input
+                type="date"
+                value={ocularForm.date}
+                onChange={(event) => handleOcularFieldChange('date', event.target.value)}
+                className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700">
+                Motivo de consulta
+              </label>
+              <input
+                type="text"
+                value={ocularForm.reason}
+                onChange={(event) => handleOcularFieldChange('reason', event.target.value)}
+                placeholder="Describe brevemente el motivo"
+                className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+              />
+            </div>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-3 rounded-xl border border-slate-200/70 bg-slate-50/60 p-4">
+              <h4 className="text-sm font-semibold text-slate-700 uppercase tracking-[0.2em]">
+                Ojo derecho
+              </h4>
+              <div>
+                <label className="block text-xs font-medium text-slate-600">
+                  Observación
+                </label>
+                <textarea
+                  value={ocularForm.rightObservation}
+                  onChange={(event) => handleOcularFieldChange('rightObservation', event.target.value)}
+                  rows={3}
+                  className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                  placeholder="Anota los hallazgos del ojo derecho"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600">
+                  Imagen del ojo derecho
+                </label>
+                <input
+                  key={`right-eye-upload-${ocularFormResetKey}`}
+                  type="file"
+                  accept="image/png,image/jpeg"
+                  onChange={(event) =>
+                    handleOcularFileChange(
+                      'rightEyeFile',
+                      event.target.files && event.target.files.length > 0
+                        ? event.target.files[0]
+                        : null,
+                    )
+                  }
+                  className="mt-2 w-full rounded-lg border border-dashed border-slate-300 px-3 py-2 text-sm text-slate-700 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                />
+                <p className="mt-1 text-xs text-slate-500">
+                  Admite JPG o PNG de hasta 10&nbsp;MB.
+                </p>
+                {ocularForm.rightEyeFile && (
+                  <p className="mt-1 text-xs font-medium text-slate-600">
+                    {ocularForm.rightEyeFile.name}
+                  </p>
+                )}
+              </div>
+            </div>
+            <div className="space-y-3 rounded-xl border border-slate-200/70 bg-slate-50/60 p-4">
+              <h4 className="text-sm font-semibold text-slate-700 uppercase tracking-[0.2em]">
+                Ojo izquierdo
+              </h4>
+              <div>
+                <label className="block text-xs font-medium text-slate-600">
+                  Observación
+                </label>
+                <textarea
+                  value={ocularForm.leftObservation}
+                  onChange={(event) => handleOcularFieldChange('leftObservation', event.target.value)}
+                  rows={3}
+                  className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                  placeholder="Anota los hallazgos del ojo izquierdo"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600">
+                  Imagen del ojo izquierdo
+                </label>
+                <input
+                  key={`left-eye-upload-${ocularFormResetKey}`}
+                  type="file"
+                  accept="image/png,image/jpeg"
+                  onChange={(event) =>
+                    handleOcularFileChange(
+                      'leftEyeFile',
+                      event.target.files && event.target.files.length > 0
+                        ? event.target.files[0]
+                        : null,
+                    )
+                  }
+                  className="mt-2 w-full rounded-lg border border-dashed border-slate-300 px-3 py-2 text-sm text-slate-700 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                />
+                <p className="mt-1 text-xs text-slate-500">
+                  Admite JPG o PNG de hasta 10&nbsp;MB.
+                </p>
+                {ocularForm.leftEyeFile && (
+                  <p className="mt-1 text-xs font-medium text-slate-600">
+                    {ocularForm.leftEyeFile.name}
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700">
+              Comentarios adicionales
+            </label>
+            <textarea
+              value={ocularForm.comment}
+              onChange={(event) => handleOcularFieldChange('comment', event.target.value)}
+              rows={3}
+              className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+              placeholder="Registra notas complementarias (opcional)"
+            />
+          </div>
+
+          <div className="flex justify-end gap-3 pt-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleCloseOcularModal}
+              disabled={isSavingOcularExam}
+            >
+              Cancelar
+            </Button>
+            <Button type="submit" disabled={isSavingOcularExam}>
+              {isSavingOcularExam ? 'Guardando...' : 'Guardar examen'}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal
+        isOpen={isDentalModalOpen}
+        onClose={handleDentalModalClose}
+        title={
+          selectedTooth
+            ? `Actualizar pieza ${DENTAL_FIELD_META[selectedTooth].displayCode}${DENTAL_FIELD_META[selectedTooth].number}`
+            : 'Actualizar pieza dental'
+        }
+      >
+        {selectedTooth ? (
+          <form
+            className="space-y-5"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void handleDentalSave();
+            }}
+          >
+            <p className="text-sm text-slate-600">
+              {DENTAL_FIELD_META[selectedTooth].quadrantLabel} - {DENTAL_FIELD_META[selectedTooth].number}
+            </p>
+
+            {dentalModalError && (
+              <div className="rounded-md border border-rose-100 bg-rose-50/80 px-3 py-2 text-sm text-rose-600">
+                {dentalModalError}
+              </div>
+            )}
+
+            <div>
+              <span className="text-sm font-medium text-slate-700">Presencia</span>
+              <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                {DENTAL_PRESENCE_OPTIONS.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    className={presenceOptionClass(option.value)}
+                    onClick={() => setPendingPresence(option.value)}
+                    title={option.helper}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700">Hallazgo</label>
+              <textarea
+                value={pendingFinding}
+                onChange={(event) => setPendingFinding(event.target.value)}
+                rows={3}
+                className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                placeholder="Describe el hallazgo para esta pieza (opcional)"
+              />
+            </div>
+
+            <div className="flex justify-end gap-3 pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleDentalModalClose}
+                disabled={isSavingTooth}
+              >
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={isSavingTooth}>
+                {isSavingTooth ? 'Guardando...' : 'Guardar cambios'}
+              </Button>
+            </div>
+          </form>
+        ) : (
+          <p className="text-sm text-slate-600">
+            Selecciona una pieza dental para actualizar su información.
+          </p>
+        )}
+      </Modal>
 
       {ribbonModal}
 
