@@ -3030,7 +3030,7 @@ export const EvolutionTracking: React.FC = () => {
               ))}
             </div>
           </div>
-          <div className="overflow-hidden rounded-2xl border border-[#FFE4D6]/70 shadow-inner">
+          <div className="overflow-hidden rounded-2xl border border-slate-200/70 shadow-inner">
             <Table data={filteredPatients} columns={patientColumns} />
           </div>
         </Card>

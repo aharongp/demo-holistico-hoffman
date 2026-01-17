@@ -215,9 +215,12 @@ export const PatientMedicalHistoryForm: React.FC<PatientMedicalHistoryFormProps>
       )}
 
       <fieldset className="space-y-6" disabled={isDisabled}>
-        <div>
-          <h3 className="text-lg font-medium text-gray-900 mb-4">Identificación</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <details className="group rounded-2xl border border-gray-200 bg-white/70 p-4 shadow-sm transition-colors open:border-[#FAD4B1]" open>
+          <summary className="flex cursor-pointer list-none items-center justify-between text-base font-semibold text-gray-800">
+            <span>Identificación</span>
+            <span className="text-xs text-gray-400 transition group-open:rotate-180">▾</span>
+          </summary>
+          <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Lugar de nacimiento
@@ -291,11 +294,14 @@ export const PatientMedicalHistoryForm: React.FC<PatientMedicalHistoryFormProps>
               />
             </div>
           </div>
-        </div>
+        </details>
 
-        <div>
-          <h3 className="text-lg font-medium text-gray-900 mb-4">Contacto y Emergencias</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <details className="group rounded-2xl border border-gray-200 bg-white/70 p-4 shadow-sm transition-colors open:border-[#FAD4B1]">
+          <summary className="flex cursor-pointer list-none items-center justify-between text-base font-semibold text-gray-800">
+            <span>Contacto y Emergencias</span>
+            <span className="text-xs text-gray-400 transition group-open:rotate-180">▾</span>
+          </summary>
+          <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Teléfono
@@ -396,11 +402,14 @@ export const PatientMedicalHistoryForm: React.FC<PatientMedicalHistoryFormProps>
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
-        </div>
+        </details>
 
-        <div>
-          <h3 className="text-lg font-medium text-gray-900 mb-4">Médico Tratante</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <details className="group rounded-2xl border border-gray-200 bg-white/70 p-4 shadow-sm transition-colors open:border-[#FAD4B1]">
+          <summary className="flex cursor-pointer list-none items-center justify-between text-base font-semibold text-gray-800">
+            <span>Médico Tratante</span>
+            <span className="text-xs text-gray-400 transition group-open:rotate-180">▾</span>
+          </summary>
+          <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Médico tratante
@@ -435,14 +444,17 @@ export const PatientMedicalHistoryForm: React.FC<PatientMedicalHistoryFormProps>
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
-        </div>
+        </details>
 
-        <div>
-          <h3 className="text-lg font-medium text-gray-900 mb-4">Antecedentes Familiares</h3>
-          <p className="text-sm text-gray-600 mb-4">
+        <details className="group rounded-2xl border border-gray-200 bg-white/70 p-4 shadow-sm transition-colors open:border-[#FAD4B1]">
+          <summary className="flex cursor-pointer list-none items-center justify-between text-base font-semibold text-gray-800">
+            <span>Antecedentes Familiares</span>
+            <span className="text-xs text-gray-400 transition group-open:rotate-180">▾</span>
+          </summary>
+          <p className="mt-4 text-sm text-gray-600">
             Registre el parentesco del familiar directo que haya presentado cada condición
           </p>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
             {(Object.keys(familyPathologyLabels) as Array<keyof MedicalHistoryData['family']['pathologies']>).map((key) => (
               <div key={key} className={key === 'others' ? 'md:col-span-2' : undefined}>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -467,11 +479,14 @@ export const PatientMedicalHistoryForm: React.FC<PatientMedicalHistoryFormProps>
               </div>
             ))}
           </div>
-        </div>
+        </details>
 
-        <div>
-          <h3 className="text-lg font-medium text-gray-900 mb-4">Contexto Familiar</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <details className="group rounded-2xl border border-gray-200 bg-white/70 p-4 shadow-sm transition-colors open:border-[#FAD4B1]">
+          <summary className="flex cursor-pointer list-none items-center justify-between text-base font-semibold text-gray-800">
+            <span>Contexto Familiar</span>
+            <span className="text-xs text-gray-400 transition group-open:rotate-180">▾</span>
+          </summary>
+          <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Edad del padre
@@ -563,11 +578,14 @@ export const PatientMedicalHistoryForm: React.FC<PatientMedicalHistoryFormProps>
               />
             </div>
           </div>
-        </div>
+        </details>
 
-        <div>
-          <h3 className="text-lg font-medium text-gray-900 mb-4">Esquema de Vacunación</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <details className="group rounded-2xl border border-gray-200 bg-white/70 p-4 shadow-sm transition-colors open:border-[#FAD4B1]">
+          <summary className="flex cursor-pointer list-none items-center justify-between text-base font-semibold text-gray-800">
+            <span>Esquema de Vacunación</span>
+            <span className="text-xs text-gray-400 transition group-open:rotate-180">▾</span>
+          </summary>
+          <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
             {immunizationOptions.map(({ key, label }) => (
               <label key={key} className="flex items-center space-x-3">
                 <input
@@ -591,12 +609,15 @@ export const PatientMedicalHistoryForm: React.FC<PatientMedicalHistoryFormProps>
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
-        </div>
+        </details>
 
-        <div>
-          <h3 className="text-lg font-medium text-gray-900 mb-4">Historia Ginecológica</h3>
-          <p className="text-sm text-gray-600 mb-4">Complete en caso de aplicar</p>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <details className="group rounded-2xl border border-gray-200 bg-white/70 p-4 shadow-sm transition-colors open:border-[#FAD4B1]">
+          <summary className="flex cursor-pointer list-none items-center justify-between text-base font-semibold text-gray-800">
+            <span>Historia Ginecológica</span>
+            <span className="text-xs text-gray-400 transition group-open:rotate-180">▾</span>
+          </summary>
+          <p className="mt-4 text-sm text-gray-600">Complete en caso de aplicar</p>
+          <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
             {gynecologicalFields.map(({ key, label }) => (
               <div key={key}>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -611,11 +632,14 @@ export const PatientMedicalHistoryForm: React.FC<PatientMedicalHistoryFormProps>
               </div>
             ))}
           </div>
-        </div>
+        </details>
 
-        <div>
-          <h3 className="text-lg font-medium text-gray-900 mb-4">Estilo de Vida</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <details className="group rounded-2xl border border-gray-200 bg-white/70 p-4 shadow-sm transition-colors open:border-[#FAD4B1]">
+          <summary className="flex cursor-pointer list-none items-center justify-between text-base font-semibold text-gray-800">
+            <span>Estilo de Vida</span>
+            <span className="text-xs text-gray-400 transition group-open:rotate-180">▾</span>
+          </summary>
+          <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
             {lifestyleFields.map(({ key, label }) => (
               <div key={key}>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -630,11 +654,14 @@ export const PatientMedicalHistoryForm: React.FC<PatientMedicalHistoryFormProps>
               </div>
             ))}
           </div>
-        </div>
+        </details>
 
-        <div>
-          <h3 className="text-lg font-medium text-gray-900 mb-4">Antecedentes Clínicos</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <details className="group rounded-2xl border border-gray-200 bg-white/70 p-4 shadow-sm transition-colors open:border-[#fdba74]">
+          <summary className="flex cursor-pointer list-none items-center justify-between text-base font-semibold text-gray-800">
+            <span>Antecedentes Clínicos</span>
+            <span className="text-xs text-gray-400 transition group-open:rotate-180">▾</span>
+          </summary>
+          <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
             {clinicalBackgroundFields.map(({ key, label, type }) => {
               if (key === 'otherDisease') {
                 return (
@@ -731,7 +758,7 @@ export const PatientMedicalHistoryForm: React.FC<PatientMedicalHistoryFormProps>
               );
             })}
           </div>
-        </div>
+        </details>
 
         <div className="flex justify-end space-x-3 pt-6 border-t border-gray-200">
           <Button type="submit" disabled={isDisabled}>
