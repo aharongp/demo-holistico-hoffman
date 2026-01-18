@@ -5,11 +5,12 @@ import { Button } from '../../components/UI/Button';
 import { useAuth } from '../../context/AuthContext';
 import { useApp } from '../../context/AppContext';
 import { Instrument } from '../../types';
+import { InstrumentResponseModal } from './components/InstrumentResponseModal';
 import {
-  InstrumentResponseModal,
   BackendInstrumentResponse,
+  CoachDiagnosticObservation,
   PreparedInstrumentAnswer,
-} from './components/InstrumentResponseModal';
+} from '../../types/patientInstruments';
 
 type ActivityStatus = 'pending' | 'in_progress' | 'completed';
 
@@ -149,6 +150,51 @@ const mapAssignmentToActivity = (assignment: BackendPatientInstrumentAssignment)
   };
 };
 
+const observationTimestampValue = (value: string | null | undefined): number => {
+  if (!value) {
+    return Number.NEGATIVE_INFINITY;
+  }
+
+  const parsed = new Date(value);
+  const time = parsed.getTime();
+  return Number.isNaN(time) ? Number.NEGATIVE_INFINITY : time;
+};
+
+const selectObservationForInstrument = (
+  observations: CoachDiagnosticObservation[],
+  instrumentId: number,
+): CoachDiagnosticObservation | null => {
+  if (!Array.isArray(observations) || !observations.length) {
+    return null;
+  }
+
+  const filtered = observations
+    .map((item) => ({
+      ...item,
+      comment: typeof item.comment === 'string' ? item.comment.trim() : null,
+      coach: typeof item.coach === 'string' ? item.coach.trim() : null,
+    }))
+    .filter((item) => Number(item.instrumentId) === instrumentId && Boolean(item.comment));
+
+  if (!filtered.length) {
+    return null;
+  }
+
+  filtered.sort((a, b) => {
+    const appliedDiff = observationTimestampValue(b.appliedAt) - observationTimestampValue(a.appliedAt);
+    if (appliedDiff !== 0) {
+      return appliedDiff;
+    }
+    const updatedDiff = observationTimestampValue(b.updatedAt) - observationTimestampValue(a.updatedAt);
+    if (updatedDiff !== 0) {
+      return updatedDiff;
+    }
+    return observationTimestampValue(b.createdAt) - observationTimestampValue(a.createdAt);
+  });
+
+  return filtered[0];
+};
+
 const parseNumericId = (value: unknown): number | null => {
   if (value === null || typeof value === 'undefined') {
     return null;
@@ -212,6 +258,10 @@ export const PatientActivities: React.FC = () => {
   const [modalInfoMessage, setModalInfoMessage] = useState<string | null>(null);
   const [isLoadingInstrumentDetail, setIsLoadingInstrumentDetail] = useState(false);
   const [isSubmittingResponses, setIsSubmittingResponses] = useState(false);
+  const [coachObservationByAssignment, setCoachObservationByAssignment] = useState<Record<number, CoachDiagnosticObservation | null>>({});
+  const [activeCoachObservation, setActiveCoachObservation] = useState<CoachDiagnosticObservation | null>(null);
+  const [isLoadingCoachObservation, setIsLoadingCoachObservation] = useState(false);
+  const [coachObservationError, setCoachObservationError] = useState<string | null>(null);
 
   const apiBase = (import.meta as any).env?.VITE_API_BASE ?? 'http://localhost:3000';
   const normalizedApiBase = useMemo(() => sanitizeApiBase(apiBase), [apiBase]);
@@ -424,6 +474,87 @@ export const PatientActivities: React.FC = () => {
     [getInstrumentDetails, instrumentCache, normalizedApiBase, token],
   );
 
+  const loadCoachObservationForAssignment = useCallback(
+    async (
+      assignment: BackendPatientInstrumentAssignment,
+      instrument: Instrument | null,
+    ): Promise<CoachDiagnosticObservation | null> => {
+      if (!token) {
+        return null;
+      }
+
+      if (!instrument) {
+        return null;
+      }
+
+      const patientId = assignment.patientId;
+      if (!patientId) {
+        setCoachObservationByAssignment((prev) => ({
+          ...prev,
+          [assignment.id]: null,
+        }));
+        return null;
+      }
+
+      const numericInstrumentId = Number(instrument.id);
+      if (!Number.isFinite(numericInstrumentId)) {
+        setCoachObservationByAssignment((prev) => ({
+          ...prev,
+          [assignment.id]: null,
+        }));
+        return null;
+      }
+
+      setIsLoadingCoachObservation(true);
+      setCoachObservationError(null);
+
+      try {
+        const response = await fetch(
+          `${normalizedApiBase}/coach-diagnostic-observation?patientId=${patientId}`,
+          {
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+          },
+        );
+
+        if (!response.ok) {
+          throw new Error(`Falló la carga con estado ${response.status}`);
+        }
+
+        const responseText = await response.text();
+        let payload: CoachDiagnosticObservation[] = [];
+
+        if (responseText.trim().length) {
+          try {
+            const parsed = JSON.parse(responseText);
+            payload = Array.isArray(parsed) ? parsed : [];
+          } catch (parseError) {
+            console.error('Error al interpretar la respuesta de observación del coach', parseError);
+            payload = [];
+          }
+        }
+
+        const selected = selectObservationForInstrument(payload, numericInstrumentId);
+
+        setCoachObservationByAssignment((prev) => ({
+          ...prev,
+          [assignment.id]: selected ?? null,
+        }));
+
+        return selected ?? null;
+      } catch (observationError) {
+        console.error('Error al obtener la observación del coach', observationError);
+        setCoachObservationError('No se pudo cargar la observación del coach.');
+        return null;
+      } finally {
+        setIsLoadingCoachObservation(false);
+      }
+    },
+    [normalizedApiBase, token],
+  );
+
   const handleOpenInstrument = useCallback(
     async (activity: Activity, desiredMode?: 'form' | 'readonly') => {
       setActiveActivity(activity);
@@ -432,6 +563,8 @@ export const PatientActivities: React.FC = () => {
       setModalError(null);
       setModalInfoMessage(nextMode === 'readonly' ? 'Este instrumento ya fue respondido y no puede editarse.' : null);
       setIsModalOpen(true);
+      setActiveCoachObservation(null);
+      setCoachObservationError(null);
 
       if (!activity.rawAssignment.instrumentTypeId) {
         setModalError('La asignación no tiene un instrumento asociado.');
@@ -444,6 +577,24 @@ export const PatientActivities: React.FC = () => {
         const instrument = await loadInstrumentForAssignment(activity.rawAssignment);
         setActiveInstrument(instrument);
         setModalError(null);
+
+        if (nextMode === 'readonly') {
+          const assignmentId = activity.rawAssignment.id;
+          const cachedObservation = coachObservationByAssignment[assignmentId] ?? null;
+
+          if (cachedObservation) {
+            setActiveCoachObservation(cachedObservation);
+          }
+
+          const fetchedObservation = await loadCoachObservationForAssignment(
+            activity.rawAssignment,
+            instrument,
+          );
+
+          if (fetchedObservation !== null || !cachedObservation) {
+            setActiveCoachObservation(fetchedObservation);
+          }
+        }
       } catch (loadingError) {
         console.error('Error al cargar el instrumento asignado', loadingError);
         const message = loadingError instanceof Error ? loadingError.message : 'No se pudo cargar el instrumento asociado.';
@@ -453,15 +604,18 @@ export const PatientActivities: React.FC = () => {
         setIsLoadingInstrumentDetail(false);
       }
     },
-    [loadInstrumentForAssignment],
+    [coachObservationByAssignment, loadCoachObservationForAssignment, loadInstrumentForAssignment],
   );
 
   const handleCloseModal = useCallback(() => {
     setIsModalOpen(false);
     setActiveActivity(null);
     setActiveInstrument(null);
+    setActiveCoachObservation(null);
     setModalError(null);
     setModalInfoMessage(null);
+    setCoachObservationError(null);
+    setIsLoadingCoachObservation(false);
     setModalMode('form');
   }, []);
 
@@ -882,6 +1036,9 @@ export const PatientActivities: React.FC = () => {
             ? 'Cargando respuestas guardadas...'
             : modalInfoMessage
         }
+        coachObservation={modalMode === 'readonly' ? activeCoachObservation : null}
+        isLoadingCoachObservation={modalMode === 'readonly' ? isLoadingCoachObservation : false}
+        coachObservationError={modalMode === 'readonly' ? coachObservationError : null}
       />
     </section>
   );

@@ -2,33 +2,11 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Instrument, Question, QuestionAnswer, QuestionOption } from '../../../types';
 import { Modal } from '../../../components/UI/Modal';
 import { Button } from '../../../components/UI/Button';
-
-export type BackendInstrumentResponse = {
-  id: number;
-  patientInstrumentId?: number | null;
-  instrumentTypeId?: number | null;
-  instrumentId?: number | null;
-  questionId: number | null;
-  question: string | null;
-  answer: string | null;
-  competence: string | null;
-  order: number | null;
-  saved: boolean;
-  evaluated: boolean;
-  answerDate?: string | null;
-};
-
-export type PreparedInstrumentAnswer = {
-  questionId: string;
-  questionNumericId: number | null;
-  questionText: string;
-  value: string;
-  label: string;
-  selections?: string[];
-  order?: number | null;
-  theme?: string | null;
-  topic?: string | null;
-};
+import {
+  BackendInstrumentResponse,
+  CoachDiagnosticObservation,
+  PreparedInstrumentAnswer,
+} from '../../../types/patientInstruments';
 
 const QUESTION_TYPE_LABELS: Record<Question['type'], string> = {
   text: 'Respuesta abierta',
@@ -53,6 +31,9 @@ type InstrumentResponseModalProps = {
   error?: string | null;
   isLoadingInstrument: boolean;
   infoMessage?: string | null;
+  coachObservation: CoachDiagnosticObservation | null;
+  isLoadingCoachObservation: boolean;
+  coachObservationError: string | null;
 };
 
 const normalizeOptionList = (question: Question): QuestionOption[] => {
@@ -128,6 +109,27 @@ const normalizeQuestionKey = (value: string): string =>
     .replace(/\s+/g, ' ')
     .trim()
     .toLocaleLowerCase('es');
+
+const formatObservationTimestamp = (value: string | null | undefined): string | null => {
+  if (!value) {
+    return null;
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+
+  try {
+    return new Intl.DateTimeFormat('es-ES', {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    }).format(parsed);
+  } catch (error) {
+    console.warn('No fue posible formatear la fecha de observación', error);
+    return parsed.toISOString();
+  }
+};
 
 const mapResponseByQuestion = (responses: BackendInstrumentResponse[]) => {
   const byId = new Map<number, BackendInstrumentResponse>();
@@ -329,6 +331,9 @@ export const InstrumentResponseModal: React.FC<InstrumentResponseModalProps> = (
   error,
   isLoadingInstrument,
   infoMessage,
+  coachObservation,
+  isLoadingCoachObservation,
+  coachObservationError,
 }) => {
   const questions = useMemo(() => {
     if (!instrument?.questions) {
@@ -344,6 +349,12 @@ export const InstrumentResponseModal: React.FC<InstrumentResponseModalProps> = (
   }, [instrument?.questions]);
 
   const responseMaps = useMemo(() => mapResponseByQuestion(responses), [responses]);
+
+  const observationComment = coachObservation?.comment?.trim() ?? '';
+  const observationCoach = coachObservation?.coach?.trim() ?? '';
+  const observationTimestamp = formatObservationTimestamp(
+    coachObservation?.appliedAt ?? coachObservation?.updatedAt ?? coachObservation?.createdAt ?? null,
+  );
 
   const initialFormValues = useMemo(() => {
     if (mode === 'readonly') {
@@ -635,6 +646,43 @@ export const InstrumentResponseModal: React.FC<InstrumentResponseModalProps> = (
         {submitSuccess ? (
           <div className="rounded-2xl border border-emerald-100/80 bg-emerald-50/70 px-4 py-3 text-sm text-emerald-600">
             {submitSuccess}
+          </div>
+        ) : null}
+
+        {mode === 'readonly' ? (
+          <div className="rounded-3xl border border-indigo-100/80 bg-indigo-50/70 px-4 py-4 shadow-[0_20px_45px_-45px_rgba(76,29,149,0.3)]">
+            {isLoadingCoachObservation ? (
+              <div className="space-y-2">
+                <div className="h-4 w-40 animate-pulse rounded bg-indigo-200/70" />
+                <div className="h-3 w-full animate-pulse rounded bg-indigo-100/70" />
+                <div className="h-3 w-2/3 animate-pulse rounded bg-indigo-100/70" />
+              </div>
+            ) : observationComment ? (
+              <div className="space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-[0.35em] text-indigo-500">
+                  Observación del coach
+                </p>
+                <p className="text-sm text-slate-700">{observationComment}</p>
+                {observationCoach || observationTimestamp ? (
+                  <p className="text-xs text-slate-500">
+                    {observationCoach ? `Coach: ${observationCoach}` : ''}
+                    {observationCoach && observationTimestamp ? ' · ' : ''}
+                    {observationTimestamp ? `Registrado: ${observationTimestamp}` : ''}
+                  </p>
+                ) : null}
+              </div>
+            ) : coachObservationError ? (
+              <p className="text-sm text-rose-500">{coachObservationError}</p>
+            ) : (
+              <div className="space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-[0.35em] text-indigo-500">
+                  Observación del coach
+                </p>
+                <p className="text-sm text-slate-500">
+                  No hay comentarios disponibles para este instrumento.
+                </p>
+              </div>
+            )}
           </div>
         ) : null}
 

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Plus, TrendingUp, User, Heart, Scale, Droplets, RefreshCw, Edit, Trash2, Search, LineChart, Ribbon, LayoutDashboard, Activity, ClipboardList } from 'lucide-react';
+import { Plus, TrendingUp, User, Heart, Scale, Droplets, RefreshCw, Edit, Trash2, Search, LineChart, Ribbon, LayoutDashboard, Activity, ClipboardList, FileText } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { Card } from '../../components/UI/Card';
 import { Button } from '../../components/UI/Button';
@@ -8,6 +8,8 @@ import { Modal } from '../../components/UI/Modal';
 import { Table } from '../../components/UI/Table';
 import { useAuth } from '../../context/AuthContext';
 import { useApp } from '../../context/AppContext';
+import type { Instrument } from '../../types';
+import type { BackendInstrumentResponse, CoachDiagnosticObservation } from '../../types/patientInstruments';
 import {
   MedicalHistoryData,
   RemotePatientMedicalHistory,
@@ -139,7 +141,106 @@ type HeartRateFormKey =
   | 'heartRateAfter30Minutes'
   | 'heartRateAfter45Minutes';
 
-type DoctorTabId = 'summary' | 'charts' | 'records';
+type DoctorTabId = 'summary' | 'charts' | 'records' | 'instruments';
+
+type BackendPatientInstrumentAssignment = {
+  id: number;
+  patientId: number | null;
+  instrumentTypeId: number | null;
+  instrumentTypeName: string | null;
+  instrumentTypeDescription: string | null;
+  assignedAt: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+  validUntil: string | null;
+  completed: boolean;
+  evaluated: boolean;
+  available: boolean;
+  availabilityRaw: string | null;
+  origin: string | null;
+  ribbonId: number | null;
+  topics: string[];
+};
+
+type InstrumentAssignmentItem = {
+  assignment: BackendPatientInstrumentAssignment;
+  instrumentId: number | null;
+  responsesCount: number;
+  isCompleted: boolean;
+  observation: CoachDiagnosticObservation | null;
+};
+
+const instrumentObservationTimestamp = (value: string | null | undefined): number => {
+  if (!value) {
+    return Number.NEGATIVE_INFINITY;
+  }
+
+  const parsed = new Date(value);
+  const time = parsed.getTime();
+  return Number.isNaN(time) ? Number.NEGATIVE_INFINITY : time;
+};
+
+const selectObservationForInstrument = (
+  observations: CoachDiagnosticObservation[],
+  instrumentId: number,
+): CoachDiagnosticObservation | null => {
+  if (!Array.isArray(observations) || !observations.length) {
+    return null;
+  }
+
+  const candidates = observations
+    .map((item) => ({
+      ...item,
+      comment: typeof item.comment === 'string' ? item.comment.trim() : null,
+      coach: typeof item.coach === 'string' ? item.coach.trim() : null,
+    }))
+    .filter((item) => Number(item.instrumentId) === instrumentId && Boolean(item.comment));
+
+  if (!candidates.length) {
+    return null;
+  }
+
+  candidates.sort((a, b) => {
+    const appliedDiff = instrumentObservationTimestamp(b.appliedAt) - instrumentObservationTimestamp(a.appliedAt);
+    if (appliedDiff !== 0) {
+      return appliedDiff;
+    }
+    const updatedDiff = instrumentObservationTimestamp(b.updatedAt) - instrumentObservationTimestamp(a.updatedAt);
+    if (updatedDiff !== 0) {
+      return updatedDiff;
+    }
+    return instrumentObservationTimestamp(b.createdAt) - instrumentObservationTimestamp(a.createdAt);
+  });
+
+  return candidates[0];
+};
+
+const instrumentAssignmentTimestamp = (value: string | null | undefined): number => {
+  if (!value) {
+    return Number.NEGATIVE_INFINITY;
+  }
+
+  const parsed = new Date(value);
+  const time = parsed.getTime();
+  return Number.isNaN(time) ? Number.NEGATIVE_INFINITY : time;
+};
+
+const formatInstrumentDate = (value: string | null): string => {
+  if (!value) {
+    return 'Sin registro';
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return 'Sin registro';
+  }
+
+  return parsed.toLocaleDateString('es-ES', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
+};
 
 const HEART_RATE_FIELDS = [
   { key: 'resting', label: 'Reposo' },
@@ -317,7 +418,7 @@ const parseDateInput = (value: string, endOfDay: boolean): number | null => {
 
 export const EvolutionTracking: React.FC = () => {
   const { user, token } = useAuth();
-  const { addEvolutionEntry, patients, programs, ribbons, reloadRibbons, updatePatient } = useApp();
+  const { addEvolutionEntry, patients, programs, ribbons, reloadRibbons, updatePatient, getInstrumentDetails } = useApp();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
   const [activeTab, setActiveTab] = useState('mood');
@@ -389,6 +490,16 @@ export const EvolutionTracking: React.FC = () => {
   const [isSavingOcularExam, setIsSavingOcularExam] = useState(false);
   const [ocularModalError, setOcularModalError] = useState<string | null>(null);
   const [ocularFormResetKey, setOcularFormResetKey] = useState(0);
+  const [instrumentAssignments, setInstrumentAssignments] = useState<InstrumentAssignmentItem[]>([]);
+  const [isLoadingInstrumentAssignments, setIsLoadingInstrumentAssignments] = useState(false);
+  const [instrumentAssignmentsError, setInstrumentAssignmentsError] = useState<string | null>(null);
+  const [instrumentCommentDrafts, setInstrumentCommentDrafts] = useState<Record<number, string>>({});
+  const [instrumentCommentSavingId, setInstrumentCommentSavingId] = useState<number | null>(null);
+  const [instrumentActionMessages, setInstrumentActionMessages] = useState<Record<number, { type: 'success' | 'error'; message: string } | null>>({});
+  const [instrumentDeletingId, setInstrumentDeletingId] = useState<number | null>(null);
+  const [instrumentAssignmentsRefreshKey, setInstrumentAssignmentsRefreshKey] = useState(0);
+  const [instrumentCache, setInstrumentCache] = useState<Record<number, Instrument | null>>({});
+  const [instrumentNotice, setInstrumentNotice] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const assetsBase = useMemo(() => {
     const rawEnv = (import.meta as any).env?.VITE_ASSETS_BASE;
     const normalizedEnv = typeof rawEnv === 'string' ? rawEnv.trim() : '';
@@ -398,6 +509,7 @@ export const EvolutionTracking: React.FC = () => {
 
     return apiBase.replace(/\/+$/, '');
   }, [apiBase]);
+  const normalizedApiBase = useMemo(() => apiBase.replace(/\/+$/, ''), [apiBase]);
 
   const resetDentalState = useCallback((errorMessage: string | null = null) => {
     setDentalPresence(createInitialDentalPresence());
@@ -498,6 +610,7 @@ export const EvolutionTracking: React.FC = () => {
       ...sortedPrograms,
     ];
   }, [programs]);
+  const selectedPatientNumericId = useMemo(() => parseNumericId(selectedPatient?.id), [selectedPatient?.id]);
   const filteredPatients = useMemo(() => {
     const normalizedTerm = searchTerm.trim().toLowerCase();
 
@@ -682,6 +795,7 @@ export const EvolutionTracking: React.FC = () => {
   const showSummarySection = !shouldShowDoctorTabs || doctorActiveTab === 'summary';
   const showChartsSection = !shouldShowDoctorTabs || doctorActiveTab === 'charts';
   const showRecordsSection = !shouldShowDoctorTabs || doctorActiveTab === 'records';
+  const showInstrumentsSection = shouldShowDoctorTabs && doctorActiveTab === 'instruments';
   const showVitalsMessaging = !shouldShowDoctorTabs || doctorActiveTab !== 'summary';
 
   useEffect(() => {
@@ -1028,6 +1142,440 @@ export const EvolutionTracking: React.FC = () => {
       window.clearTimeout(timeout);
     };
   }, [medicalHistorySuccess]);
+
+  const loadInstrumentForAssignment = useCallback(
+    async (assignment: BackendPatientInstrumentAssignment): Promise<Instrument | null> => {
+      const typeId = assignment.instrumentTypeId;
+      if (!typeId) {
+        return null;
+      }
+
+      const cached = instrumentCache[typeId];
+      if (typeof cached !== 'undefined') {
+        return cached;
+      }
+
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+
+      if (token) {
+        headers.Authorization = `Bearer ${token}`;
+      }
+
+      try {
+        const response = await fetch(`${normalizedApiBase}/instruments/by-type/${typeId}`, {
+          headers,
+        });
+
+        if (!response.ok) {
+          throw new Error(`Falló la carga con estado ${response.status}`);
+        }
+
+        const payload = await response.json().catch(() => []);
+        const instrumentCandidate = Array.isArray(payload) && payload.length ? payload[0] : null;
+
+        if (!instrumentCandidate) {
+          setInstrumentCache((prev) => ({ ...prev, [typeId]: null }));
+          return null;
+        }
+
+        const rawInstrumentId =
+          instrumentCandidate?.id ??
+          instrumentCandidate?.instrumento_id ??
+          instrumentCandidate?.instrumentId;
+        const numericInstrumentId = Number(rawInstrumentId);
+
+        if (!Number.isFinite(numericInstrumentId)) {
+          throw new Error('No se pudo determinar el identificador del instrumento.');
+        }
+
+        const instrument = await getInstrumentDetails(String(numericInstrumentId));
+        setInstrumentCache((prev) => ({ ...prev, [typeId]: instrument ?? null }));
+        return instrument ?? null;
+      } catch (error) {
+        console.error('Error al cargar el detalle del instrumento', error);
+        setInstrumentCache((prev) => ({ ...prev, [typeId]: null }));
+        return null;
+      }
+    },
+    [getInstrumentDetails, instrumentCache, normalizedApiBase, token],
+  );
+
+  const resolveInstrumentIdForAssignment = useCallback(
+    async (item: InstrumentAssignmentItem): Promise<number | null> => {
+      if (item.instrumentId !== null) {
+        return item.instrumentId;
+      }
+
+      const instrument = await loadInstrumentForAssignment(item.assignment);
+      if (!instrument) {
+        return null;
+      }
+
+      const numericInstrumentId = Number(instrument.id);
+      if (!Number.isFinite(numericInstrumentId)) {
+        return null;
+      }
+
+      setInstrumentAssignments((prev) =>
+        prev.map((assignmentItem) =>
+          assignmentItem.assignment.id === item.assignment.id
+            ? { ...assignmentItem, instrumentId: numericInstrumentId }
+            : assignmentItem,
+        ),
+      );
+
+      return numericInstrumentId;
+    },
+    [loadInstrumentForAssignment],
+  );
+
+  const loadInstrumentAssignments = useCallback(async (): Promise<void> => {
+    if (!shouldShowDoctorTabs || doctorActiveTab !== 'instruments') {
+      return;
+    }
+
+    if (!selectedPatientNumericId) {
+      setInstrumentAssignments([]);
+      setInstrumentCommentDrafts({});
+      setInstrumentActionMessages({});
+      setInstrumentAssignmentsError('Selecciona un paciente para ver sus instrumentos asignados.');
+      return;
+    }
+
+    if (!token) {
+      setInstrumentAssignments([]);
+      setInstrumentCommentDrafts({});
+      setInstrumentActionMessages({});
+      setInstrumentAssignmentsError('No se pudo autenticar la solicitud. Intenta iniciar sesión nuevamente.');
+      return;
+    }
+
+    setIsLoadingInstrumentAssignments(true);
+    setInstrumentAssignmentsError(null);
+    setInstrumentNotice(null);
+
+    try {
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      };
+
+      const [assignmentsRes, responsesRes, observationsRes] = await Promise.all([
+        fetch(`${normalizedApiBase}/patient-instruments/patient/${selectedPatientNumericId}`, { headers }),
+        fetch(`${normalizedApiBase}/patient-instruments/responses/patient/${selectedPatientNumericId}`, { headers }),
+        fetch(`${normalizedApiBase}/coach-diagnostic-observation?patientId=${selectedPatientNumericId}`, { headers }),
+      ]);
+
+      if (!assignmentsRes.ok) {
+        const text = await assignmentsRes.text().catch(() => null);
+        throw new Error(text || `No se pudieron obtener las asignaciones (${assignmentsRes.status}).`);
+      }
+
+      if (!responsesRes.ok) {
+        const text = await responsesRes.text().catch(() => null);
+        throw new Error(text || `No se pudieron obtener las respuestas (${responsesRes.status}).`);
+      }
+
+      let observationsPayload: CoachDiagnosticObservation[] = [];
+      if (observationsRes.ok) {
+        const observationsText = await observationsRes.text();
+        if (observationsText.trim().length) {
+          try {
+            const parsed = JSON.parse(observationsText);
+            observationsPayload = Array.isArray(parsed) ? parsed : [];
+          } catch (parseError) {
+            console.error('No fue posible interpretar las observaciones del coach', parseError);
+            observationsPayload = [];
+          }
+        }
+      } else if (observationsRes.status !== 404) {
+        const text = await observationsRes.text().catch(() => null);
+        throw new Error(text || `No se pudieron obtener las observaciones (${observationsRes.status}).`);
+      }
+
+      const assignmentsPayload: BackendPatientInstrumentAssignment[] = await assignmentsRes
+        .json()
+        .catch(() => []);
+      const responsesPayload: BackendInstrumentResponse[] = await responsesRes
+        .json()
+        .catch(() => []);
+
+      const responsesByAssignment = new Map<number, BackendInstrumentResponse[]>();
+      responsesPayload.forEach((response) => {
+        const assignmentId = typeof response.patientInstrumentId === 'number' ? response.patientInstrumentId : null;
+        if (assignmentId === null) {
+          return;
+        }
+        if (!responsesByAssignment.has(assignmentId)) {
+          responsesByAssignment.set(assignmentId, []);
+        }
+        responsesByAssignment.get(assignmentId)!.push(response);
+      });
+
+      const items = assignmentsPayload.map<InstrumentAssignmentItem>((assignment) => {
+        const responseList = responsesByAssignment.get(assignment.id) ?? [];
+        let instrumentId: number | null = null;
+        for (const response of responseList) {
+          const numericInstrumentId = Number(response.instrumentId);
+          if (Number.isFinite(numericInstrumentId)) {
+            instrumentId = numericInstrumentId;
+            break;
+          }
+        }
+
+        const isCompleted = Boolean(assignment.completed || assignment.evaluated || responseList.length > 0);
+        const observation = instrumentId !== null
+          ? selectObservationForInstrument(observationsPayload, instrumentId)
+          : null;
+
+        return {
+          assignment,
+          instrumentId,
+          responsesCount: responseList.length,
+          isCompleted,
+          observation,
+        };
+      });
+
+      items.sort((a, b) => {
+        const aTimestamp = instrumentAssignmentTimestamp(a.assignment.assignedAt ?? a.assignment.createdAt);
+        const bTimestamp = instrumentAssignmentTimestamp(b.assignment.assignedAt ?? b.assignment.createdAt);
+        return bTimestamp - aTimestamp;
+      });
+
+      const drafts: Record<number, string> = {};
+      const feedback: Record<number, { type: 'success' | 'error'; message: string } | null> = {};
+
+      items.forEach((item) => {
+        drafts[item.assignment.id] = item.observation?.comment ?? '';
+        feedback[item.assignment.id] = null;
+      });
+
+      setInstrumentAssignments(items);
+      setInstrumentCommentDrafts(drafts);
+      setInstrumentActionMessages(feedback);
+      setInstrumentAssignmentsError(null);
+    } catch (error) {
+      console.error('Error al obtener las asignaciones de instrumentos', error);
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'No se pudieron cargar los instrumentos asignados. Intenta nuevamente.';
+      setInstrumentAssignments([]);
+      setInstrumentCommentDrafts({});
+      setInstrumentActionMessages({});
+      setInstrumentAssignmentsError(message);
+    } finally {
+      setIsLoadingInstrumentAssignments(false);
+    }
+  }, [doctorActiveTab, normalizedApiBase, selectedPatientNumericId, shouldShowDoctorTabs, token]);
+
+  useEffect(() => {
+    if (!shouldShowDoctorTabs || doctorActiveTab !== 'instruments') {
+      return;
+    }
+
+    void loadInstrumentAssignments();
+  }, [doctorActiveTab, loadInstrumentAssignments, shouldShowDoctorTabs, instrumentAssignmentsRefreshKey]);
+
+  const handleRefreshInstrumentAssignments = useCallback(() => {
+    setInstrumentAssignmentsRefreshKey((value) => value + 1);
+  }, []);
+
+  const handleInstrumentCommentChange = useCallback((assignmentId: number, value: string) => {
+    setInstrumentCommentDrafts((prev) => ({
+      ...prev,
+      [assignmentId]: value,
+    }));
+
+    setInstrumentActionMessages((prev) => {
+      if (!prev[assignmentId]) {
+        return prev;
+      }
+
+      const next = { ...prev };
+      next[assignmentId] = null;
+      return next;
+    });
+  }, []);
+
+  const handleSaveInstrumentComment = useCallback(
+    async (assignmentId: number) => {
+      const item = instrumentAssignments.find((candidate) => candidate.assignment.id === assignmentId);
+      if (!item) {
+        return;
+      }
+
+      const draftValue = instrumentCommentDrafts[assignmentId] ?? '';
+      const trimmedComment = draftValue.trim();
+
+      if (!trimmedComment.length) {
+        setInstrumentActionMessages((prev) => ({
+          ...prev,
+          [assignmentId]: { type: 'error', message: 'Ingresa un comentario antes de guardarlo.' },
+        }));
+        return;
+      }
+
+      if (!token) {
+        setInstrumentActionMessages((prev) => ({
+          ...prev,
+          [assignmentId]: { type: 'error', message: 'Tu sesión ha expirado. Inicia sesión nuevamente.' },
+        }));
+        return;
+      }
+
+      if (!selectedPatientNumericId) {
+        setInstrumentActionMessages((prev) => ({
+          ...prev,
+          [assignmentId]: { type: 'error', message: 'No se pudo identificar al paciente asociado.' },
+        }));
+        return;
+      }
+
+      setInstrumentCommentSavingId(assignmentId);
+      setInstrumentActionMessages((prev) => ({ ...prev, [assignmentId]: null }));
+
+      try {
+        const instrumentId = await resolveInstrumentIdForAssignment(item);
+        if (!instrumentId) {
+          throw new Error('No se pudo determinar el instrumento asociado a la asignación.');
+        }
+
+        const headers: Record<string, string> = {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        };
+
+        const coachName = [user?.firstName, user?.lastName].filter(Boolean).join(' ').trim() || null;
+        const endpoint = item.observation
+          ? `${normalizedApiBase}/coach-diagnostic-observation/${item.observation.id}`
+          : `${normalizedApiBase}/coach-diagnostic-observation`;
+        const method = item.observation ? 'PATCH' : 'POST';
+        const payload = item.observation
+          ? {
+              comentario: trimmedComment,
+              coach: coachName,
+            }
+          : {
+              id_paciente: selectedPatientNumericId,
+              id_instrumento: instrumentId,
+              comentario: trimmedComment,
+              coach: coachName,
+              fecha_aplicado: new Date().toISOString(),
+            };
+
+        const response = await fetch(endpoint, {
+          method,
+          headers,
+          body: JSON.stringify(payload),
+        });
+
+        if (!response.ok) {
+          const text = await response.text().catch(() => null);
+          throw new Error(text || `No se pudo guardar el comentario (${response.status}).`);
+        }
+
+        const data = await response.json().catch(() => null);
+        const updatedObservation =
+          data && typeof data === 'object' ? (data as CoachDiagnosticObservation) : item.observation;
+
+        setInstrumentAssignments((prev) =>
+          prev.map((assignmentItem) =>
+            assignmentItem.assignment.id === assignmentId
+              ? {
+                  ...assignmentItem,
+                  instrumentId,
+                  observation: updatedObservation ?? null,
+                }
+              : assignmentItem,
+          ),
+        );
+        setInstrumentCommentDrafts((prev) => ({
+          ...prev,
+          [assignmentId]: trimmedComment,
+        }));
+        setInstrumentActionMessages((prev) => ({
+          ...prev,
+          [assignmentId]: { type: 'success', message: 'Comentario guardado correctamente.' },
+        }));
+        setInstrumentNotice({ type: 'success', message: 'Comentario guardado correctamente.' });
+      } catch (error) {
+        console.error('Error al guardar el comentario del instrumento', error);
+        const message =
+          error instanceof Error ? error.message : 'No se pudo guardar el comentario. Intenta nuevamente.';
+        setInstrumentActionMessages((prev) => ({
+          ...prev,
+          [assignmentId]: { type: 'error', message },
+        }));
+        setInstrumentNotice({ type: 'error', message });
+      } finally {
+        setInstrumentCommentSavingId(null);
+      }
+    },
+    [
+      instrumentAssignments,
+      instrumentCommentDrafts,
+      normalizedApiBase,
+      resolveInstrumentIdForAssignment,
+      selectedPatientNumericId,
+      token,
+      user,
+    ],
+  );
+
+  const handleDeleteInstrumentAssignment = useCallback(
+    async (assignmentId: number) => {
+      if (!token) {
+        setInstrumentNotice({
+          type: 'error',
+          message: 'Tu sesión ha expirado. Inicia sesión nuevamente.',
+        });
+        return;
+      }
+
+      setInstrumentDeletingId(assignmentId);
+      setInstrumentNotice(null);
+
+      try {
+        const response = await fetch(`${normalizedApiBase}/patient-instruments/${assignmentId}`, {
+          method: 'DELETE',
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (!response.ok) {
+          const text = await response.text().catch(() => null);
+          throw new Error(text || `No se pudo eliminar la asignación (${response.status}).`);
+        }
+
+        setInstrumentAssignments((prev) => prev.filter((item) => item.assignment.id !== assignmentId));
+        setInstrumentCommentDrafts((prev) => {
+          const next = { ...prev };
+          delete next[assignmentId];
+          return next;
+        });
+        setInstrumentActionMessages((prev) => {
+          const next = { ...prev };
+          delete next[assignmentId];
+          return next;
+        });
+        setInstrumentNotice({ type: 'success', message: 'Asignación eliminada correctamente.' });
+        handleRefreshInstrumentAssignments();
+      } catch (error) {
+        console.error('Error al eliminar la asignación del instrumento', error);
+        const message =
+          error instanceof Error ? error.message : 'No se pudo eliminar la asignación. Intenta nuevamente.';
+        setInstrumentNotice({ type: 'error', message });
+      } finally {
+        setInstrumentDeletingId(null);
+      }
+    },
+    [handleRefreshInstrumentAssignments, normalizedApiBase, token],
+  );
 
   const presenceOptionClass = (value: DentalPresenceSelection): string =>
     `rounded-full border px-4 py-2 text-sm font-medium transition ${
@@ -2792,6 +3340,7 @@ export const EvolutionTracking: React.FC = () => {
     { id: 'summary', label: 'Resumen clínico', icon: LayoutDashboard },
     { id: 'charts', label: 'Evolución', icon: Activity },
     { id: 'records', label: 'Registros de evolución detallados', icon: ClipboardList },
+    { id: 'instruments', label: 'Instrumentos', icon: FileText },
   ] as const satisfies ReadonlyArray<{ id: DoctorTabId; label: string; icon: LucideIcon }>;
 
   const healthTabs = [
@@ -3134,6 +3683,188 @@ export const EvolutionTracking: React.FC = () => {
               })}
             </nav>
           </div>
+        )}
+
+        {shouldShowDoctorTabs && showInstrumentsSection && (
+          <Card className="rounded-[28px] border border-[#FFE4D6]/70 bg-white/90 p-6 shadow-[0_30px_70px_rgba(124,45,18,0.08)] backdrop-blur">
+            <div className="space-y-6">
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <h2 className="text-xl font-semibold text-slate-900">Instrumentos asignados</h2>
+                  <p className="text-sm text-slate-500">
+                    Consulta los instrumentos del paciente, agrega comentarios y elimina los pendientes si es necesario.
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleRefreshInstrumentAssignments}
+                  disabled={isLoadingInstrumentAssignments}
+                  className="inline-flex items-center gap-2 self-start md:self-auto"
+                >
+                  <RefreshCw className={`h-4 w-4 ${isLoadingInstrumentAssignments ? 'animate-spin' : ''}`} />
+                  {isLoadingInstrumentAssignments ? 'Actualizando' : 'Actualizar lista'}
+                </Button>
+              </div>
+
+              {instrumentNotice ? (
+                <div
+                  className={`rounded-lg border px-3 py-2 text-sm ${
+                    instrumentNotice.type === 'success'
+                      ? 'border-emerald-100 bg-emerald-50 text-emerald-600'
+                      : 'border-rose-100 bg-rose-50 text-rose-600'
+                  }`}
+                >
+                  {instrumentNotice.message}
+                </div>
+              ) : null}
+
+              {instrumentAssignmentsError ? (
+                <div className="rounded-lg border border-rose-100 bg-rose-50/80 px-3 py-2 text-sm text-rose-600">
+                  {instrumentAssignmentsError}
+                </div>
+              ) : null}
+
+              {isLoadingInstrumentAssignments ? (
+                <div className="rounded-xl border border-slate-100 bg-white/70 px-4 py-6 text-sm text-slate-600">
+                  Cargando instrumentos asignados...
+                </div>
+              ) : instrumentAssignments.length === 0 ? (
+                <div className="rounded-xl border border-slate-100 bg-white/80 px-4 py-6 text-sm text-slate-600">
+                  No hay instrumentos asignados para este paciente.
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {instrumentAssignments.map((item) => {
+                    const { assignment } = item;
+                    const statusLabel = item.isCompleted
+                      ? 'Completado'
+                      : item.responsesCount > 0
+                        ? 'En progreso'
+                        : 'Pendiente';
+                    const statusClasses = item.isCompleted
+                      ? 'bg-emerald-50 text-emerald-600 border border-emerald-200'
+                      : item.responsesCount > 0
+                        ? 'bg-amber-50 text-amber-600 border border-amber-200'
+                        : 'bg-slate-100 text-slate-600 border border-slate-200';
+                    const hasTopics = assignment.topics.some((topic) => Boolean(topic?.trim()));
+                    const actionFeedback = instrumentActionMessages[assignment.id] ?? null;
+                    const commentDraft = instrumentCommentDrafts[assignment.id] ?? '';
+
+                    return (
+                      <div
+                        key={assignment.id}
+                        className="space-y-4 rounded-2xl border border-slate-100 bg-white/85 p-5 shadow-sm"
+                      >
+                        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                          <div className="space-y-3">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <h3 className="text-base font-semibold text-slate-900">
+                                {assignment.instrumentTypeName ?? 'Instrumento sin nombre'}
+                              </h3>
+                              <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${statusClasses}`}>
+                                {statusLabel}
+                              </span>
+                            </div>
+                            {assignment.instrumentTypeDescription ? (
+                              <p className="text-sm text-slate-500">{assignment.instrumentTypeDescription}</p>
+                            ) : null}
+                            {hasTopics ? (
+                              <div className="flex flex-wrap gap-2">
+                                {assignment.topics
+                                  .filter((topic) => Boolean(topic?.trim()))
+                                  .map((topic) => (
+                                    <span
+                                      key={`${assignment.id}-${topic}`}
+                                      className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600"
+                                    >
+                                      {topic.trim()}
+                                    </span>
+                                  ))}
+                              </div>
+                            ) : null}
+                          </div>
+                          <div className="grid gap-2 text-xs text-slate-500 sm:text-sm">
+                            <div>
+                              <span className="font-semibold text-slate-600">Asignado:</span>{' '}
+                              {formatInstrumentDate(assignment.assignedAt ?? assignment.createdAt)}
+                            </div>
+                            <div>
+                              <span className="font-semibold text-slate-600">Disponible hasta:</span>{' '}
+                              {formatInstrumentDate(assignment.validUntil)}
+                            </div>
+                            <div>
+                              <span className="font-semibold text-slate-600">Respuestas registradas:</span>{' '}
+                              {item.responsesCount}
+                            </div>
+                          </div>
+                        </div>
+
+                        {item.isCompleted ? (
+                          <div className="space-y-3 rounded-xl border border-slate-200/70 bg-slate-50/60 p-4">
+                            <label className="text-sm font-semibold text-slate-700" htmlFor={`instrument-comment-${assignment.id}`}>
+                              Comentario para el paciente
+                            </label>
+                            <textarea
+                              id={`instrument-comment-${assignment.id}`}
+                              rows={3}
+                              value={commentDraft}
+                              onChange={(event) => handleInstrumentCommentChange(assignment.id, event.target.value)}
+                              disabled={instrumentCommentSavingId === assignment.id}
+                              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:border-[#FB923C] focus:outline-none focus:ring-2 focus:ring-[#FDBA74] disabled:cursor-not-allowed"
+                              placeholder="Comparte hallazgos o recomendaciones breves."
+                            />
+                            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                              <div className="text-xs text-slate-500">
+                                {actionFeedback ? (
+                                  <span
+                                    className={actionFeedback.type === 'success' ? 'text-emerald-600' : 'text-rose-600'}
+                                  >
+                                    {actionFeedback.message}
+                                  </span>
+                                ) : (
+                                  'El paciente verá este comentario junto a su instrumento completado.'
+                                )}
+                              </div>
+                              <Button
+                                type="button"
+                                size="sm"
+                                onClick={() => handleSaveInstrumentComment(assignment.id)}
+                                disabled={instrumentCommentSavingId === assignment.id}
+                                className="self-start sm:self-auto"
+                              >
+                                {instrumentCommentSavingId === assignment.id ? 'Guardando...' : 'Guardar comentario'}
+                              </Button>
+                            </div>
+                          </div>
+                        ) : item.responsesCount === 0 ? (
+                          <div className="flex flex-col gap-3 rounded-xl border border-slate-200/70 bg-slate-50/60 p-4 sm:flex-row sm:items-center sm:justify-between">
+                            <p className="text-sm text-slate-600">
+                              Este instrumento todavía no tiene respuestas. Puedes eliminar la asignación si fue creada por error.
+                            </p>
+                            <Button
+                              type="button"
+                              variant="danger"
+                              size="sm"
+                              onClick={() => handleDeleteInstrumentAssignment(assignment.id)}
+                              disabled={instrumentDeletingId === assignment.id}
+                            >
+                              {instrumentDeletingId === assignment.id ? 'Eliminando...' : 'Eliminar asignación'}
+                            </Button>
+                          </div>
+                        ) : (
+                          <div className="rounded-xl border border-slate-200/70 bg-slate-50/60 px-4 py-3 text-sm text-slate-600">
+                            El instrumento ya cuenta con respuestas registradas. Espera a que el paciente lo complete para agregar un comentario.
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </Card>
         )}
 
         {showSummarySection && (
