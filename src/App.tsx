@@ -24,6 +24,7 @@ import { PatientActivities } from './pages/Activities/PatientActivities';
 import { EvolutionTracking } from './pages/Evolution/EvolutionTracking';
 import { ReportsManagement } from './pages/Reports/ReportsManagement';
 import { MedicalHistory } from './pages/MedicalHistory/MedicalHistory';
+import { ConsultationDetail } from './pages/MedicalHistory/ConsultationDetail';
 import { UserProfile } from './pages/Profile/UserProfile';
 import { InstrumentResults } from './pages/Results/InstrumentResults';
 
@@ -77,6 +78,10 @@ const AppContent: React.FC = () => {
       <Route path="/reports" element={<Layout><ReportsManagement /></Layout>} />
       <Route path="/results" element={<Layout><InstrumentResults /></Layout>} />
       <Route path="/medical-history" element={<Layout><MedicalHistory /></Layout>} />
+      <Route
+        path="/medical-history/consultations/:consultationId"
+        element={<Layout><ConsultationDetail /></Layout>}
+      />
       <Route path="/profile" element={<Layout><UserProfile /></Layout>} />
       <Route path="/" element={<Navigate to={getDashboardPath(user.role)} replace />} />
       <Route path="*" element={<Navigate to={getDashboardPath(user.role)} replace />} />

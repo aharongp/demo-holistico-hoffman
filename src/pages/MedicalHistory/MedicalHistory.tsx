@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Upload, File, Download, Trash2, Plus, Edit, Eye } from 'lucide-react';
 import { Card } from '../../components/UI/Card';
 import { Button } from '../../components/UI/Button';
@@ -640,6 +641,174 @@ export const createInitialOcularForm = (): OcularFormState => ({
   rightEyeFile: null,
   leftEyeFile: null,
 });
+
+const consultationDateFormatter = new Intl.DateTimeFormat('es-ES', {
+  dateStyle: 'medium',
+});
+
+const formatConsultationDate = (value?: string | null): string => {
+  if (!value) {
+    return '—';
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return '—';
+  }
+
+  return consultationDateFormatter.format(parsed);
+};
+
+const sanitizeConsultationString = (value: unknown): string => {
+  if (value === null || typeof value === 'undefined') {
+    return '';
+  }
+
+  if (typeof value === 'string') {
+    return value.trim();
+  }
+
+  return String(value).trim();
+};
+
+export interface ConsultationRow {
+  id: number;
+  dateLabel: string;
+  reason: string;
+  weight: string;
+  bodyMassIndex: string;
+  bodyFat: string;
+  pulse: string;
+  maxHeartRate: string;
+  bloodPressure: string;
+  waist: string;
+  hip: string;
+  recommendation: string;
+  observation: string;
+  diagnosis: string;
+}
+
+export interface ConsultationFormState {
+  date: string;
+  reason: string;
+  weight: string;
+  bodyMassIndex: string;
+  bodyFat: string;
+  pulse: string;
+  maxHeartRate: string;
+  bloodPressure: string;
+  arm: string;
+  thigh: string;
+  waist: string;
+  hip: string;
+  chest: string;
+  neck: string;
+  finding: string;
+  recommendation: string;
+  observation: string;
+  diagnosis: string;
+  breathing: string;
+  evolution: string;
+  coachRecommendation: string;
+  indications: string;
+}
+
+export const createInitialConsultationForm = (): ConsultationFormState => ({
+  date: '',
+  reason: '',
+  weight: '',
+  bodyMassIndex: '',
+  bodyFat: '',
+  pulse: '',
+  maxHeartRate: '',
+  bloodPressure: '',
+  arm: '',
+  thigh: '',
+  waist: '',
+  hip: '',
+  chest: '',
+  neck: '',
+  finding: '',
+  recommendation: '',
+  observation: '',
+  diagnosis: '',
+  breathing: '',
+  evolution: '',
+  coachRecommendation: '',
+  indications: '',
+});
+
+interface NormalizedConsultationRow {
+  sortKey: number;
+  row: ConsultationRow;
+}
+
+export const normalizeConsultationRecords = (
+  records: unknown[],
+): ConsultationRow[] => {
+  const normalized: NormalizedConsultationRow[] = [];
+
+  records.forEach((record, index) => {
+    if (!record || typeof record !== 'object') {
+      return;
+    }
+
+    const raw = record as Record<string, unknown>;
+    const rawDate = typeof raw.date === 'string' ? raw.date : null;
+    const legacyDate = typeof raw['fecha'] === 'string' ? raw['fecha'] : null;
+    const dateValue = rawDate ?? legacyDate ?? null;
+    const timestamp = dateValue ? new Date(dateValue).getTime() : Number.NaN;
+    const sortKey = Number.isFinite(timestamp) ? timestamp : Number.NEGATIVE_INFINITY;
+
+    const idCandidate = Number(raw.id);
+    const id = Number.isFinite(idCandidate) ? idCandidate : -(index + 1);
+
+    const reason = sanitizeConsultationString(raw.reason ?? raw['motivo']);
+    const weight = sanitizeConsultationString(raw.weight ?? raw['peso']);
+    const bodyMassIndex = sanitizeConsultationString(
+      raw.bodyMassIndex ?? raw['imc'],
+    );
+    const bodyFat = sanitizeConsultationString(raw.bodyFat ?? raw['gc']);
+    const pulse = sanitizeConsultationString(raw.pulse ?? raw['pulso']);
+    const maxHeartRate = sanitizeConsultationString(raw.maxHeartRate ?? raw['fcm']);
+    const bloodPressure = sanitizeConsultationString(
+      raw.bloodPressure ?? raw['tension'],
+    );
+    const waist = sanitizeConsultationString(raw.waist ?? raw['cintura']);
+    const hip = sanitizeConsultationString(raw.hip ?? raw['cadera']);
+    const recommendation = sanitizeConsultationString(
+      raw.recommendation ?? raw['recomendacion'],
+    );
+    const observation = sanitizeConsultationString(
+      raw.observation ?? raw['observacion'],
+    );
+    const diagnosis = sanitizeConsultationString(raw.diagnosis ?? raw['diagnostico']);
+
+    normalized.push({
+      sortKey,
+      row: {
+        id,
+        dateLabel: formatConsultationDate(dateValue),
+        reason,
+        weight,
+        bodyMassIndex,
+        bodyFat,
+        pulse,
+        maxHeartRate,
+        bloodPressure,
+        waist,
+        hip,
+        recommendation,
+        observation,
+        diagnosis,
+      },
+    });
+  });
+
+  return normalized
+    .sort((a, b) => b.sortKey - a.sortKey)
+    .map(({ row }) => row);
+};
 
 export const createInitialMedicalHistory = (): MedicalHistoryData => ({
   personal: {
@@ -1823,6 +1992,7 @@ export const MedicalHistoryViewModal: React.FC<MedicalHistoryViewModalProps> = (
 
 export const MedicalHistory: React.FC = () => {
   const { user, token } = useAuth();
+  const navigate = useNavigate();
   const apiBase = (import.meta as any).env?.VITE_API_BASE ?? 'http://localhost:3000';
   const assetsBase = useMemo(() => {
     const rawEnv = (import.meta as any).env?.VITE_ASSETS_BASE;
@@ -1848,6 +2018,18 @@ export const MedicalHistory: React.FC = () => {
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
   const [downloadingFileId, setDownloadingFileId] = useState<string | null>(null);
   const [patientId, setPatientId] = useState<number | null>(null);
+  const [consultations, setConsultations] = useState<ConsultationRow[]>([]);
+  const [isLoadingConsultations, setIsLoadingConsultations] = useState(false);
+  const [consultationsError, setConsultationsError] = useState<string | null>(null);
+  const [isConsultationModalOpen, setIsConsultationModalOpen] = useState(false);
+  const [consultationForm, setConsultationForm] = useState<ConsultationFormState>(
+    createInitialConsultationForm(),
+  );
+  const [isSavingConsultation, setIsSavingConsultation] = useState(false);
+  const [consultationModalError, setConsultationModalError] =
+    useState<string | null>(null);
+  const [consultationSuccess, setConsultationSuccess] = useState<string | null>(null);
+  const [consultationsRefreshKey, setConsultationsRefreshKey] = useState(0);
   const [dentalPresence, setDentalPresence] = useState<DentalPresenceState>(
     createInitialDentalPresence(),
   );
@@ -2073,6 +2255,82 @@ export const MedicalHistory: React.FC = () => {
       controller.abort();
     };
   }, [apiBase, fetchAttachments, token, user?.id]);
+
+  useEffect(() => {
+    if (!patientId || !token) {
+      setConsultations([]);
+      setConsultationsError(null);
+      setIsLoadingConsultations(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    let cancelled = false;
+
+    const loadConsultations = async () => {
+      setIsLoadingConsultations(true);
+      setConsultationsError(null);
+
+      try {
+        const url = new URL(`${apiBase}/consultation`);
+        url.searchParams.set('patientId', String(patientId));
+
+        const res = await fetch(url.toString(), {
+          method: 'GET',
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          signal: controller.signal,
+        });
+
+        if (res.status === 404 || res.status === 204) {
+          if (!cancelled) {
+            setConsultations([]);
+          }
+          return;
+        }
+
+        if (!res.ok) {
+          throw new Error(`Failed to fetch consultations (${res.status})`);
+        }
+
+        const payload = await res.json().catch(() => null);
+        if (cancelled) {
+          return;
+        }
+
+        const records = Array.isArray(payload)
+          ? payload
+          : payload && typeof payload === 'object'
+          ? [payload]
+          : [];
+
+        const normalized = normalizeConsultationRecords(records);
+        setConsultations(normalized);
+      } catch (error: any) {
+        if (cancelled || error?.name === 'AbortError') {
+          return;
+        }
+
+        console.error('Failed to load consultations', error);
+        setConsultationsError(
+          'No se pudo cargar el historial de consultas. Intenta nuevamente.',
+        );
+        setConsultations([]);
+      } finally {
+        if (!cancelled) {
+          setIsLoadingConsultations(false);
+        }
+      }
+    };
+
+    void loadConsultations();
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [apiBase, consultationsRefreshKey, patientId, token]);
 
   useEffect(() => {
     if (!patientId || !token) {
@@ -2308,6 +2566,14 @@ export const MedicalHistory: React.FC = () => {
     const timer = window.setTimeout(() => setSaveSuccess(null), 5000);
     return () => window.clearTimeout(timer);
   }, [saveSuccess]);
+
+  useEffect(() => {
+    if (!consultationSuccess) {
+      return;
+    }
+    const timer = window.setTimeout(() => setConsultationSuccess(null), 5000);
+    return () => window.clearTimeout(timer);
+  }, [consultationSuccess]);
 
   const filteredFiles = files.filter(file => 
     selectedCategory === 'all' || file.category === selectedCategory
@@ -2791,6 +3057,109 @@ export const MedicalHistory: React.FC = () => {
     }
   };
 
+  const handleOpenConsultationModal = () => {
+    if (!patientId || !token) {
+      return;
+    }
+
+    setConsultationForm(createInitialConsultationForm());
+    setConsultationModalError(null);
+    setIsConsultationModalOpen(true);
+  };
+
+  const handleCloseConsultationModal = () => {
+    if (isSavingConsultation) {
+      return;
+    }
+
+    setIsConsultationModalOpen(false);
+    setConsultationModalError(null);
+    setConsultationForm(createInitialConsultationForm());
+  };
+
+  const handleConsultationFieldChange = (
+    field: keyof ConsultationFormState,
+    value: string,
+  ) => {
+    setConsultationForm((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+  };
+
+  const handleSubmitConsultation = async (
+    event: React.FormEvent<HTMLFormElement>,
+  ) => {
+    event.preventDefault();
+
+    if (!patientId || !token) {
+      setConsultationModalError('No se pudo identificar al paciente.');
+      return;
+    }
+
+    setIsSavingConsultation(true);
+    setConsultationModalError(null);
+
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    };
+
+    const normalizeInput = (value: string): string | null => {
+      const trimmed = value.trim();
+      return trimmed.length > 0 ? trimmed : null;
+    };
+
+    const payload = {
+      id_paciente: patientId,
+      motivo: normalizeInput(consultationForm.reason),
+      fecha: normalizeInput(consultationForm.date),
+      peso: normalizeInput(consultationForm.weight),
+      imc: normalizeInput(consultationForm.bodyMassIndex),
+      gc: normalizeInput(consultationForm.bodyFat),
+      pulso: normalizeInput(consultationForm.pulse),
+      fcm: normalizeInput(consultationForm.maxHeartRate),
+      tension: normalizeInput(consultationForm.bloodPressure),
+      brazo: normalizeInput(consultationForm.arm),
+      muslo: normalizeInput(consultationForm.thigh),
+      cintura: normalizeInput(consultationForm.waist),
+      cadera: normalizeInput(consultationForm.hip),
+      busto_pecho: normalizeInput(consultationForm.chest),
+      cuello: normalizeInput(consultationForm.neck),
+      hallazgo: normalizeInput(consultationForm.finding),
+      recomendacion: normalizeInput(consultationForm.recommendation),
+      observacion: normalizeInput(consultationForm.observation),
+      diagnostico: normalizeInput(consultationForm.diagnosis),
+      respiracion: normalizeInput(consultationForm.breathing),
+      evolucion: normalizeInput(consultationForm.evolution),
+      recomendacion_coach: normalizeInput(consultationForm.coachRecommendation),
+      indicaciones: normalizeInput(consultationForm.indications),
+    };
+
+    try {
+      const res = await fetch(`${apiBase}/consultation`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        throw new Error(`Failed to create consultation (${res.status})`);
+      }
+
+      setConsultationSuccess('Consulta registrada correctamente.');
+      setConsultationsError(null);
+      setIsConsultationModalOpen(false);
+      setConsultationForm(createInitialConsultationForm());
+      setConsultationsRefreshKey((key) => key + 1);
+    } catch (error) {
+      console.error('Failed to save consultation', error);
+      setConsultationModalError('No se pudo guardar la consulta. Intenta nuevamente.');
+    } finally {
+      setIsSavingConsultation(false);
+    }
+  };
+
   const renderQuadrant = (key: DentalQuadrantKey) => {
     const config = DENTAL_FIELD_GROUPS[key];
 
@@ -3021,6 +3390,12 @@ export const MedicalHistory: React.FC = () => {
       {saveSuccess && (
         <div className="rounded-2xl border border-emerald-100 bg-emerald-50/90 px-4 py-3 text-sm text-emerald-700 shadow-lg shadow-emerald-100/60">
           {saveSuccess}
+        </div>
+      )}
+
+      {consultationSuccess && (
+        <div className="rounded-2xl border border-emerald-100 bg-emerald-50/90 px-4 py-3 text-sm text-emerald-700 shadow-lg shadow-emerald-100/60">
+          {consultationSuccess}
         </div>
       )}
 
@@ -3279,6 +3654,100 @@ export const MedicalHistory: React.FC = () => {
         </div>
       </Card>
 
+      <Card className="rounded-[24px] border-white/60 bg-white/80 shadow-xl shadow-slate-200/70 backdrop-blur">
+        <div className="space-y-6">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div>
+              <h2 className="text-xl font-semibold text-slate-900">Consultas médicas</h2>
+              <p className="text-sm text-slate-500">
+                Revisa las consultas registradas y añade nuevas evaluaciones clínicas.
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="primary"
+              onClick={handleOpenConsultationModal}
+              className="inline-flex items-center gap-2 self-start md:self-auto"
+              disabled={!patientId || !token}
+              title={
+                !patientId || !token
+                  ? 'Selecciona un paciente para registrar una consulta'
+                  : 'Registrar una nueva consulta'
+              }
+            >
+              <Plus className="h-4 w-4" />
+              Registrar consulta
+            </Button>
+          </div>
+
+          {consultationsError && (
+            <div className="rounded-lg border border-rose-100 bg-rose-50/80 px-3 py-2 text-sm text-rose-600">
+              {consultationsError}
+            </div>
+          )}
+
+          {isLoadingConsultations ? (
+            <div className="rounded-xl border border-slate-100 bg-white/70 px-4 py-6 text-sm text-slate-600">
+              Cargando historial de consultas...
+            </div>
+          ) : (
+            <div className="overflow-x-auto rounded-xl border border-slate-100 bg-white/80">
+              <table className="min-w-full divide-y divide-slate-100">
+                <thead className="bg-slate-50/80">
+                  <tr className="text-left text-xs font-semibold uppercase tracking-[0.3em] text-slate-500">
+                    <th className="px-4 py-3">Fecha</th>
+                    <th className="px-4 py-3">Motivo</th>
+                    <th className="px-4 py-3">Peso</th>
+                    <th className="px-4 py-3">IMC</th>
+                    <th className="px-4 py-3">Pulso</th>
+                    <th className="px-4 py-3">Tensión</th>
+                    <th className="px-4 py-3">Diagnóstico</th>
+                    <th className="px-4 py-3">Recomendación</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {consultations.length > 0 ? (
+                    consultations.map((consultation) => (
+                      <tr
+                        key={consultation.id}
+                        className="cursor-pointer text-sm text-slate-600 transition hover:bg-slate-50 focus-within:bg-slate-100"
+                        onClick={() => navigate(`/medical-history/consultations/${consultation.id}`)}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault();
+                            navigate(`/medical-history/consultations/${consultation.id}`);
+                          }
+                        }}
+                      >
+                        <td className="whitespace-nowrap px-4 py-3">{consultation.dateLabel}</td>
+                        <td className="min-w-[12rem] px-4 py-3">{toDisplayText(consultation.reason)}</td>
+                        <td className="px-4 py-3">{toDisplayText(consultation.weight)}</td>
+                        <td className="px-4 py-3">{toDisplayText(consultation.bodyMassIndex)}</td>
+                        <td className="px-4 py-3">{toDisplayText(consultation.pulse)}</td>
+                        <td className="px-4 py-3">{toDisplayText(consultation.bloodPressure)}</td>
+                        <td className="min-w-[12rem] px-4 py-3">{toDisplayText(consultation.diagnosis)}</td>
+                        <td className="min-w-[12rem] px-4 py-3">{toDisplayText(consultation.recommendation)}</td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td
+                        colSpan={8}
+                        className="px-4 py-6 text-center text-sm text-slate-500"
+                      >
+                        No hay consultas registradas.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </Card>
+
       {/* Upload Area */}
       <Card className="rounded-[24px] border-white/60 bg-white/80 shadow-xl shadow-slate-200/70 backdrop-blur">
         <div
@@ -3445,6 +3914,352 @@ export const MedicalHistory: React.FC = () => {
             </div>
           </div>
         )}
+      </Modal>
+
+      <Modal
+        isOpen={isConsultationModalOpen}
+        onClose={handleCloseConsultationModal}
+        title="Registrar consulta médica"
+      >
+        <form className="space-y-5" onSubmit={handleSubmitConsultation}>
+          {consultationModalError && (
+            <div className="rounded-md border border-rose-100 bg-rose-50/80 px-3 py-2 text-sm text-rose-600">
+              {consultationModalError}
+            </div>
+          )}
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className="block text-sm font-medium text-slate-700">
+                Fecha de la consulta
+              </label>
+              <input
+                type="date"
+                value={consultationForm.date}
+                onChange={(event) =>
+                  handleConsultationFieldChange('date', event.target.value)
+                }
+                className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700">
+                Motivo
+              </label>
+              <input
+                type="text"
+                value={consultationForm.reason}
+                onChange={(event) =>
+                  handleConsultationFieldChange('reason', event.target.value)
+                }
+                placeholder="Describe brevemente el motivo"
+                className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700">
+                Peso
+              </label>
+              <input
+                type="text"
+                value={consultationForm.weight}
+                onChange={(event) =>
+                  handleConsultationFieldChange('weight', event.target.value)
+                }
+                placeholder="Ej. 72 kg"
+                className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700">
+                IMC
+              </label>
+              <input
+                type="text"
+                value={consultationForm.bodyMassIndex}
+                onChange={(event) =>
+                  handleConsultationFieldChange('bodyMassIndex', event.target.value)
+                }
+                placeholder="Ej. 24.5"
+                className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700">
+                % Grasa corporal
+              </label>
+              <input
+                type="text"
+                value={consultationForm.bodyFat}
+                onChange={(event) =>
+                  handleConsultationFieldChange('bodyFat', event.target.value)
+                }
+                placeholder="Ej. 18%"
+                className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700">
+                Pulso
+              </label>
+              <input
+                type="text"
+                value={consultationForm.pulse}
+                onChange={(event) =>
+                  handleConsultationFieldChange('pulse', event.target.value)
+                }
+                placeholder="Ej. 72 bpm"
+                className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700">
+                Frecuencia cardíaca máxima
+              </label>
+              <input
+                type="text"
+                value={consultationForm.maxHeartRate}
+                onChange={(event) =>
+                  handleConsultationFieldChange('maxHeartRate', event.target.value)
+                }
+                placeholder="Ej. 160 bpm"
+                className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700">
+                Tensión arterial
+              </label>
+              <input
+                type="text"
+                value={consultationForm.bloodPressure}
+                onChange={(event) =>
+                  handleConsultationFieldChange('bloodPressure', event.target.value)
+                }
+                placeholder="Ej. 120/80"
+                className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700">
+                Cintura
+              </label>
+              <input
+                type="text"
+                value={consultationForm.waist}
+                onChange={(event) =>
+                  handleConsultationFieldChange('waist', event.target.value)
+                }
+                placeholder="Ej. 82 cm"
+                className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700">
+                Cadera
+              </label>
+              <input
+                type="text"
+                value={consultationForm.hip}
+                onChange={(event) =>
+                  handleConsultationFieldChange('hip', event.target.value)
+                }
+                placeholder="Ej. 95 cm"
+                className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700">
+                Circunferencia brazo
+              </label>
+              <input
+                type="text"
+                value={consultationForm.arm}
+                onChange={(event) =>
+                  handleConsultationFieldChange('arm', event.target.value)
+                }
+                placeholder="Ej. 32 cm"
+                className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700">
+                Circunferencia muslo
+              </label>
+              <input
+                type="text"
+                value={consultationForm.thigh}
+                onChange={(event) =>
+                  handleConsultationFieldChange('thigh', event.target.value)
+                }
+                placeholder="Ej. 55 cm"
+                className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700">
+                Busto/pecho
+              </label>
+              <input
+                type="text"
+                value={consultationForm.chest}
+                onChange={(event) =>
+                  handleConsultationFieldChange('chest', event.target.value)
+                }
+                placeholder="Ej. 98 cm"
+                className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700">
+                Cuello
+              </label>
+              <input
+                type="text"
+                value={consultationForm.neck}
+                onChange={(event) =>
+                  handleConsultationFieldChange('neck', event.target.value)
+                }
+                placeholder="Ej. 36 cm"
+                className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700">
+              Hallazgo
+            </label>
+            <textarea
+              value={consultationForm.finding}
+              onChange={(event) =>
+                handleConsultationFieldChange('finding', event.target.value)
+              }
+              rows={3}
+              className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+              placeholder="Resume los hallazgos principales"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700">
+              Diagnóstico
+            </label>
+            <textarea
+              value={consultationForm.diagnosis}
+              onChange={(event) =>
+                handleConsultationFieldChange('diagnosis', event.target.value)
+              }
+              rows={3}
+              className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+              placeholder="Describe el diagnóstico principal"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700">
+              Recomendación
+            </label>
+            <textarea
+              value={consultationForm.recommendation}
+              onChange={(event) =>
+                handleConsultationFieldChange('recommendation', event.target.value)
+              }
+              rows={3}
+              className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+              placeholder="Incluye indicaciones o recomendaciones"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700">
+              Observaciones
+            </label>
+            <textarea
+              value={consultationForm.observation}
+              onChange={(event) =>
+                handleConsultationFieldChange('observation', event.target.value)
+              }
+              rows={3}
+              className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+              placeholder="Notas adicionales (opcional)"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700">
+              Respiración
+            </label>
+            <textarea
+              value={consultationForm.breathing}
+              onChange={(event) =>
+                handleConsultationFieldChange('breathing', event.target.value)
+              }
+              rows={2}
+              className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+              placeholder="Observaciones sobre la respiración"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700">
+              Evolución
+            </label>
+            <textarea
+              value={consultationForm.evolution}
+              onChange={(event) =>
+                handleConsultationFieldChange('evolution', event.target.value)
+              }
+              rows={3}
+              className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+              placeholder="Registra la evolución del paciente"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700">
+              Recomendación del coach
+            </label>
+            <textarea
+              value={consultationForm.coachRecommendation}
+              onChange={(event) =>
+                handleConsultationFieldChange('coachRecommendation', event.target.value)
+              }
+              rows={3}
+              className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+              placeholder="Notas o recomendaciones del coach"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700">
+              Indicaciones
+            </label>
+            <textarea
+              value={consultationForm.indications}
+              onChange={(event) =>
+                handleConsultationFieldChange('indications', event.target.value)
+              }
+              rows={3}
+              className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+              placeholder="Indicaciones adicionales para el paciente"
+            />
+          </div>
+
+          <div className="flex justify-end gap-3 pt-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleCloseConsultationModal}
+              disabled={isSavingConsultation}
+            >
+              Cancelar
+            </Button>
+            <Button type="submit" disabled={isSavingConsultation}>
+              {isSavingConsultation ? 'Guardando...' : 'Guardar consulta'}
+            </Button>
+          </div>
+        </form>
       </Modal>
 
       <Modal
