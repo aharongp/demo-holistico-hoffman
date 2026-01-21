@@ -611,54 +611,9 @@ export const PatientMedicalHistoryForm: React.FC<PatientMedicalHistoryFormProps>
           </div>
         </details>
 
-        <details className="group rounded-2xl border border-gray-200 bg-white/70 p-4 shadow-sm transition-colors open:border-[#FAD4B1]">
-          <summary className="flex cursor-pointer list-none items-center justify-between text-base font-semibold text-gray-800">
-            <span>Historia Ginecológica</span>
-            <span className="text-xs text-gray-400 transition group-open:rotate-180">▾</span>
-          </summary>
-          <p className="mt-4 text-sm text-gray-600">Complete en caso de aplicar</p>
-          <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-            {gynecologicalFields.map(({ key, label }) => (
-              <div key={key}>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  {label}
-                </label>
-                <input
-                  type="text"
-                  value={data.gynecological[key]}
-                  onChange={(e) => updateGynecologicalField(key, e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-            ))}
-          </div>
-        </details>
-
-        <details className="group rounded-2xl border border-gray-200 bg-white/70 p-4 shadow-sm transition-colors open:border-[#FAD4B1]">
-          <summary className="flex cursor-pointer list-none items-center justify-between text-base font-semibold text-gray-800">
-            <span>Estilo de Vida</span>
-            <span className="text-xs text-gray-400 transition group-open:rotate-180">▾</span>
-          </summary>
-          <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-            {lifestyleFields.map(({ key, label }) => (
-              <div key={key}>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  {label}
-                </label>
-                <input
-                  type="text"
-                  value={data.lifestyle[key]}
-                  onChange={(e) => updateLifestyleField(key, e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-            ))}
-          </div>
-        </details>
-
         <details className="group rounded-2xl border border-gray-200 bg-white/70 p-4 shadow-sm transition-colors open:border-[#fdba74]">
           <summary className="flex cursor-pointer list-none items-center justify-between text-base font-semibold text-gray-800">
-            <span>Antecedentes Clínicos</span>
+            <span>Antecedentes personales</span>
             <span className="text-xs text-gray-400 transition group-open:rotate-180">▾</span>
           </summary>
           <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -757,6 +712,51 @@ export const PatientMedicalHistoryForm: React.FC<PatientMedicalHistoryFormProps>
                 </div>
               );
             })}
+          </div>
+        </details>
+
+        <details className="group rounded-2xl border border-gray-200 bg-white/70 p-4 shadow-sm transition-colors open:border-[#FAD4B1]">
+          <summary className="flex cursor-pointer list-none items-center justify-between text-base font-semibold text-gray-800">
+            <span>Historia Ginecológica</span>
+            <span className="text-xs text-gray-400 transition group-open:rotate-180">▾</span>
+          </summary>
+          <p className="mt-4 text-sm text-gray-600">Complete en caso de aplicar</p>
+          <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+            {gynecologicalFields.map(({ key, label }) => (
+              <div key={key}>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  {label}
+                </label>
+                <input
+                  type="text"
+                  value={data.gynecological[key]}
+                  onChange={(e) => updateGynecologicalField(key, e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+            ))}
+          </div>
+        </details>
+
+        <details className="group rounded-2xl border border-gray-200 bg-white/70 p-4 shadow-sm transition-colors open:border-[#FAD4B1]">
+          <summary className="flex cursor-pointer list-none items-center justify-between text-base font-semibold text-gray-800">
+            <span>Estilo de Vida</span>
+            <span className="text-xs text-gray-400 transition group-open:rotate-180">▾</span>
+          </summary>
+          <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+            {lifestyleFields.map(({ key, label }) => (
+              <div key={key}>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  {label}
+                </label>
+                <input
+                  type="text"
+                  value={data.lifestyle[key]}
+                  onChange={(e) => updateLifestyleField(key, e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+            ))}
           </div>
         </details>
 

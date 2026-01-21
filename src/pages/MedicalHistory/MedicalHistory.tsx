@@ -1334,7 +1334,7 @@ export const lifestyleFields: Array<{
   { key: 'rest', label: '¿Descansa lo necesario?' },
   { key: 'freeTime', label: '¿Como emplea su tiempo libre?' },
   { key: 'workSharing', label: '¿Con quién lo comparte?' },
-  { key: 'leisure', label: 'hobbies' },
+  { key: 'leisure', label: 'Hobbies' },
   { key: 'pets', label: 'Mascotas' },
   { key: 'plants', label: 'Plantas' },
   { key: 'technology', label: 'Tecnología' },
