@@ -672,32 +672,7 @@ export const EvolutionTracking: React.FC = () => {
     });
   }, [assignmentFilter, genderFilter, patients, searchTerm, selectedProgram, statusFilter]);
   const filteredPatientCount = filteredPatients.length;
-  const { totalPatients, assignedProgramCount } = useMemo(() => {
-    let assigned = 0;
-    for (const patient of patients) {
-      if (patient.programId) {
-        assigned += 1;
-      }
-    }
-    return {
-      totalPatients: patients.length,
-      assignedProgramCount: assigned,
-    };
-  }, [patients]);
-  const filteredProgramsCount = useMemo(() => {
-    const base = new Set<string>();
-    filteredPatients.forEach(patient => {
-      if (patient.programId) {
-        base.add(patient.programId);
-      }
-    });
-    return base.size;
-  }, [filteredPatients]);
-  const filteredAwaitingAssignmentCount = useMemo(
-    () => filteredPatients.filter(patient => !patient.programId).length,
-    [filteredPatients],
-  );
-  const filteredAssignedCount = filteredPatientCount - filteredAwaitingAssignmentCount;
+  const totalPatients = useMemo(() => patients.length, [patients]);
   const dateFormatter = useMemo(
     () => new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium', timeStyle: 'short' }),
     []
@@ -3483,100 +3458,84 @@ export const EvolutionTracking: React.FC = () => {
               Listado maestro
             </span>
           </div>
-          <div className="mb-5 space-y-4">
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
-              <div className="relative md:col-span-2 xl:col-span-2">
-                <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-[#fb923c]" />
-                <input
-                  type="text"
-                  placeholder="Busca por nombre, cédula o correo"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full rounded-3xl border border-[#FBD6B3]/70 bg-white/75 pl-10 pr-4 py-2 text-sm text-slate-700 placeholder:text-slate-400 focus:border-[#fb923c] focus:outline-none focus:ring-2 focus:ring-[#fed7aa]"
-                />
-              </div>
-              <div>
-                <select
-                  value={selectedProgram}
-                  onChange={(e) => setSelectedProgram(e.target.value)}
-                  className="w-full rounded-3xl border border-[#FBD6B3]/70 bg-white/75 px-4 py-2 text-sm text-slate-700 focus:border-[#fb923c] focus:outline-none focus:ring-2 focus:ring-[#fed7aa]"
-                >
-                  {programOptions.map(option => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <select
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
-                  className="w-full rounded-3xl border border-[#FBD6B3]/70 bg-white/75 px-4 py-2 text-sm text-slate-700 focus:border-[#fb923c] focus:outline-none focus:ring-2 focus:ring-[#fed7aa]"
-                >
-                  <option value="all">Estado: todos</option>
-                  <option value="active">Solo activos</option>
-                  <option value="inactive">Solo inactivos</option>
-                </select>
-              </div>
-              <div>
-                <select
-                  value={assignmentFilter}
-                  onChange={(e) => setAssignmentFilter(e.target.value as typeof assignmentFilter)}
-                  className="w-full rounded-3xl border border-[#FBD6B3]/70 bg-white/75 px-4 py-2 text-sm text-slate-700 focus:border-[#fb923c] focus:outline-none focus:ring-2 focus:ring-[#fed7aa]"
-                >
-                  <option value="all">Asignación: todas</option>
-                  <option value="assigned">Con programa</option>
-                  <option value="unassigned">Sin programa</option>
-                </select>
-              </div>
-              <div>
-                <select
-                  value={genderFilter}
-                  onChange={(e) => setGenderFilter(e.target.value as typeof genderFilter)}
-                  className="w-full rounded-3xl border border-[#FBD6B3]/70 bg-white/75 px-4 py-2 text-sm text-slate-700 focus:border-[#fb923c] focus:outline-none focus:ring-2 focus:ring-[#fed7aa]"
-                >
-                  <option value="all">Género: todos</option>
-                  <option value="female">Femenino</option>
-                  <option value="male">Masculino</option>
-                  <option value="other">Otro / no binario</option>
-                </select>
-              </div>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              {[
-                {
-                  label: 'Con programa (filtro)',
-                  value: filteredAssignedCount.toLocaleString(),
-                  detail: 'Participando en planes',
-                },
-                {
-                  label: 'Sin asignación (filtro)',
-                  value: filteredAwaitingAssignmentCount.toLocaleString(),
-                  detail: 'Pendientes de programa',
-                },
-                {
-                  label: 'Programas filtrados',
-                  value: filteredProgramsCount.toLocaleString(),
-                  detail: 'Cobertura actual',
-                },
-                {
-                  label: 'Asignados totales',
-                  value: assignedProgramCount.toLocaleString(),
-                  detail: 'En toda la base',
-                },
-              ].map(item => (
-                <div
-                  key={item.label}
-                  className="rounded-3xl border border-[#FBD6B3]/70 bg-white/70 px-4 py-3 text-slate-900 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]"
-                >
-                  <p className="text-[0.65rem] font-semibold uppercase tracking-[0.45em] text-[#B45309]/80">
-                    {item.label}
-                  </p>
-                  <p className="text-2xl font-semibold text-slate-900">{item.value}</p>
-                  <p className="text-xs text-[#B45309]/70">{item.detail}</p>
+          <div className="mb-5">
+            <div className="flex flex-col gap-4 sm:flex-col lg:flex-row lg:items-center lg:justify-between">
+              <div className="grid w-full gap-3 lg:grid-cols-[minmax(0,1.8fr)_repeat(3,minmax(0,1fr))] xl:grid-cols-[minmax(0,2fr)_repeat(4,minmax(0,1fr))]">
+                <div className="relative">
+                  <Search className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="Busca por nombre, cédula o correo"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full rounded-3xl border border-slate-200/60 bg-slate-50/70 pl-10 pr-4 py-2 text-sm focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-200"
+                  />
                 </div>
-              ))}
+                <div>
+                  <select
+                    value={selectedProgram}
+                    onChange={(e) => setSelectedProgram(e.target.value)}
+                    className="w-full rounded-3xl border border-slate-200/60 bg-slate-50/70 px-4 py-2 text-sm focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-200"
+                  >
+                    {programOptions.map(option => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <select
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
+                    className="w-full rounded-3xl border border-slate-200/60 bg-slate-50/70 px-4 py-2 text-sm focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-200"
+                  >
+                    <option value="all">Estado: todos</option>
+                    <option value="active">Solo activos</option>
+                    <option value="inactive">Solo inactivos</option>
+                  </select>
+                </div>
+                <div>
+                  <select
+                    value={assignmentFilter}
+                    onChange={(e) => setAssignmentFilter(e.target.value as typeof assignmentFilter)}
+                    className="w-full rounded-3xl border border-slate-200/60 bg-slate-50/70 px-4 py-2 text-sm focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-200"
+                  >
+                    <option value="all">Asignación: todas</option>
+                    <option value="assigned">Con programa</option>
+                    <option value="unassigned">Sin programa</option>
+                  </select>
+                </div>
+                <div className="hidden xl:block">
+                  <select
+                    value={genderFilter}
+                    onChange={(e) => setGenderFilter(e.target.value as typeof genderFilter)}
+                    className="w-full rounded-3xl border border-slate-200/60 bg-slate-50/70 px-4 py-2 text-sm focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-200"
+                  >
+                    <option value="all">Género: todos</option>
+                    <option value="female">Femenino</option>
+                    <option value="male">Masculino</option>
+                    <option value="other">Otro / no binario</option>
+                  </select>
+                </div>
+              </div>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between lg:gap-6">
+                <div className="xl:hidden">
+                  <select
+                    value={genderFilter}
+                    onChange={(e) => setGenderFilter(e.target.value as typeof genderFilter)}
+                    className="w-full rounded-3xl border border-slate-200/60 bg-slate-50/70 px-4 py-2 text-sm focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-200"
+                  >
+                    <option value="all">Género: todos</option>
+                    <option value="female">Femenino</option>
+                    <option value="male">Masculino</option>
+                    <option value="other">Otro / no binario</option>
+                  </select>
+                </div>
+                <p className="text-xs uppercase tracking-[0.4em] text-slate-400 text-center sm:text-right">
+                  {filteredPatientCount.toLocaleString()} resultados
+                </p>
+              </div>
             </div>
           </div>
           <div className="overflow-hidden rounded-2xl border border-slate-200/70 shadow-inner">

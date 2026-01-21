@@ -1333,7 +1333,7 @@ export const lifestyleFields: Array<{
   { key: 'jobStability', label: '¿La remuneración le da estabilidad?' },
   { key: 'rest', label: '¿Descansa lo necesario?' },
   { key: 'freeTime', label: '¿Como emplea su tiempo libre?' },
-  { key: 'workSharing', label: '¿Con quién lo comparte?' },
+  { key: 'workSharing', label: '¿Con quién lo comparte su tiempo libre?' },
   { key: 'leisure', label: 'Hobbies' },
   { key: 'pets', label: 'Mascotas' },
   { key: 'plants', label: 'Plantas' },

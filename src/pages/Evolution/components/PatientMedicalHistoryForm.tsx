@@ -215,7 +215,7 @@ export const PatientMedicalHistoryForm: React.FC<PatientMedicalHistoryFormProps>
       )}
 
       <fieldset className="space-y-6" disabled={isDisabled}>
-        <details className="group rounded-2xl border border-gray-200 bg-white/70 p-4 shadow-sm transition-colors open:border-[#FAD4B1]" open>
+        <details className="group rounded-2xl border border-gray-200 bg-white/70 p-4 shadow-sm transition-colors open:border-[#FAD4B1]">
           <summary className="flex cursor-pointer list-none items-center justify-between text-base font-semibold text-gray-800">
             <span>Identificación</span>
             <span className="text-xs text-gray-400 transition group-open:rotate-180">▾</span>
@@ -743,7 +743,7 @@ export const PatientMedicalHistoryForm: React.FC<PatientMedicalHistoryFormProps>
             <span>Estilo de Vida</span>
             <span className="text-xs text-gray-400 transition group-open:rotate-180">▾</span>
           </summary>
-          <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
             {lifestyleFields.map(({ key, label }) => (
               <div key={key}>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
