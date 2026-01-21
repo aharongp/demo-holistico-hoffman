@@ -270,8 +270,6 @@ const HEART_RATE_FORM_FIELDS = [
 }>;
 
 type EvolutionFormData = {
-  mood: number;
-  energy: number;
   weight: string;
   bloodSugar: string;
   bloodPressureSystolic: string;
@@ -284,12 +282,21 @@ type EvolutionFormData = {
   heartRateAfter30Minutes: string;
   heartRateAfter45Minutes: string;
   heartRateSessionType: string;
-  notes: string;
+  bodyMassWeight: string;
+  bodyMassNeck: string;
+  bodyMassBust: string;
+  bodyMassWaist: string;
+  bodyMassHip: string;
+  bodyMassRightArm: string;
+  bodyMassRightThigh: string;
+  bodyMassFacePhoto: File | null;
+  bodyMassFrontPhoto: File | null;
+  bodyMassProfilePhoto: File | null;
+  bodyMassBackPhoto: File | null;
+  bodyMassExtraPhoto: File | null;
 };
 
 const INITIAL_FORM_DATA: EvolutionFormData = {
-  mood: 5,
-  energy: 5,
   weight: '',
   bloodSugar: '',
   bloodPressureSystolic: '',
@@ -302,7 +309,18 @@ const INITIAL_FORM_DATA: EvolutionFormData = {
   heartRateAfter30Minutes: '',
   heartRateAfter45Minutes: '',
   heartRateSessionType: '',
-  notes: '',
+  bodyMassWeight: '',
+  bodyMassNeck: '',
+  bodyMassBust: '',
+  bodyMassWaist: '',
+  bodyMassHip: '',
+  bodyMassRightArm: '',
+  bodyMassRightThigh: '',
+  bodyMassFacePhoto: null,
+  bodyMassFrontPhoto: null,
+  bodyMassProfilePhoto: null,
+  bodyMassBackPhoto: null,
+  bodyMassExtraPhoto: null,
 };
 
 const toNumeric = (value: unknown): number | null => {
@@ -421,9 +439,14 @@ export const EvolutionTracking: React.FC = () => {
   const { addEvolutionEntry, patients, programs, ribbons, reloadRibbons, updatePatient, getInstrumentDetails } = useApp();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
-  const [activeTab, setActiveTab] = useState('mood');
+  const [activeTab, setActiveTab] = useState('weight');
   const [doctorActiveTab, setDoctorActiveTab] = useState<DoctorTabId>('summary');
   const [formData, setFormData] = useState<EvolutionFormData>(() => ({ ...INITIAL_FORM_DATA }));
+  const [bodyMassPhotoResetKey, setBodyMassPhotoResetKey] = useState(0);
+  const resetEvolutionForm = useCallback(() => {
+    setFormData({ ...INITIAL_FORM_DATA });
+    setBodyMassPhotoResetKey(value => value + 1);
+  }, []);
   const [vitals, setVitals] = useState<PatientVitalsSummary | null>(null);
   const [isLoadingVitals, setIsLoadingVitals] = useState(false);
   const [vitalsError, setVitalsError] = useState<string | null>(null);
@@ -2043,7 +2066,7 @@ export const EvolutionTracking: React.FC = () => {
   );
 
   const registerVital = useCallback(
-    async (path: string, payload: Record<string, unknown>) => {
+    async (path: string, payload: Record<string, unknown> | FormData) => {
       if (resolvedUserId === null) {
         throw new Error('No se pudo determinar el usuario asociado al registro.');
       }
@@ -2052,13 +2075,19 @@ export const EvolutionTracking: React.FC = () => {
         throw new Error('Sesion no valida. Inicia sesion nuevamente.');
       }
 
+      const isFormData = payload instanceof FormData;
+      const headers: Record<string, string> = {
+        Authorization: `Bearer ${token}`,
+      };
+
+      if (!isFormData) {
+        headers['Content-Type'] = 'application/json';
+      }
+
       const response = await fetch(`${apiBase}/vitals/user/${resolvedUserId}/${path}`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(payload),
+        headers,
+        body: isFormData ? payload : JSON.stringify(payload),
       });
 
       if (!response.ok) {
@@ -3048,6 +3077,20 @@ export const EvolutionTracking: React.FC = () => {
     return Number(bmi.toFixed(1));
   };
 
+  const bmiEstimate = useMemo(() => {
+    const weightReference = formData.bodyMassWeight || formData.weight;
+    if (!weightReference) {
+      return undefined;
+    }
+
+    const parsedWeight = parseNumberInput(weightReference);
+    if (parsedWeight === undefined) {
+      return undefined;
+    }
+
+    return calculateBMI(parsedWeight);
+  }, [formData.bodyMassWeight, formData.weight]);
+
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
 
@@ -3070,6 +3113,63 @@ export const EvolutionTracking: React.FC = () => {
     const weightInput = normalizeNumberInput(formData.weight);
     if (weightInput) {
       queue.push(() => registerVital('weight', { peso: weightInput, fecha: nowIso }));
+    }
+
+    const bodyMassPayload: Record<string, unknown> = {};
+    const bodyMassFiles: Array<{ key: string; file: File }> = [];
+    let hasBodyMassPayload = false;
+
+    const assignBodyMassMeasurement = (value: string, key: string) => {
+      const normalized = normalizeNumberInput(value);
+      if (!normalized) {
+        return;
+      }
+      bodyMassPayload[key] = normalized;
+      hasBodyMassPayload = true;
+    };
+
+    const assignBodyMassFile = (file: File | null, key: string) => {
+      if (!file) {
+        return;
+      }
+      bodyMassFiles.push({ key, file });
+      hasBodyMassPayload = true;
+    };
+
+    assignBodyMassMeasurement(formData.bodyMassWeight, 'peso');
+    assignBodyMassMeasurement(formData.bodyMassNeck, 'cuello');
+    assignBodyMassMeasurement(formData.bodyMassBust, 'busto');
+    assignBodyMassMeasurement(formData.bodyMassWaist, 'cintura');
+    assignBodyMassMeasurement(formData.bodyMassHip, 'cadera');
+    assignBodyMassMeasurement(formData.bodyMassRightArm, 'brazoDerecho');
+    assignBodyMassMeasurement(formData.bodyMassRightThigh, 'musloDerecho');
+    assignBodyMassFile(formData.bodyMassFacePhoto, 'fotoRostro');
+    assignBodyMassFile(formData.bodyMassFrontPhoto, 'fotoCuerpoFrente');
+    assignBodyMassFile(formData.bodyMassProfilePhoto, 'fotoCuerpoPerfil');
+    assignBodyMassFile(formData.bodyMassBackPhoto, 'fotoEspaldaEntero');
+    assignBodyMassFile(formData.bodyMassExtraPhoto, 'fotoExtra');
+
+    if (hasBodyMassPayload) {
+      bodyMassPayload.fecha = nowIso;
+      let requestPayload: Record<string, unknown> | FormData = bodyMassPayload;
+
+      if (bodyMassFiles.length) {
+        const formDataPayload = new FormData();
+        Object.entries(bodyMassPayload).forEach(([key, value]) => {
+          if (value !== undefined && value !== null) {
+            formDataPayload.append(key, String(value));
+          }
+        });
+
+        bodyMassFiles.forEach(({ key, file }) => {
+          formDataPayload.append(key, file);
+        });
+
+        requestPayload = formDataPayload;
+      }
+
+      queue.push(() => registerVital('body-mass', requestPayload));
+    } else if (weightInput) {
       queue.push(() => registerVital('body-mass', { peso: weightInput, fecha: nowIso }));
     }
 
@@ -3126,7 +3226,10 @@ export const EvolutionTracking: React.FC = () => {
 
       if (user) {
         const weightValue = parseNumberInput(formData.weight);
-        const bmiValue = weightValue !== undefined ? calculateBMI(weightValue) : undefined;
+        const bodyMassWeightValue = parseNumberInput(formData.bodyMassWeight);
+        const bmiWeightReference = bodyMassWeightValue ?? weightValue;
+        const bmiValue =
+          bmiWeightReference !== undefined ? calculateBMI(bmiWeightReference) : undefined;
         const bloodSugarValue = parseNumberInput(formData.bloodSugar);
         const systolicValue = parseNumberInput(formData.bloodPressureSystolic);
         const diastolicValue = parseNumberInput(formData.bloodPressureDiastolic);
@@ -3136,20 +3239,17 @@ export const EvolutionTracking: React.FC = () => {
         addEvolutionEntry({
           patientId: user.id,
           date: now,
-          mood: formData.mood,
-          energy: formData.energy,
-          weight: weightValue,
+          weight: weightValue ?? bodyMassWeightValue ?? undefined,
           bloodSugar: bloodSugarValue,
           bloodPressureSystolic: systolicValue,
           bloodPressureDiastolic: diastolicValue,
           pulse: pulseValue,
           bodyMassIndex: bmiValue,
           heartRate: restingHeartRate,
-          notes: formData.notes,
         });
       }
 
-      setFormData({ ...INITIAL_FORM_DATA });
+      resetEvolutionForm();
       setIsModalOpen(false);
     } catch (error) {
       console.error('Fallo el registro de signos vitales', error);
@@ -3319,10 +3419,12 @@ export const EvolutionTracking: React.FC = () => {
   ] as const satisfies ReadonlyArray<{ id: DoctorTabId; label: string; icon: LucideIcon }>;
 
   const healthTabs = [
-    { id: 'mood', label: 'Estado y energía', icon: TrendingUp },
     { id: 'weight', label: 'Peso', icon: Scale },
-    { id: 'blood', label: 'Biomarcadores', icon: Droplets },
-    { id: 'vitals', label: 'Signos vitales', icon: Heart },
+    { id: 'pulse', label: 'Pulso', icon: Activity },
+    { id: 'pressure', label: 'Presión arterial', icon: Heart },
+    { id: 'glycemia', label: 'Glicemia', icon: Droplets },
+    { id: 'bmi', label: 'Índice de masa corporal', icon: TrendingUp },
+    { id: 'recovery', label: 'Recuperación cardiaca', icon: RefreshCw },
   ];
 
   const ribbonModal = (
@@ -3606,7 +3708,7 @@ export const EvolutionTracking: React.FC = () => {
                 <Button
                   onClick={() => {
                     setSaveError(null);
-                    setFormData({ ...INITIAL_FORM_DATA });
+                    resetEvolutionForm();
                     setIsModalOpen(true);
                   }}
                   className="rounded-full bg-gradient-to-r from-[#F97316] via-[#FB7185] to-[#F472B6] px-6 py-2 text-sm font-semibold text-white shadow-[0_25px_60px_rgba(249,115,22,0.35)] hover:opacity-90"
@@ -4844,7 +4946,7 @@ export const EvolutionTracking: React.FC = () => {
               return;
             }
             setSaveError(null);
-            setFormData({ ...INITIAL_FORM_DATA });
+            resetEvolutionForm();
             setIsModalOpen(false);
           }}
           title="Registrar tu salud"
@@ -4875,50 +4977,6 @@ export const EvolutionTracking: React.FC = () => {
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
-              {/* Estado de ánimo y energía */}
-              {activeTab === 'mood' && (
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Nivel de ánimo (1-10)
-                    </label>
-                    <input
-                      type="range"
-                      min="1"
-                      max="10"
-                      value={formData.mood}
-                      onChange={(e) => setFormData(prev => ({ ...prev, mood: parseInt(e.target.value) }))}
-                      className="w-full"
-                    />
-                    <div className="flex justify-between text-xs text-gray-500 mt-1">
-                      <span>Muy bajo</span>
-                      <span className="font-medium">Actual: {formData.mood}</span>
-                      <span>Excelente</span>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Nivel de energía (1-10)
-                    </label>
-                    <input
-                      type="range"
-                      min="1"
-                      max="10"
-                      value={formData.energy}
-                      onChange={(e) => setFormData(prev => ({ ...prev, energy: parseInt(e.target.value) }))}
-                      className="w-full"
-                    />
-                    <div className="flex justify-between text-xs text-gray-500 mt-1">
-                      <span>Muy bajo</span>
-                      <span className="font-medium">Actual: {formData.energy}</span>
-                      <span>Mucha energía</span>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Peso */}
               {activeTab === 'weight' && (
                 <div className="space-y-4">
                   <div>
@@ -4929,68 +4987,18 @@ export const EvolutionTracking: React.FC = () => {
                       type="number"
                       step="0.1"
                       value={formData.weight}
-                      onChange={(e) => setFormData(prev => ({ ...prev, weight: e.target.value }))}
+                      onChange={(event) => setFormData(prev => ({ ...prev, weight: event.target.value }))}
                       placeholder="Ingresa tu peso"
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     />
                   </div>
-                  {formData.weight && (
-                    <div className="bg-blue-50 p-3 rounded-lg">
-                      <p className="text-sm text-blue-800">
-                        <strong>IMC:</strong> {calculateBMI(parseFloat(formData.weight))} 
-                        <span className="text-xs ml-2">(Basado en una estatura promedio de 1.70 m)</span>
-                      </p>
-                    </div>
-                  )}
+                  <p className="text-xs text-gray-500">
+                    Este valor actualizará tus registros de peso y permitirá calcular tu evolución.
+                  </p>
                 </div>
               )}
 
-              {/* Biomarcadores */}
-              {activeTab === 'blood' && (
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Nivel de glucosa (mg/dL)
-                    </label>
-                    <input
-                      type="number"
-                      value={formData.bloodSugar}
-                      onChange={(e) => setFormData(prev => ({ ...prev, bloodSugar: e.target.value }))}
-                      placeholder="Ingresa tu nivel de glucosa"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Presión arterial - Sistólica (mmHg)
-                      </label>
-                      <input
-                        type="number"
-                        value={formData.bloodPressureSystolic}
-                        onChange={(e) => setFormData(prev => ({ ...prev, bloodPressureSystolic: e.target.value }))}
-                        placeholder="120"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Presión arterial - Diastólica (mmHg)
-                      </label>
-                      <input
-                        type="number"
-                        value={formData.bloodPressureDiastolic}
-                        onChange={(e) => setFormData(prev => ({ ...prev, bloodPressureDiastolic: e.target.value }))}
-                        placeholder="80"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Signos vitales */}
-              {activeTab === 'vitals' && (
+              {activeTab === 'pulse' && (
                 <div className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -4999,69 +5007,356 @@ export const EvolutionTracking: React.FC = () => {
                     <input
                       type="number"
                       value={formData.pulse}
-                      onChange={(e) => setFormData(prev => ({ ...prev, pulse: e.target.value }))}
+                      onChange={(event) => setFormData(prev => ({ ...prev, pulse: event.target.value }))}
                       placeholder="Ingresa tu pulso"
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     />
                   </div>
-                  <div className="space-y-3">
+                  <p className="text-xs text-gray-500">
+                    Registra el pulso en reposo para monitorear tu frecuencia cardiaca basal.
+                  </p>
+                </div>
+              )}
+
+              {activeTab === 'pressure' && (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <span className="block text-sm font-medium text-gray-700">
-                        Frecuencia cardiaca (bpm)
-                      </span>
-                      <p className="text-xs text-gray-500">
-                        Registra los valores en reposo y durante la recuperacion posterior al entrenamiento.
-                      </p>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      {HEART_RATE_FORM_FIELDS.map(field => (
-                        <div key={field.formKey}>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">
-                            {HEART_RATE_LABEL_MAP[field.metricKey]}
-                          </label>
-                          <input
-                            type="number"
-                            value={formData[field.formKey]}
-                            onChange={(event) =>
-                              setFormData(prev => ({ ...prev, [field.formKey]: event.target.value }))
-                            }
-                            placeholder="Ej. 72"
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                          />
-                        </div>
-                      ))}
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Presión sistólica (mmHg)
+                      </label>
+                      <input
+                        type="number"
+                        value={formData.bloodPressureSystolic}
+                        onChange={(event) => setFormData(prev => ({ ...prev, bloodPressureSystolic: event.target.value }))}
+                        placeholder="120"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Tipo de sesion
+                        Presión diastólica (mmHg)
                       </label>
                       <input
-                        type="text"
-                        value={formData.heartRateSessionType}
-                        onChange={(event) =>
-                          setFormData(prev => ({ ...prev, heartRateSessionType: event.target.value }))
-                        }
-                        placeholder="Entrenamiento funcional, resistencia, descanso..."
+                        type="number"
+                        value={formData.bloodPressureDiastolic}
+                        onChange={(event) => setFormData(prev => ({ ...prev, bloodPressureDiastolic: event.target.value }))}
+                        placeholder="80"
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       />
+                    </div>
+                  </div>
+                  <p className="text-xs text-gray-500">
+                    Procura medir la presión en condiciones de reposo y con el mismo equipo para obtener resultados consistentes.
+                  </p>
+                </div>
+              )}
+
+              {activeTab === 'glycemia' && (
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Glucosa en sangre (mg/dL)
+                    </label>
+                    <input
+                      type="number"
+                      value={formData.bloodSugar}
+                      onChange={(event) => setFormData(prev => ({ ...prev, bloodSugar: event.target.value }))}
+                      placeholder="Ingresa tu nivel de glucosa"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                  <p className="text-xs text-gray-500">
+                    Anota tu lectura en ayunas o según la recomendación de tu especialista.
+                  </p>
+                </div>
+              )}
+
+              {activeTab === 'bmi' && (
+                <div className="space-y-6">
+                  <div className="space-y-2">
+                    <p className="text-sm text-gray-600">
+                      Registra tus medidas corporales para complementar el seguimiento del programa. Estos datos se almacenan junto con el peso y permiten comparar cambios a lo largo del tiempo.
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      Los campos numéricos aceptan valores con decimales. Carga tus fotos en formato JPG o PNG (máximo 10&nbsp;MB); las ajustaremos automáticamente a un recorte de 4&nbsp;cm por 4&nbsp;cm.
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Peso (kg)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        value={formData.bodyMassWeight}
+                        onChange={(event) =>
+                          setFormData(prev => ({ ...prev, bodyMassWeight: event.target.value }))
+                        }
+                        placeholder="Ej. 68.5"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Cuello (cm)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        value={formData.bodyMassNeck}
+                        onChange={(event) =>
+                          setFormData(prev => ({ ...prev, bodyMassNeck: event.target.value }))
+                        }
+                        placeholder="Ej. 36"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Busto (cm)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        value={formData.bodyMassBust}
+                        onChange={(event) =>
+                          setFormData(prev => ({ ...prev, bodyMassBust: event.target.value }))
+                        }
+                        placeholder="Ej. 92"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Cintura (cm)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        value={formData.bodyMassWaist}
+                        onChange={(event) =>
+                          setFormData(prev => ({ ...prev, bodyMassWaist: event.target.value }))
+                        }
+                        placeholder="Ej. 78"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Cadera (cm)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        value={formData.bodyMassHip}
+                        onChange={(event) =>
+                          setFormData(prev => ({ ...prev, bodyMassHip: event.target.value }))
+                        }
+                        placeholder="Ej. 100"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Brazo derecho (cm)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        value={formData.bodyMassRightArm}
+                        onChange={(event) =>
+                          setFormData(prev => ({ ...prev, bodyMassRightArm: event.target.value }))
+                        }
+                        placeholder="Ej. 32"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Muslo derecho (cm)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        value={formData.bodyMassRightThigh}
+                        onChange={(event) =>
+                          setFormData(prev => ({ ...prev, bodyMassRightThigh: event.target.value }))
+                        }
+                        placeholder="Ej. 55"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                    </div>
+                  </div>
+
+                  {bmiEstimate !== undefined && (
+                    <div className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-3 text-sm text-blue-800">
+                      <strong>IMC estimado:</strong> {bmiEstimate}
+                      <span className="ml-2 text-xs">
+                        (considerando una estatura de referencia de 1.70&nbsp;m)
+                      </span>
+                    </div>
+                  )}
+
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Foto rostro
+                      </label>
+                      <input
+                        key={`body-mass-face-${bodyMassPhotoResetKey}`}
+                        type="file"
+                        accept="image/jpeg,image/png"
+                        onChange={(event) =>
+                          setFormData(prev => ({
+                            ...prev,
+                            bodyMassFacePhoto: event.target.files?.[0] ?? null,
+                          }))
+                        }
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                      {formData.bodyMassFacePhoto && (
+                        <p className="mt-1 text-xs text-gray-500">
+                          Archivo seleccionado: {formData.bodyMassFacePhoto.name}
+                        </p>
+                      )}
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Foto cuerpo de frente
+                      </label>
+                      <input
+                        key={`body-mass-front-${bodyMassPhotoResetKey}`}
+                        type="file"
+                        accept="image/jpeg,image/png"
+                        onChange={(event) =>
+                          setFormData(prev => ({
+                            ...prev,
+                            bodyMassFrontPhoto: event.target.files?.[0] ?? null,
+                          }))
+                        }
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                      {formData.bodyMassFrontPhoto && (
+                        <p className="mt-1 text-xs text-gray-500">
+                          Archivo seleccionado: {formData.bodyMassFrontPhoto.name}
+                        </p>
+                      )}
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Foto cuerpo de perfil
+                      </label>
+                      <input
+                        key={`body-mass-profile-${bodyMassPhotoResetKey}`}
+                        type="file"
+                        accept="image/jpeg,image/png"
+                        onChange={(event) =>
+                          setFormData(prev => ({
+                            ...prev,
+                            bodyMassProfilePhoto: event.target.files?.[0] ?? null,
+                          }))
+                        }
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                      {formData.bodyMassProfilePhoto && (
+                        <p className="mt-1 text-xs text-gray-500">
+                          Archivo seleccionado: {formData.bodyMassProfilePhoto.name}
+                        </p>
+                      )}
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Foto espalda completa
+                      </label>
+                      <input
+                        key={`body-mass-back-${bodyMassPhotoResetKey}`}
+                        type="file"
+                        accept="image/jpeg,image/png"
+                        onChange={(event) =>
+                          setFormData(prev => ({
+                            ...prev,
+                            bodyMassBackPhoto: event.target.files?.[0] ?? null,
+                          }))
+                        }
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                      {formData.bodyMassBackPhoto && (
+                        <p className="mt-1 text-xs text-gray-500">
+                          Archivo seleccionado: {formData.bodyMassBackPhoto.name}
+                        </p>
+                      )}
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Foto adicional (opcional)
+                      </label>
+                      <input
+                        key={`body-mass-extra-${bodyMassPhotoResetKey}`}
+                        type="file"
+                        accept="image/jpeg,image/png"
+                        onChange={(event) =>
+                          setFormData(prev => ({
+                            ...prev,
+                            bodyMassExtraPhoto: event.target.files?.[0] ?? null,
+                          }))
+                        }
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                      {formData.bodyMassExtraPhoto && (
+                        <p className="mt-1 text-xs text-gray-500">
+                          Archivo seleccionado: {formData.bodyMassExtraPhoto.name}
+                        </p>
+                      )}
                     </div>
                   </div>
                 </div>
               )}
 
-              {/* Notas disponibles en todas las pestañas */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Notas
-                </label>
-                <textarea
-                  value={formData.notes}
-                  onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
-                  rows={3}
-                  placeholder="¿Cómo te sientes hoy? ¿Algún evento o síntoma relevante?"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
+              {activeTab === 'recovery' && (
+                <div className="space-y-4">
+                  <div>
+                    <span className="block text-sm font-medium text-gray-700">Recuperación de frecuencia cardiaca</span>
+                    <p className="text-xs text-gray-500">
+                      Registra los valores en reposo y durante la recuperación posterior al entrenamiento.
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {HEART_RATE_FORM_FIELDS.map((field) => (
+                      <div key={field.formKey}>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          {HEART_RATE_LABEL_MAP[field.metricKey]}
+                        </label>
+                        <input
+                          type="number"
+                          value={formData[field.formKey]}
+                          onChange={(event) =>
+                            setFormData(prev => ({ ...prev, [field.formKey]: event.target.value }))
+                          }
+                          placeholder="Ej. 72"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Tipo de sesión
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.heartRateSessionType}
+                      onChange={(event) =>
+                        setFormData(prev => ({ ...prev, heartRateSessionType: event.target.value }))
+                      }
+                      placeholder="Entrenamiento funcional, resistencia, descanso..."
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                </div>
+              )}
 
               {saveError && <p className="text-sm text-red-600">{saveError}</p>}
 
@@ -5072,7 +5367,7 @@ export const EvolutionTracking: React.FC = () => {
                   disabled={isSavingEntry}
                   onClick={() => {
                     setSaveError(null);
-                    setFormData({ ...INITIAL_FORM_DATA });
+                    resetEvolutionForm();
                     setIsModalOpen(false);
                   }}
                 >

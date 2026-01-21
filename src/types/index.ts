@@ -163,9 +163,9 @@ export interface EvolutionEntry {
   id: string;
   patientId: string;
   date: Date;
-  mood: number; // 1-10 scale
-  energy: number; // 1-10 scale
-  notes: string;
+  mood?: number; // 1-10 scale
+  energy?: number; // 1-10 scale
+  notes?: string;
   weight?: number; // in kg
   bloodSugar?: number; // mg/dL
   bloodPressureSystolic?: number; // mmHg
