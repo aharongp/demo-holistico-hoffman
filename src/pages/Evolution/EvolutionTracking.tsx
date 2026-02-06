@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Plus, TrendingUp, User, Heart, Scale, Droplets, RefreshCw, Edit, Trash2, Search, LineChart, Ribbon, LayoutDashboard, Activity, ClipboardList, FileText } from 'lucide-react';
+import { Plus, TrendingUp, User, Heart, Scale, Droplets, RefreshCw, Edit, Trash2, Search, LineChart, Ribbon, LayoutDashboard, Activity, ClipboardList, FileText, BarChart3 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { Card } from '../../components/UI/Card';
 import { Button } from '../../components/UI/Button';
@@ -8,7 +8,8 @@ import { Modal } from '../../components/UI/Modal';
 import { Table } from '../../components/UI/Table';
 import { useAuth } from '../../context/AuthContext';
 import { useApp } from '../../context/AppContext';
-import type { Instrument } from '../../types';
+import { InstrumentResults } from '../Results/InstrumentResults';
+import type { Instrument, Question, QuestionOption } from '../../types';
 import type { BackendInstrumentResponse, CoachDiagnosticObservation } from '../../types/patientInstruments';
 import {
   MedicalHistoryData,
@@ -57,6 +58,63 @@ const SOURCE_LABELS: Record<VitalSource, string> = {
   weight: 'Peso',
   body_mass: 'Masa corporal',
   blood_pressure: 'Tension arterial',
+};
+
+const BODY_MASS_PHOTO_FALLBACK_LABELS: Record<string, string> = {
+  foto_rostro: 'Rostro',
+  foto_cuerpo_frente: 'Frente',
+  foto_cuerpo_perfil: 'Perfil',
+  foto_espalda_entero: 'Espalda',
+  foto_extra: 'Extra',
+};
+
+const encodePathSegments = (input: string): string =>
+  input
+    .split('/')
+    .filter(segment => segment.length > 0)
+    .map(segment => encodeURIComponent(segment))
+    .join('/');
+
+const computeBodyMassPhotoUrl = (
+  value: string,
+  baseUrl: string,
+  type?: string,
+): string | null => {
+  const sanitized = value.replace(/\\/g, '/').trim();
+  if (!sanitized) {
+    return null;
+  }
+
+  if (/^https?:\/\//i.test(sanitized)) {
+    return sanitized;
+  }
+
+  const normalizedBase = baseUrl.replace(/\/+$/, '');
+  const normalized = sanitized.replace(/^\/+/, '');
+  const normalizedLower = normalized.toLowerCase();
+
+  const build = (relativePath: string): string => {
+    const encoded = encodePathSegments(relativePath);
+    return normalizedBase ? `${normalizedBase}/${encoded}` : `/${encoded}`;
+  };
+
+  if (normalizedLower.startsWith('assets/')) {
+    return build(normalized);
+  }
+
+  if (normalizedLower.startsWith('images/')) {
+    return build(`assets/${normalized}`);
+  }
+
+  if (normalized.includes('/')) {
+    return build(`assets/images/${normalized}`);
+  }
+
+  if (type && type.trim().length > 0) {
+    return build(`assets/images/${type.trim()}/${normalized}`);
+  }
+
+  return build(`assets/images/${normalized}`);
 };
 
 type EditableVitalType = 'weight' | 'pulse' | 'glycemia' | 'blood_pressure' | 'heart_rate';
@@ -117,6 +175,241 @@ const parseNumericId = (value: unknown): number | null => {
   return Number.isFinite(numeric) ? numeric : null;
 };
 
+const normalizeQuestionKey = (value: string): string =>
+  value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9\s]/g, ' ')
+    .replace(/^pregunta[_\s-]*/i, '')
+    .replace(/^\d+[\s.)-]*/, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLocaleLowerCase('es');
+
+const normalizeQuestionOptions = (question: Question | null | undefined): QuestionOption[] => {
+  if (!question) {
+    return [];
+  }
+
+  const seen = new Set<string>();
+  const options: QuestionOption[] = [];
+
+  const pushOption = (labelRaw: unknown, valueRaw: unknown) => {
+    const label = typeof labelRaw === 'string' ? labelRaw.trim() : '';
+    const value = typeof valueRaw === 'string' ? valueRaw.trim() : label;
+
+    if (!label || !value) {
+      return;
+    }
+
+    const key = value.toLocaleLowerCase('es');
+    if (seen.has(key)) {
+      return;
+    }
+
+    seen.add(key);
+    options.push({ label, value });
+  };
+
+  if (Array.isArray(question.answers)) {
+    question.answers.forEach((answer) => {
+      pushOption(answer.label, answer.value ?? answer.label);
+    });
+  }
+
+  if (!options.length && Array.isArray(question.options)) {
+    question.options.forEach((option) => {
+      if (!option) {
+        return;
+      }
+
+      if (typeof option === 'string') {
+        pushOption(option, option);
+        return;
+      }
+
+      const typed = option as QuestionOption;
+      pushOption(typed.label, typed.value ?? typed.label);
+    });
+  }
+
+  if (!options.length && question.type === 'boolean') {
+    pushOption('Sí', 'yes');
+    pushOption('No', 'no');
+  }
+
+  return options;
+};
+
+const splitAnswerParts = (value?: string | null): string[] => {
+  if (typeof value !== 'string') {
+    return [];
+  }
+
+  return value
+    .split(',')
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0);
+};
+
+const findLabelForValue = (value: string, options: QuestionOption[]): string | null => {
+  if (!value || !options.length) {
+    return null;
+  }
+
+  const lowered = value.toLocaleLowerCase('es');
+
+  for (const option of options) {
+    const optionValue = option.value.toLocaleLowerCase('es');
+    if (optionValue === lowered) {
+      return option.label;
+    }
+
+    if (option.label.toLocaleLowerCase('es') === lowered) {
+      return option.label;
+    }
+  }
+
+  return null;
+};
+
+const resolveQuestionForResponse = (
+  instrument: Instrument | null,
+  response: BackendInstrumentResponse,
+  responseIndex: number,
+): Question | null => {
+  const questions = instrument?.questions ?? [];
+  if (!questions.length) {
+    return null;
+  }
+
+  if (response.questionId !== null) {
+    const stringId = String(response.questionId);
+    const directMatch = questions.find((question) => String(question.id) === stringId);
+    if (directMatch) {
+      return directMatch;
+    }
+
+    const numericId = Number(response.questionId);
+    if (Number.isFinite(numericId)) {
+      const numericMatch = questions.find((question) => Number(question.id) === numericId);
+      if (numericMatch) {
+        return numericMatch;
+      }
+    }
+  }
+
+  if (typeof response.question === 'string' && response.question.trim().length) {
+    const rawText = response.question.trim().toLocaleLowerCase('es');
+    const textMatch = questions.find((question) => {
+      const questionText = question.text?.trim();
+      return questionText?.toLocaleLowerCase('es') === rawText;
+    });
+
+    if (textMatch) {
+      return textMatch;
+    }
+
+    const normalizedResponse = normalizeQuestionKey(response.question);
+    const normalizedMatch = questions.find((question) => {
+      const questionText = question.text?.trim();
+      return questionText ? normalizeQuestionKey(questionText) === normalizedResponse : false;
+    });
+
+    if (normalizedMatch) {
+      return normalizedMatch;
+    }
+  }
+
+  if (typeof response.order === 'number' && Number.isFinite(response.order)) {
+    const targetOrder = Math.round(response.order);
+    const byOrder = questions.find((question) => {
+      if (typeof question.order !== 'number' || !Number.isFinite(question.order)) {
+        return false;
+      }
+
+      return Math.round(question.order) === targetOrder;
+    });
+
+    if (byOrder) {
+      return byOrder;
+    }
+  }
+
+  return questions[responseIndex] ?? null;
+};
+
+const buildInstrumentResponseDisplay = (
+  instrument: Instrument | null,
+  response: BackendInstrumentResponse,
+  responseIndex: number,
+): { label: string; value: string | null } => {
+  const question = resolveQuestionForResponse(instrument, response, responseIndex);
+  const rawAnswer = typeof response.answer === 'string' ? response.answer.trim() : '';
+  const rawCompetence = typeof response.competence === 'string' ? response.competence.trim() : '';
+
+  if (!question) {
+    const label = rawCompetence || rawAnswer || 'Sin respuesta registrada';
+    return {
+      label,
+      value:
+        rawAnswer && label.toLocaleLowerCase('es') !== rawAnswer.toLocaleLowerCase('es')
+          ? rawAnswer
+          : null,
+    };
+  }
+
+  if (question.type === 'text') {
+    const label = rawAnswer || rawCompetence || 'Sin respuesta registrada';
+    return {
+      label,
+      value:
+        rawAnswer && label.toLocaleLowerCase('es') !== rawAnswer.toLocaleLowerCase('es')
+          ? rawAnswer
+          : null,
+    };
+  }
+
+  const options = normalizeQuestionOptions(question);
+  const answerParts = splitAnswerParts(rawAnswer);
+  const competenceParts = splitAnswerParts(rawCompetence);
+
+  const resolvedLabels: string[] = [];
+
+  if (answerParts.length) {
+    answerParts.forEach((part) => {
+      const match = findLabelForValue(part, options);
+      resolvedLabels.push(match ?? part);
+    });
+  }
+
+  if (!resolvedLabels.length && competenceParts.length) {
+    competenceParts.forEach((part) => {
+      const match = findLabelForValue(part, options);
+      resolvedLabels.push(match ?? part);
+    });
+  }
+
+  if (!resolvedLabels.length && rawCompetence) {
+    resolvedLabels.push(rawCompetence);
+  }
+
+  const label = resolvedLabels.length
+    ? resolvedLabels.join(', ')
+    : rawCompetence || rawAnswer || 'Sin respuesta registrada';
+
+  const valueCandidate = answerParts.length
+    ? answerParts.join(', ')
+    : rawAnswer || (competenceParts.length ? competenceParts.join(', ') : '');
+
+  const normalizedLabel = label.toLocaleLowerCase('es');
+  const normalizedValue = valueCandidate.toLocaleLowerCase('es');
+
+  const value = valueCandidate && normalizedLabel !== normalizedValue ? valueCandidate : null;
+
+  return { label, value };
+};
+
 type HeartRateMetricKey =
   | 'resting'
   | 'after5Minutes'
@@ -141,7 +434,7 @@ type HeartRateFormKey =
   | 'heartRateAfter30Minutes'
   | 'heartRateAfter45Minutes';
 
-type DoctorTabId = 'summary' | 'charts' | 'records' | 'instruments';
+type DoctorTabId = 'summary' | 'charts' | 'records' | 'results' | 'instruments';
 
 type BackendPatientInstrumentAssignment = {
   id: number;
@@ -240,6 +533,28 @@ const formatInstrumentDate = (value: string | null): string => {
     month: 'short',
     day: 'numeric',
   });
+};
+
+const formatInstrumentResponseTimestamp = (
+  value: string | null | undefined,
+): string | null => {
+  if (!value) {
+    return null;
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+
+  try {
+    return parsed.toLocaleString('es-ES', {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    });
+  } catch {
+    return parsed.toISOString();
+  }
 };
 
 const HEART_RATE_FIELDS = [
@@ -439,6 +754,22 @@ export const EvolutionTracking: React.FC = () => {
   const { addEvolutionEntry, patients, programs, ribbons, reloadRibbons, updatePatient, getInstrumentDetails } = useApp();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
+  const selectedPatientUserId = useMemo(() => {
+    if (!selectedPatient) {
+      return null;
+    }
+    const primary = parseNumericId(selectedPatient.userId ?? null);
+    if (primary !== null) {
+      return primary;
+    }
+    return parseNumericId(selectedPatient.id);
+  }, [selectedPatient]);
+  const selectedPatientFullName = useMemo(() => {
+    if (!selectedPatient) {
+      return '';
+    }
+    return `${selectedPatient.firstName} ${selectedPatient.lastName}`.trim();
+  }, [selectedPatient]);
   const [activeTab, setActiveTab] = useState('weight');
   const [doctorActiveTab, setDoctorActiveTab] = useState<DoctorTabId>('summary');
   const [formData, setFormData] = useState<EvolutionFormData>(() => ({ ...INITIAL_FORM_DATA }));
@@ -523,6 +854,13 @@ export const EvolutionTracking: React.FC = () => {
   const [instrumentAssignmentsRefreshKey, setInstrumentAssignmentsRefreshKey] = useState(0);
   const [instrumentCache, setInstrumentCache] = useState<Record<number, Instrument | null>>({});
   const [instrumentNotice, setInstrumentNotice] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [instrumentResponsesByAssignment, setInstrumentResponsesByAssignment] = useState<Record<number, BackendInstrumentResponse[]>>({});
+  const [isInstrumentResponsesModalOpen, setIsInstrumentResponsesModalOpen] = useState(false);
+  const [instrumentResponsesModalAssignment, setInstrumentResponsesModalAssignment] = useState<InstrumentAssignmentItem | null>(null);
+  const [instrumentResponsesModalData, setInstrumentResponsesModalData] = useState<BackendInstrumentResponse[]>([]);
+  const [instrumentResponsesModalInstrument, setInstrumentResponsesModalInstrument] = useState<Instrument | null>(null);
+  const [instrumentResponsesModalError, setInstrumentResponsesModalError] = useState<string | null>(null);
+  const [isInstrumentResponsesModalLoading, setIsInstrumentResponsesModalLoading] = useState(false);
   const assetsBase = useMemo(() => {
     const rawEnv = (import.meta as any).env?.VITE_ASSETS_BASE;
     const normalizedEnv = typeof rawEnv === 'string' ? rawEnv.trim() : '';
@@ -728,7 +1066,16 @@ export const EvolutionTracking: React.FC = () => {
 
   type SingleValuePoint = { label: string; value: number };
   type BloodPressurePoint = { label: string; systolic: number | null; diastolic: number | null };
-  type BmiRow = { id: number; label: string; bmi: number | null; category: string; source: VitalSource };
+  type BodyMassPhotoRow = { type: string; label: string; url: string; path: string };
+  type BmiRow = {
+    id: number;
+    label: string;
+    bmi: number | null;
+    category: string;
+    source: VitalSource;
+    record: NumericVitalRecord;
+    photos: BodyMassPhotoRow[];
+  };
   type WeightRow = {
     id: number;
     label: string;
@@ -793,6 +1140,7 @@ export const EvolutionTracking: React.FC = () => {
   const showSummarySection = !shouldShowDoctorTabs || doctorActiveTab === 'summary';
   const showChartsSection = !shouldShowDoctorTabs || doctorActiveTab === 'charts';
   const showRecordsSection = !shouldShowDoctorTabs || doctorActiveTab === 'records';
+  const showResultsSection = shouldShowDoctorTabs && doctorActiveTab === 'results';
   const showInstrumentsSection = shouldShowDoctorTabs && doctorActiveTab === 'instruments';
   const showVitalsMessaging = !shouldShowDoctorTabs || doctorActiveTab !== 'summary';
 
@@ -1312,8 +1660,16 @@ export const EvolutionTracking: React.FC = () => {
         responsesByAssignment.get(assignmentId)!.push(response);
       });
 
+      const responsesRecord: Record<number, BackendInstrumentResponse[]> = {};
       const items = assignmentsPayload.map<InstrumentAssignmentItem>((assignment) => {
-        const responseList = responsesByAssignment.get(assignment.id) ?? [];
+        const responseList = [...(responsesByAssignment.get(assignment.id) ?? [])].sort((a, b) => {
+          const orderDiff = (a.order ?? 0) - (b.order ?? 0);
+          if (orderDiff !== 0) {
+            return orderDiff;
+          }
+          return a.id - b.id;
+        });
+        responsesRecord[assignment.id] = responseList;
         let instrumentId: number | null = null;
         for (const response of responseList) {
           const numericInstrumentId = Number(response.instrumentId);
@@ -1351,6 +1707,7 @@ export const EvolutionTracking: React.FC = () => {
         feedback[item.assignment.id] = null;
       });
 
+      setInstrumentResponsesByAssignment(responsesRecord);
       setInstrumentAssignments(items);
       setInstrumentCommentDrafts(drafts);
       setInstrumentActionMessages(feedback);
@@ -1364,6 +1721,7 @@ export const EvolutionTracking: React.FC = () => {
       setInstrumentAssignments([]);
       setInstrumentCommentDrafts({});
       setInstrumentActionMessages({});
+      setInstrumentResponsesByAssignment({});
       setInstrumentAssignmentsError(message);
     } finally {
       setIsLoadingInstrumentAssignments(false);
@@ -1380,6 +1738,45 @@ export const EvolutionTracking: React.FC = () => {
 
   const handleRefreshInstrumentAssignments = useCallback(() => {
     setInstrumentAssignmentsRefreshKey((value) => value + 1);
+  }, []);
+
+  const handleViewInstrumentResponses = useCallback(
+    async (item: InstrumentAssignmentItem) => {
+      const responses = instrumentResponsesByAssignment[item.assignment.id] ?? [];
+      setInstrumentResponsesModalError(null);
+      setInstrumentResponsesModalAssignment(item);
+      setInstrumentResponsesModalData([...responses]);
+      setIsInstrumentResponsesModalOpen(true);
+      setIsInstrumentResponsesModalLoading(true);
+
+      try {
+        const instrument = await loadInstrumentForAssignment(item.assignment);
+        setInstrumentResponsesModalInstrument(instrument);
+
+        if (!instrument) {
+          setInstrumentResponsesModalError('No se pudo cargar el detalle del instrumento asociado.');
+        }
+      } catch (error) {
+        console.error('Error al cargar el instrumento para revisar respuestas', error);
+        const message =
+          error instanceof Error
+            ? error.message
+            : 'No se pudo cargar el detalle del instrumento asociado.';
+        setInstrumentResponsesModalInstrument(null);
+        setInstrumentResponsesModalError(message);
+      } finally {
+        setIsInstrumentResponsesModalLoading(false);
+      }
+    },
+    [instrumentResponsesByAssignment, loadInstrumentForAssignment],
+  );
+
+  const handleCloseInstrumentResponsesModal = useCallback(() => {
+    setIsInstrumentResponsesModalOpen(false);
+    setInstrumentResponsesModalAssignment(null);
+    setInstrumentResponsesModalData([]);
+    setInstrumentResponsesModalInstrument(null);
+    setInstrumentResponsesModalError(null);
   }, []);
 
   const handleInstrumentCommentChange = useCallback((assignmentId: number, value: string) => {
@@ -1550,7 +1947,9 @@ export const EvolutionTracking: React.FC = () => {
           throw new Error(text || `No se pudo eliminar la asignación (${response.status}).`);
         }
 
-        setInstrumentAssignments((prev) => prev.filter((item) => item.assignment.id !== assignmentId));
+        setInstrumentAssignments((prev) =>
+          prev.filter((item) => item.assignment.id !== assignmentId),
+        );
         setInstrumentCommentDrafts((prev) => {
           const next = { ...prev };
           delete next[assignmentId];
@@ -2639,15 +3038,45 @@ export const EvolutionTracking: React.FC = () => {
 
     return sortByRecordedAtDesc(filteredBmiRecords).map((record, index) => {
       const value = toNumeric(record.value);
+      const normalizedPhotos = Array.isArray(record.photos)
+        ? record.photos
+            .map<BodyMassPhotoRow | null>(photo => {
+              if (!photo || typeof photo.path !== 'string') {
+                return null;
+              }
+
+              const url = computeBodyMassPhotoUrl(photo.path, assetsBase, photo.type);
+              if (!url) {
+                return null;
+              }
+
+              const type = typeof photo.type === 'string' && photo.type.trim().length > 0 ? photo.type.trim() : 'unknown';
+              const labelSource =
+                typeof photo.label === 'string' && photo.label.trim().length > 0
+                  ? photo.label.trim()
+                  : BODY_MASS_PHOTO_FALLBACK_LABELS[type] ?? 'Foto corporal';
+
+              return {
+                type,
+                label: labelSource,
+                url,
+                path: photo.path,
+              } satisfies BodyMassPhotoRow;
+            })
+            .filter((photo): photo is BodyMassPhotoRow => photo !== null)
+        : [];
+
       return {
         id: record.id,
         label: formatRecordedAt(record.recordedAt, index),
         bmi: value,
         category: getBmiCategory(value),
         source: record.source,
-      };
+        record,
+        photos: normalizedPhotos,
+      } satisfies BmiRow;
     });
-  }, [filteredBmiRecords, formatRecordedAt]);
+  }, [assetsBase, filteredBmiRecords, formatRecordedAt]);
 
   const heartRateRows = useMemo<HeartRateRow[]>(() => {
     if (!filteredHeartRateRecords.length) {
@@ -2989,7 +3418,40 @@ export const EvolutionTracking: React.FC = () => {
         header: 'BMI',
         render: (row: BmiRow) => formatDecimal(row.bmi, 1),
       },
-  { key: 'category', header: 'Clasificacion' },
+      { key: 'category', header: 'Clasificacion' },
+      {
+        key: 'photos',
+        header: 'Fotos',
+        className: '!whitespace-normal align-top',
+        render: (row: BmiRow) => {
+          if (!row.photos.length) {
+            return EMPTY_VALUE;
+          }
+
+          return (
+            <div className="flex flex-wrap gap-3">
+              {row.photos.map(photo => (
+                <div
+                  key={`${row.id}-${photo.type}-${photo.path}`}
+                  className="flex flex-col items-center gap-1 max-w-[4.5rem]"
+                >
+                  <a href={photo.url} target="_blank" rel="noopener noreferrer" className="block">
+                    <img
+                      src={photo.url}
+                      alt={`Foto ${photo.label}`}
+                      className="h-16 w-16 rounded-md object-cover border border-gray-200 shadow-sm"
+                      loading="lazy"
+                    />
+                  </a>
+                  <span className="text-[10px] text-gray-500 text-center leading-tight">
+                    {photo.label}
+                  </span>
+                </div>
+              ))}
+            </div>
+          );
+        },
+      },
       {
         key: 'source',
         header: 'Origen',
@@ -3415,6 +3877,7 @@ export const EvolutionTracking: React.FC = () => {
     { id: 'summary', label: 'Resumen clínico', icon: LayoutDashboard },
     { id: 'charts', label: 'Evolución', icon: Activity },
     { id: 'records', label: 'Registros de evolución detallados', icon: ClipboardList },
+    { id: 'results', label: 'Resultados de instrumentos', icon: BarChart3 },
     { id: 'instruments', label: 'Instrumentos', icon: FileText },
   ] as const satisfies ReadonlyArray<{ id: DoctorTabId; label: string; icon: LucideIcon }>;
 
@@ -3746,6 +4209,21 @@ export const EvolutionTracking: React.FC = () => {
           </div>
         )}
 
+        {shouldShowDoctorTabs && showResultsSection && (
+          selectedPatientUserId !== null ? (
+            <InstrumentResults
+              patientUserId={selectedPatientUserId}
+              titleOverride={selectedPatientFullName ? `Resultados clínicos de ${selectedPatientFullName}` : undefined}
+              subtitleOverride="Consulta la síntesis de instrumentos completados por el paciente para orientar su plan terapéutico."
+              className="px-0 sm:px-0 lg:px-0"
+            />
+          ) : (
+            <Card className="rounded-[28px] border border-[#FFE4D6]/70 bg-white/90 p-6 text-sm text-slate-600 shadow-[0_25px_65px_rgba(124,45,18,0.08)] backdrop-blur">
+              No se pudo determinar el usuario asociado al paciente seleccionado. Verifica sus datos antes de consultar los resultados.
+            </Card>
+          )
+        )}
+
         {shouldShowDoctorTabs && showInstrumentsSection && (
           <Card className="rounded-[28px] border border-[#FFE4D6]/70 bg-white/90 p-6 shadow-[0_30px_70px_rgba(124,45,18,0.08)] backdrop-blur">
             <div className="space-y-6">
@@ -3864,9 +4342,22 @@ export const EvolutionTracking: React.FC = () => {
 
                         {item.isCompleted ? (
                           <div className="space-y-3 rounded-xl border border-slate-200/70 bg-slate-50/60 p-4">
-                            <label className="text-sm font-semibold text-slate-700" htmlFor={`instrument-comment-${assignment.id}`}>
-                              Comentario para el paciente
-                            </label>
+                            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                              <label className="text-sm font-semibold text-slate-700" htmlFor={`instrument-comment-${assignment.id}`}>
+                                Comentario para el paciente
+                              </label>
+                              {item.responsesCount > 0 ? (
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleViewInstrumentResponses(item)}
+                                  className="self-start rounded-full border border-[#FDBA74] bg-white/80 px-4 py-1.5 text-xs font-semibold text-[#9A3412] hover:bg-white sm:self-auto"
+                                >
+                                  Ver respuestas del paciente
+                                </Button>
+                              ) : null}
+                            </div>
                             <textarea
                               id={`instrument-comment-${assignment.id}`}
                               rows={3}
@@ -3915,8 +4406,19 @@ export const EvolutionTracking: React.FC = () => {
                             </Button>
                           </div>
                         ) : (
-                          <div className="rounded-xl border border-slate-200/70 bg-slate-50/60 px-4 py-3 text-sm text-slate-600">
-                            El instrumento ya cuenta con respuestas registradas. Espera a que el paciente lo complete para agregar un comentario.
+                          <div className="flex flex-col gap-3 rounded-xl border border-slate-200/70 bg-slate-50/60 px-4 py-3 text-sm text-slate-600 sm:flex-row sm:items-center sm:justify-between">
+                            <p className="text-sm text-slate-600">
+                              El instrumento ya cuenta con respuestas registradas. Espera a que el paciente lo complete para agregar un comentario.
+                            </p>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleViewInstrumentResponses(item)}
+                              className="self-start rounded-full border border-[#FDBA74] bg-white/80 px-4 py-1.5 text-xs font-semibold text-[#9A3412] hover:bg-white sm:self-auto"
+                            >
+                              Ver respuestas del paciente
+                            </Button>
                           </div>
                         )}
                       </div>
@@ -4501,6 +5003,88 @@ export const EvolutionTracking: React.FC = () => {
           )}
         </>
       )}
+      <Modal
+        isOpen={isInstrumentResponsesModalOpen}
+        onClose={handleCloseInstrumentResponsesModal}
+        title={
+          instrumentResponsesModalAssignment?.assignment.instrumentTypeName
+            ? `Respuestas · ${instrumentResponsesModalAssignment.assignment.instrumentTypeName}`
+            : 'Respuestas del paciente'
+        }
+        size="lg"
+      >
+        <div className="space-y-4">
+          {instrumentResponsesModalError ? (
+            <div className="rounded-lg border border-rose-100 bg-rose-50/80 px-3 py-2 text-sm text-rose-600">
+              {instrumentResponsesModalError}
+            </div>
+          ) : null}
+
+          {instrumentResponsesModalInstrument ? (
+            <div className="rounded-lg border border-slate-200/70 bg-slate-50/70 px-3 py-2 text-sm text-slate-600">
+              <p className="text-sm font-semibold text-slate-800">
+                {instrumentResponsesModalInstrument.name ?? 'Instrumento sin nombre'}
+              </p>
+              {instrumentResponsesModalInstrument.description ? (
+                <p className="mt-1 text-xs text-slate-500">
+                  {instrumentResponsesModalInstrument.description}
+                </p>
+              ) : null}
+            </div>
+          ) : instrumentResponsesModalAssignment?.assignment.instrumentTypeDescription ? (
+            <div className="rounded-lg border border-slate-200/70 bg-slate-50/70 px-3 py-2 text-sm text-slate-600">
+              {instrumentResponsesModalAssignment.assignment.instrumentTypeDescription}
+            </div>
+          ) : null}
+
+          {isInstrumentResponsesModalLoading ? (
+            <p className="text-sm text-slate-500">Cargando información del instrumento...</p>
+          ) : instrumentResponsesModalData.length > 0 ? (
+            <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+              {instrumentResponsesModalData.map((response, index) => {
+                const questionLabel = response.question?.trim().length
+                  ? response.question.trim()
+                  : `Pregunta ${index + 1}`;
+                const { label: answerText, value: answerValue } = buildInstrumentResponseDisplay(
+                  instrumentResponsesModalInstrument,
+                  response,
+                  index,
+                );
+                const answeredAt = formatInstrumentResponseTimestamp(response.answerDate);
+
+                return (
+                  <div
+                    key={`${response.id}-${index}`}
+                    className="space-y-2 rounded-lg border border-slate-200 bg-white px-3 py-3 shadow-sm"
+                  >
+                    <div className="flex flex-col gap-1">
+                      <span className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-400">
+                        Pregunta {index + 1}
+                      </span>
+                      <p className="text-sm font-medium text-slate-800">{questionLabel}</p>
+                    </div>
+                    <div className="rounded-md bg-slate-50 px-3 py-2">
+                      <p className="text-sm text-slate-700">{answerText}</p>
+                      {answerValue ? (
+                        <p className="mt-1 text-xs text-slate-500">Valor numérico: {answerValue}</p>
+                      ) : null}
+                    </div>
+                    <div className="flex flex-wrap gap-3 text-xs text-slate-500">
+                      {answeredAt ? <span>Respondido: {answeredAt}</span> : null}
+                      {response.theme ? <span>Tema: {response.theme}</span> : null}
+                      {response.topic ? <span>Bloque: {response.topic}</span> : null}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="text-sm text-slate-500">
+              El paciente aún no registra respuestas para este instrumento.
+            </p>
+          )}
+        </div>
+      </Modal>
 
       <Modal
         isOpen={isOcularModalOpen}

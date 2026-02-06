@@ -38,6 +38,12 @@ export interface HealthDiagnosticResult {
   colorTexto: string | null;
   icono: string | null;
   total: number;
+  responses: HealthDiagnosticResponse[];
+}
+
+export interface HealthDiagnosticResponse {
+  question: string | null;
+  answer: string | null;
 }
 
 export interface DailyReviewResult {
@@ -64,11 +70,44 @@ export interface RegiflexResult {
   predominant: string | null;
 }
 
+export interface FirmnessAdaptabilityAxis {
+  label: string | null;
+  sum: number;
+  percentage: number;
+}
+
+export type FirmnessAdaptabilityBalance = 'firmness' | 'adaptability' | 'balanced';
+
+export interface FirmnessAdaptabilityResult {
+  firmness: FirmnessAdaptabilityAxis;
+  adaptability: FirmnessAdaptabilityAxis;
+  total: number;
+  difference: number;
+  balance: FirmnessAdaptabilityBalance;
+}
+
+export interface PatientResultsSectionMetadata {
+  availableDates: string[];
+  selectedDate: string | null;
+}
+
+export interface PatientResultsMetadata {
+  attitudinal: PatientResultsSectionMetadata;
+  firmnessAdaptability: PatientResultsSectionMetadata;
+  diagnostics: PatientResultsSectionMetadata;
+  tests: PatientResultsSectionMetadata;
+  dailyReview: PatientResultsSectionMetadata;
+  wellnessLife: PatientResultsSectionMetadata;
+  wellnessHealth: PatientResultsSectionMetadata;
+  wellnessRegiflex: PatientResultsSectionMetadata;
+}
+
 export interface PatientAggregatedResults {
   attitudinal: {
     strengths: AttitudinalStrengthResult[];
     summary: AttitudinalSummary | null;
   };
+  firmnessAdaptability: FirmnessAdaptabilityResult | null;
   health: {
     diagnostics: HealthDiagnosticResult[];
     tests: Record<string, TestResult | null>;
@@ -79,4 +118,5 @@ export interface PatientAggregatedResults {
     wheelOfHealth: WheelResult[];
     regiflex: RegiflexResult | null;
   };
+  metadata: PatientResultsMetadata;
 }

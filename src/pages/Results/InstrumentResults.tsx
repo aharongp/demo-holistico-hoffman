@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { BarChart3, Calendar, Download, Filter, RefreshCw, Sparkles } from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useRef, useState, useId } from 'react';
+import { BarChart3, Calendar, Download, RefreshCw, Sparkles } from 'lucide-react';
 import { Card } from '../../components/UI/Card';
 import { Button } from '../../components/UI/Button';
 import { useAuth } from '../../context/AuthContext';
@@ -7,10 +7,28 @@ import {
   AttitudinalStrengthResult,
   DailyReviewResult,
   HealthDiagnosticResult,
+  HealthDiagnosticResponse,
+  FirmnessAdaptabilityBalance,
+  FirmnessAdaptabilityResult,
   PatientAggregatedResults,
+  PatientResultsSectionMetadata,
   TestResult,
   WheelResult,
 } from '../../types/patientResults';
+import type { TooltipProps } from 'recharts';
+import {
+  ResponsiveContainer,
+  RadarChart,
+  PolarGrid,
+  PolarAngleAxis,
+  PolarRadiusAxis,
+  Radar,
+  Tooltip as RadarTooltip,
+  PieChart,
+  Pie,
+  Cell,
+  Tooltip as PieTooltip,
+} from 'recharts';
 
 type SummaryMetric = {
   label: string;
@@ -68,6 +86,30 @@ const TEST_METADATA: Record<
   },
 };
 
+const FIRMNESS_BALANCE_METADATA: Record<
+  FirmnessAdaptabilityBalance,
+  { title: string; description: string; accent: string; tone: string }
+> = {
+  firmness: {
+    title: 'Predomina la firmeza',
+    description: 'Las respuestas recientes se inclinan mayormente hacia la firmeza.',
+    accent: 'from-[#fecdd3]/75 via-white to-[#fda4af]/60',
+    tone: 'text-rose-500',
+  },
+  adaptability: {
+    title: 'Predomina la adaptabilidad',
+    description: 'Las respuestas recientes favorecen la adaptabilidad frente a la firmeza.',
+    accent: 'from-[#bfdbfe]/75 via-white to-[#93c5fd]/60',
+    tone: 'text-sky-500',
+  },
+  balanced: {
+    title: 'Equilibrio observado',
+    description: 'Se mantiene un balance porcentual entre ambos ejes.',
+    accent: 'from-[#fde68a]/75 via-white to-[#bbf7d0]/60',
+    tone: 'text-emerald-600',
+  },
+};
+
 const timelineMilestones = [
   {
     title: 'Revisión mensual programada',
@@ -89,6 +131,13 @@ const timelineMilestones = [
   },
 ];
 
+type InstrumentResultsProps = {
+  patientUserId?: number;
+  titleOverride?: string;
+  subtitleOverride?: string;
+  className?: string;
+};
+
 const sanitizeApiBase = (value: string): string => value.replace(/\/+$/g, '');
 
 const parseNumericId = (value: unknown): number | null => {
@@ -107,6 +156,74 @@ const wheelValueToPercent = (value: number): number => {
 
   const percent = (value / 10) * 100;
   return Math.min(Math.max(percent, 0), 100);
+};
+
+const REGIFLEX_COLORS = ['#a5b4fc', '#6366f1', '#22d3ee', '#38bdf8', '#34d399'];
+
+type RegiflexAggregatedEntry = {
+  topicLabel: string;
+  value: number;
+};
+
+const wrapWheelLabel = (value: string, maxChars = 14): string[] => {
+  if (!value) {
+    return [''];
+  }
+
+  const words = value.trim().split(/\s+/);
+  const lines: string[] = [];
+  let current = '';
+
+  for (const word of words) {
+    if (!current.length) {
+      current = word;
+      continue;
+    }
+
+    if (`${current} ${word}`.length <= maxChars) {
+      current = `${current} ${word}`;
+    } else {
+      lines.push(current);
+      current = word;
+    }
+  }
+
+  if (current) {
+    lines.push(current);
+  }
+
+  return lines.length ? lines.slice(0, 3) : [''];
+};
+
+const WheelAxisTick: React.FC<{ x?: number; y?: number; payload?: { value: string } }> = ({ x = 0, y = 0, payload }) => {
+  const lines = wrapWheelLabel(payload?.value ?? '');
+
+  return (
+    <text x={x} y={y} textAnchor="middle" fill="#475569" fontSize={11} fontWeight={500}>
+      {lines.map((line, index) => (
+        <tspan key={`${payload?.value ?? 'tick'}-${index}`} x={x} dy={index === 0 ? 0 : 12}>
+          {line}
+        </tspan>
+      ))}
+    </text>
+  );
+};
+
+const renderWheelTooltip = ({ active, payload }: TooltipProps<number, string>) => {
+  if (!active || !payload || !payload.length) {
+    return null;
+  }
+
+  const item = payload[0];
+  const topic = String(item.payload?.topicLabel ?? item.name ?? 'Dimensión');
+  const value = Number(item.payload?.average ?? item.value ?? 0);
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white/95 px-3 py-2 text-xs shadow-xl">
+      <p className="font-semibold text-slate-700">{topic}</p>
+      <p className="text-slate-500">{value.toFixed(2)} / 10</p>
+    </div>
+  );
 };
 
 const readStoredUserId = (): number | null => {
@@ -154,6 +271,28 @@ const buildSummaryMetrics = (results: PatientAggregatedResults | null): SummaryM
       value: String(diagnosticsCount),
     },
   ];
+};
+
+const formatDisplayDate = (value: string | null, fallback = 'Más reciente'): string => {
+  if (!value) {
+    return fallback;
+  }
+
+  try {
+    const parsed = new Date(`${value}T00:00:00`);
+    if (Number.isNaN(parsed.getTime())) {
+      return value;
+    }
+
+    return new Intl.DateTimeFormat('es-ES', {
+      day: '2-digit',
+      month: 'long',
+      year: 'numeric',
+    }).format(parsed);
+  } catch (error) {
+    console.warn('No fue posible formatear la fecha seleccionada', error);
+    return value;
+  }
 };
 
 const mapToneClass = (color: string | null | undefined): string => {
@@ -217,64 +356,243 @@ const diagnosticStatusFromColor = (color: string | null | undefined): string => 
 const hasTestData = (tests: Record<string, TestResult | null>): boolean =>
   Object.values(tests).some((item) => Boolean(item));
 
-export const InstrumentResults: React.FC = () => {
+type SectionKey =
+  | 'diagnostics'
+  | 'tests'
+  | 'firmnessAdaptability'
+  | 'dailyReview'
+  | 'wellnessLife'
+  | 'wellnessHealth'
+  | 'wellnessRegiflex';
+const SECTION_KEYS: SectionKey[] = [
+  'diagnostics',
+  'tests',
+  'firmnessAdaptability',
+  'dailyReview',
+  'wellnessLife',
+  'wellnessHealth',
+  'wellnessRegiflex',
+];
+type SectionDateState = Record<SectionKey, string | null>;
+const EMPTY_SECTION_METADATA: PatientResultsSectionMetadata = {
+  availableDates: [],
+  selectedDate: null,
+};
+
+const createEmptySectionFilters = (): SectionDateState => ({
+  diagnostics: null,
+  tests: null,
+  firmnessAdaptability: null,
+  dailyReview: null,
+  wellnessLife: null,
+  wellnessHealth: null,
+  wellnessRegiflex: null,
+});
+
+export const InstrumentResults: React.FC<InstrumentResultsProps> = ({
+  patientUserId,
+  titleOverride,
+  subtitleOverride,
+  className,
+}) => {
   const { token, user } = useAuth();
+  const resultsRef = useRef<HTMLDivElement | null>(null);
   const [results, setResults] = useState<PatientAggregatedResults | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+  const [filters, setFilters] = useState<SectionDateState>(() => createEmptySectionFilters());
+  const [metadata, setMetadata] = useState<PatientAggregatedResults['metadata'] | null>(null);
+  const filtersRef = useRef(filters);
+
+  useEffect(() => {
+    filtersRef.current = filters;
+  }, [filters]);
+
+  const baseFilterId = useId();
+  const filterIds = useMemo<Record<SectionKey, string>>(
+    () =>
+      SECTION_KEYS.reduce((acc, section) => {
+        acc[section] = `${baseFilterId}-${section}`;
+        return acc;
+      }, {} as Record<SectionKey, string>),
+    [baseFilterId],
+  );
 
   type ImportMetaWithEnv = { env?: Record<string, string | undefined> };
   const apiBase = ((import.meta as unknown as ImportMetaWithEnv).env?.VITE_API_BASE ?? 'http://localhost:3000');
   const normalizedApiBase = useMemo(() => sanitizeApiBase(apiBase), [apiBase]);
   const storedUserId = useMemo(() => readStoredUserId(), []);
   const resolvedUserId = useMemo(() => {
+    if (typeof patientUserId === 'number' && Number.isFinite(patientUserId)) {
+      return patientUserId;
+    }
     const fallbackUser = user as { id?: number; userId?: number } | null;
     const contextId = parseNumericId(user?.id ?? fallbackUser?.userId);
     if (contextId !== null) {
       return contextId;
     }
     return storedUserId;
-  }, [storedUserId, user]);
+  }, [patientUserId, storedUserId, user]);
 
-  const fetchAggregatedResults = useCallback(async () => {
-    if (!token) {
-      setError('Debes iniciar sesión para visualizar tus resultados.');
-      setResults(null);
-      return;
-    }
-
-    if (resolvedUserId === null) {
-      setError('No se encontró un paciente asociado al usuario actual.');
-      setResults(null);
-      return;
-    }
-
-    setIsLoading(true);
+  useEffect(() => {
+    const resetFilters = createEmptySectionFilters();
+    filtersRef.current = resetFilters;
+    setFilters(resetFilters);
+    setMetadata(null);
+    setResults(null);
     setError(null);
+  }, [resolvedUserId]);
 
-    try {
-      const res = await fetch(`${normalizedApiBase}/patient-instruments/results/user/${resolvedUserId}`, {
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (!res.ok) {
-        throw new Error(`No se pudieron obtener los resultados (${res.status})`);
+  const fetchAggregatedResults = useCallback(
+    async (customFilters?: SectionDateState) => {
+      if (!token) {
+        setError('Debes iniciar sesión para visualizar tus resultados.');
+        setResults(null);
+        return;
       }
 
-      const payload: PatientAggregatedResults = await res.json();
-      setResults(payload);
-    } catch (fetchError) {
-      console.error('Error al obtener resultados de instrumentos', fetchError);
-      const message = fetchError instanceof Error ? fetchError.message : 'No se pudieron cargar los resultados.';
-      setError(message);
-      setResults(null);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [normalizedApiBase, resolvedUserId, token]);
+      if (resolvedUserId === null) {
+        setError('No se encontró un paciente asociado al usuario actual.');
+        setResults(null);
+        return;
+      }
+
+      const activeFilters = customFilters ?? filtersRef.current;
+
+      setIsLoading(true);
+      setError(null);
+
+      try {
+        const params = new URLSearchParams();
+        if (activeFilters.diagnostics) {
+          params.set('diagnosticsDate', activeFilters.diagnostics);
+        }
+        if (activeFilters.tests) {
+          params.set('testsDate', activeFilters.tests);
+        }
+        if (activeFilters.firmnessAdaptability) {
+          params.set('firmnessAdaptabilityDate', activeFilters.firmnessAdaptability);
+        }
+        if (activeFilters.dailyReview) {
+          params.set('dailyReviewDate', activeFilters.dailyReview);
+        }
+        if (activeFilters.wellnessLife) {
+          params.set('wellnessLifeDate', activeFilters.wellnessLife);
+        }
+        if (activeFilters.wellnessHealth) {
+          params.set('wellnessHealthDate', activeFilters.wellnessHealth);
+        }
+        if (activeFilters.wellnessRegiflex) {
+          params.set('wellnessRegiflexDate', activeFilters.wellnessRegiflex);
+        }
+
+        const query = params.toString();
+        const endpoint = `${normalizedApiBase}/patient-instruments/results/user/${resolvedUserId}${
+          query ? `?${query}` : ''
+        }`;
+
+        const res = await fetch(endpoint, {
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (!res.ok) {
+          throw new Error(`No se pudieron obtener los resultados (${res.status})`);
+        }
+
+        const payload: PatientAggregatedResults = await res.json();
+        setResults(payload);
+        setMetadata(payload.metadata ?? null);
+
+        const nextFilters: SectionDateState = {
+          diagnostics: payload.metadata?.diagnostics?.selectedDate ?? null,
+          tests: payload.metadata?.tests?.selectedDate ?? null,
+          firmnessAdaptability: payload.metadata?.firmnessAdaptability?.selectedDate ?? null,
+          dailyReview: payload.metadata?.dailyReview?.selectedDate ?? null,
+          wellnessLife: payload.metadata?.wellnessLife?.selectedDate ?? null,
+          wellnessHealth: payload.metadata?.wellnessHealth?.selectedDate ?? null,
+          wellnessRegiflex: payload.metadata?.wellnessRegiflex?.selectedDate ?? null,
+        };
+
+        filtersRef.current = nextFilters;
+        setFilters(nextFilters);
+      } catch (fetchError) {
+        console.error('Error al obtener resultados de instrumentos', fetchError);
+        const message = fetchError instanceof Error ? fetchError.message : 'No se pudieron cargar los resultados.';
+        setError(message);
+        setResults(null);
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [normalizedApiBase, resolvedUserId, token],
+  );
+
+  const handleSectionDateChange = useCallback(
+    (section: SectionKey, value: string) => {
+      const nextValue = value === '' ? null : value;
+      const nextFilters = { ...filtersRef.current, [section]: nextValue } as SectionDateState;
+      filtersRef.current = nextFilters;
+      setFilters(nextFilters);
+      void fetchAggregatedResults(nextFilters);
+    },
+    [fetchAggregatedResults],
+  );
+
+  const getSectionFilterState = useCallback(
+    (section: SectionKey) => {
+      const meta = metadata?.[section] ?? EMPTY_SECTION_METADATA;
+      const selected = filters[section] ?? meta.selectedDate ?? null;
+      return { meta, selected };
+    },
+    [filters, metadata],
+  );
+
+  const renderSectionDateSelect = useCallback(
+    (section: SectionKey, title: string, helper?: string) => {
+      const { meta, selected } = getSectionFilterState(section);
+      if (!meta.availableDates.length) {
+        return null;
+      }
+
+      const options = meta.availableDates.map((date) => ({
+        value: date,
+        label: formatDisplayDate(date),
+      }));
+
+      return (
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <span className="text-xs font-semibold uppercase tracking-[0.35em] text-slate-500">{title}</span>
+            {helper ? <p className="text-xs text-slate-500">{helper}</p> : null}
+          </div>
+          <div className="relative">
+            <select
+              id={filterIds[section]}
+              aria-label={title}
+              value={selected ?? ''}
+              onChange={(event) => handleSectionDateChange(section, event.target.value)}
+              disabled={isLoading}
+              className="appearance-none rounded-2xl border border-white/60 bg-white/80 py-2 pl-4 pr-10 text-sm font-semibold text-slate-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)] focus:border-[#4338CA]/70 focus:outline-none focus:ring-2 focus:ring-[#4338CA]/30 disabled:cursor-wait"
+            >
+              <option value="">{formatDisplayDate(null)}</option>
+              {options.map((option) => (
+                <option key={`${section}-${option.value}`} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <Calendar className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          </div>
+        </div>
+      );
+    },
+    [filterIds, getSectionFilterState, handleSectionDateChange, isLoading],
+  );
 
   useEffect(() => {
     if (token && resolvedUserId !== null) {
@@ -285,6 +603,7 @@ export const InstrumentResults: React.FC = () => {
   const summaryMetrics = useMemo(() => buildSummaryMetrics(results), [results]);
   const attitudinalStrengths = results?.attitudinal.strengths ?? [];
   const attitudinalSummary = results?.attitudinal.summary ?? null;
+  const firmnessAdaptability: FirmnessAdaptabilityResult | null = results?.firmnessAdaptability ?? null;
   const healthDiagnostics = results?.health.diagnostics ?? [];
   const tests = useMemo<Record<string, TestResult | null>>(
     () => results?.health.tests ?? {},
@@ -296,7 +615,150 @@ export const InstrumentResults: React.FC = () => {
   const wheelOfHealth = results?.wellness?.wheelOfHealth ?? [];
   const regiflex = results?.wellness?.regiflex ?? null;
   const hasWellnessData = wheelOfLife.length > 0 || wheelOfHealth.length > 0 || Boolean(regiflex);
-  const regiflexTotal = regiflex?.entries?.reduce((acc, entry) => acc + entry.sum, 0) ?? 0;
+  const firmnessAdaptabilityAxes = useMemo(
+    () => {
+      if (!firmnessAdaptability) {
+        return [] as Array<{
+          key: 'firmness' | 'adaptability';
+          label: string;
+          sum: number;
+          percentage: number;
+          tone: string;
+          barClass: string;
+        }>;
+      }
+      return [
+        {
+          key: 'firmness' as const,
+          label: firmnessAdaptability.firmness.label ?? 'Firmeza',
+          sum: firmnessAdaptability.firmness.sum,
+          percentage: firmnessAdaptability.firmness.percentage,
+          tone: 'text-rose-500',
+          barClass: 'from-[#fda4af]/80 to-[#fb7185]/80',
+        },
+        {
+          key: 'adaptability' as const,
+          label: firmnessAdaptability.adaptability.label ?? 'Adaptabilidad',
+          sum: firmnessAdaptability.adaptability.sum,
+          percentage: firmnessAdaptability.adaptability.percentage,
+          tone: 'text-sky-500',
+          barClass: 'from-[#93c5fd]/80 to-[#60a5fa]/80',
+        },
+      ];
+    },
+    [firmnessAdaptability]
+  );
+  const firmnessBalanceMeta = useMemo(
+    () => (firmnessAdaptability ? FIRMNESS_BALANCE_METADATA[firmnessAdaptability.balance] : null),
+    [firmnessAdaptability]
+  );
+  const lifeRadarIdSource = useId();
+  const lifeRadarGradientId = useMemo(
+    () => `${lifeRadarIdSource}-life-fill`.replace(/[:]/g, '-'),
+    [lifeRadarIdSource]
+  );
+  const healthRadarIdSource = useId();
+  const healthRadarGradientId = useMemo(
+    () => `${healthRadarIdSource}-health-fill`.replace(/[:]/g, '-'),
+    [healthRadarIdSource]
+  );
+  const sortedWheelOfLife = useMemo(
+    () => [...wheelOfLife].sort((a, b) => b.average - a.average),
+    [wheelOfLife]
+  );
+  const lifeRadarData = useMemo(
+    () =>
+      wheelOfLife.map((item, index) => {
+        const average = Number.isFinite(item.average) ? Number(item.average) : 0;
+        const topicLabel = item.topic?.trim().length ? item.topic.trim() : `Dimensión ${index + 1}`;
+        return {
+          topic: item.topic ?? null,
+          topicLabel,
+          average,
+        };
+      }),
+    [wheelOfLife]
+  );
+  const lifeRadarTooltip = useCallback(
+    (props: TooltipProps<number, string>) => renderWheelTooltip(props),
+    []
+  );
+  const aggregatedRegiflexEntries = useMemo<RegiflexAggregatedEntry[]>(() => {
+    if (!regiflex) {
+      return [];
+    }
+
+    const buckets = new Map<string, RegiflexAggregatedEntry>();
+
+    regiflex.entries.forEach((entry, index) => {
+      const value = Number.isFinite(entry.sum) ? Number(entry.sum) : 0;
+      const rawLabel = entry.topic?.trim() ?? '';
+      const topicLabel = rawLabel.length ? rawLabel : `Tendencia ${index + 1}`;
+      const key = rawLabel.length ? rawLabel.toLowerCase() : `__fallback_${index}`;
+
+      const existing = buckets.get(key);
+      if (existing) {
+        existing.value += value;
+      } else {
+        buckets.set(key, {
+          topicLabel,
+          value,
+        });
+      }
+    });
+
+    return Array.from(buckets.values()).filter((entry) => entry.value > 0);
+  }, [regiflex]);
+  const regiflexTotal = useMemo(
+    () => aggregatedRegiflexEntries.reduce((acc, entry) => acc + entry.value, 0),
+    [aggregatedRegiflexEntries]
+  );
+  const regiflexPieData = aggregatedRegiflexEntries;
+  const sortedRegiflexEntries = useMemo(
+    () => [...aggregatedRegiflexEntries].sort((a, b) => b.value - a.value),
+    [aggregatedRegiflexEntries]
+  );
+  const regiflexPieTooltip = useCallback(
+    ({ active, payload }: TooltipProps<number, string>) => {
+      if (!active || !payload || !payload.length) {
+        return null;
+      }
+
+      const item = payload[0];
+      const topicLabel = String(item.payload?.topicLabel ?? item.name ?? 'Tendencia');
+      const value = Number(item.value ?? item.payload?.value ?? 0);
+      const percentage = regiflexTotal > 0 ? (value / regiflexTotal) * 100 : 0;
+
+      return (
+        <div className="rounded-xl border border-slate-200 bg-white/95 px-3 py-2 text-xs shadow-xl">
+          <p className="font-semibold text-slate-700">{topicLabel}</p>
+          <p className="text-slate-500">{value.toFixed(2)} puntos · {percentage.toFixed(1)}%</p>
+        </div>
+      );
+    },
+    [regiflexTotal]
+  );
+  const sortedWheelOfHealth = useMemo(
+    () => [...wheelOfHealth].sort((a, b) => b.average - a.average),
+    [wheelOfHealth]
+  );
+  const healthRadarData = useMemo(
+    () =>
+      wheelOfHealth.map((item, index) => {
+        const average = Number.isFinite(item.average) ? Number(item.average) : 0;
+        const topicLabel = item.topic?.trim().length ? item.topic.trim() : `Dimensión ${index + 1}`;
+        return {
+          topic: item.topic ?? null,
+          topicLabel,
+          average,
+        };
+      }),
+    [wheelOfHealth]
+  );
+  const healthRadarTooltip = useCallback(
+    (props: TooltipProps<number, string>) => renderWheelTooltip(props),
+    []
+  );
 
   const hasMeaningfulData = useMemo(() => {
     if (!results) {
@@ -305,6 +767,7 @@ export const InstrumentResults: React.FC = () => {
     return (
       attitudinalStrengths.length > 0 ||
       Boolean(attitudinalSummary) ||
+      Boolean(firmnessAdaptability) ||
       healthDiagnostics.length > 0 ||
       dailyReview.length > 0 ||
       hasTestsData ||
@@ -314,6 +777,7 @@ export const InstrumentResults: React.FC = () => {
     results,
     attitudinalStrengths.length,
     attitudinalSummary,
+    firmnessAdaptability,
     healthDiagnostics.length,
     dailyReview.length,
     hasTestsData,
@@ -321,6 +785,83 @@ export const InstrumentResults: React.FC = () => {
   ]);
 
   const hasNoData = !hasMeaningfulData && !isLoading && !error;
+
+  const handleExportPdf = useCallback(async () => {
+    const contentElement = resultsRef.current;
+    if (!contentElement) {
+      return;
+    }
+
+    setExportError(null);
+    setIsExporting(true);
+
+    const previousStyles = {
+      maxHeight: contentElement.style.maxHeight,
+      height: contentElement.style.height,
+      overflow: contentElement.style.overflow,
+      overflowY: contentElement.style.overflowY,
+    };
+
+    try {
+      const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
+        import('html2canvas'),
+        import('jspdf'),
+      ]);
+
+      contentElement.style.maxHeight = 'none';
+      contentElement.style.height = 'auto';
+      contentElement.style.overflow = 'visible';
+      contentElement.style.overflowY = 'visible';
+
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+
+      const canvas = await html2canvas(contentElement, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#ffffff',
+        scrollY: -window.scrollY,
+        windowWidth: contentElement.scrollWidth,
+        windowHeight: contentElement.scrollHeight,
+      });
+
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const margin = 15;
+      const imgProps = pdf.getImageProperties(imgData);
+      const pdfWidth = pdf.internal.pageSize.getWidth() - margin * 2;
+      const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const usablePageHeight = pageHeight - margin * 2;
+
+      let heightLeft = pdfHeight;
+      let position = margin;
+
+      pdf.addImage(imgData, 'PNG', margin, position, pdfWidth, pdfHeight);
+      heightLeft -= usablePageHeight;
+
+      while (heightLeft > 0) {
+        position = margin - (pdfHeight - heightLeft);
+        pdf.addPage();
+        pdf.addImage(imgData, 'PNG', margin, position, pdfWidth, pdfHeight);
+        heightLeft -= usablePageHeight;
+      }
+
+      const ISO_DATE_LENGTH = 10;
+      const timestamp = new Date().toISOString().slice(0, ISO_DATE_LENGTH).replace(/-/g, '');
+      const filename = timestamp ? `resultados-instrumentos-${timestamp}.pdf` : 'resultados-instrumentos.pdf';
+
+      pdf.save(filename);
+    } catch (exportException) {
+      console.error('Error exporting instrument results PDF', exportException);
+      setExportError('No se pudo exportar el PDF. Intenta nuevamente.');
+    } finally {
+      contentElement.style.maxHeight = previousStyles.maxHeight;
+      contentElement.style.height = previousStyles.height;
+      contentElement.style.overflow = previousStyles.overflow;
+      contentElement.style.overflowY = previousStyles.overflowY;
+      setIsExporting(false);
+    }
+  }, [resultsRef]);
 
   const handleRefresh = () => {
     void fetchAggregatedResults();
@@ -333,9 +874,16 @@ export const InstrumentResults: React.FC = () => {
   ];
 
   const orderedTests: TestKey[] = ['stress', 'health', 'biologicalAge', 'codependency'];
+  const resolvedTitle = titleOverride ?? 'Panorama integral de tus instrumentos';
+  const resolvedSubtitle =
+    subtitleOverride ??
+    'Visualiza cómo han evolucionado tus resultados y mantén el pulso de tus avances con paneles comparativos, tendencias y espacios listos para análisis cualitativos.';
+  const sectionClassName = className
+    ? `space-y-10 px-4 py-10 sm:px-8 ${className}`
+    : 'space-y-10 px-4 py-10 sm:px-8';
 
   return (
-    <section className="space-y-10 px-4 py-10 sm:px-8">
+    <section ref={resultsRef} className={sectionClassName}>
       <div className="relative overflow-hidden rounded-[32px] border border-white/45 bg-gradient-to-r from-[#EEF5FF]/95 via-white/90 to-[#F5F3FF]/90 p-6 sm:p-10 shadow-[0_40px_90px_-65px_rgba(79,70,229,0.55)] backdrop-blur-lg">
         <div
           aria-hidden="true"
@@ -353,29 +901,30 @@ export const InstrumentResults: React.FC = () => {
             </span>
             <div className="space-y-4">
               <h1 className="text-3xl font-semibold leading-tight text-slate-900 sm:text-5xl">
-                Panorama integral de tus instrumentos
+                {resolvedTitle}
               </h1>
               <p className="text-sm text-slate-600 sm:text-base">
-                Visualiza cómo han evolucionado tus resultados y mantén el pulso de tus avances con paneles comparativos, tendencias y espacios listos para análisis cualitativos.
+                {resolvedSubtitle}
               </p>
             </div>
             <div className="flex flex-wrap gap-3">
               <Button
                 type="button"
                 variant="primary"
-                className="bg-gradient-to-r from-[#4F46E5] via-[#7C3AED] to-[#C026D3] text-white shadow-[0_20px_45px_-25px_rgba(79,70,229,0.75)] hover:brightness-110"
+                onClick={() => {
+                  void handleExportPdf();
+                }}
+                disabled={isExporting}
+                className="bg-gradient-to-r from-[#4F46E5] via-[#7C3AED] to-[#C026D3] text-white shadow-[0_20px_45px_-25px_rgba(79,70,229,0.75)] hover:brightness-110 disabled:cursor-wait disabled:opacity-80"
               >
-                <Download className="mr-2 h-4 w-4" />
-                Exportar PDF
+                {isExporting ? (
+                  <Sparkles className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Download className="mr-2 h-4 w-4" />
+                )}
+                {isExporting ? 'Generando...' : 'Exportar PDF'}
               </Button>
-              <Button
-                type="button"
-                variant="outline"
-                className="border border-white/60 bg-white/60 text-[#4338CA] backdrop-blur hover:bg-white"
-              >
-                <Sparkles className="mr-2 h-4 w-4" />
-                Explorar insights
-              </Button>
+
               <Button
                 type="button"
                 variant="outline"
@@ -386,6 +935,11 @@ export const InstrumentResults: React.FC = () => {
                 Actualizar
               </Button>
             </div>
+            {exportError ? (
+              <p className="text-sm font-medium text-rose-500">
+                {exportError}
+              </p>
+            ) : null}
           </div>
 
           <div className="grid w-full gap-4 sm:grid-cols-3 lg:w-auto">
@@ -415,43 +969,6 @@ export const InstrumentResults: React.FC = () => {
         </Card>
       ) : null}
 
-      <Card className="rounded-[28px] border border-white/35 bg-white/75 shadow-[0_30px_80px_-55px_rgba(15,23,42,0.45)] backdrop-blur" padding="lg">
-        <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex items-center gap-3">
-            <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-[#E0E7FF]/40 to-[#C7D2FE]/80 text-[#4338CA]">
-              <Filter className="h-5 w-5" />
-            </span>
-            <div>
-              <h2 className="text-lg font-semibold text-slate-900">Filtros inteligentes</h2>
-              <p className="text-sm text-slate-600">Configura cohortes, momentos del día y objetivos clínicos.</p>
-            </div>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              className="rounded-full border border-white/60 bg-white/60 px-5 py-2 text-sm font-semibold text-slate-600"
-            >
-              Últimos 30 días
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className="rounded-full border border-white/60 bg-white/60 px-5 py-2 text-sm font-semibold text-slate-600"
-            >
-              Todas las dimensiones
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className="rounded-full border border-white/60 bg-white/60 px-5 py-2 text-sm font-semibold text-slate-600"
-            >
-              Comparativo histórico
-            </Button>
-          </div>
-        </div>
-      </Card>
-
       {attitudinalSummary ? (
         <Card className="rounded-[28px] border border-white/40 bg-white/80 shadow-[0_30px_70px_-55px_rgba(244,114,182,0.35)] backdrop-blur" padding="lg">
           <div className="space-y-6">
@@ -468,7 +985,6 @@ export const InstrumentResults: React.FC = () => {
                 Estado: {attitudinalSummary.ponderation.holistica ?? 'Sin clasificación'}
               </div>
             </div>
-
             <div className="grid gap-4 sm:grid-cols-3">
               <div className="rounded-3xl border border-white/60 bg-white/80 p-6 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]">
                 <p className="text-xs font-semibold uppercase tracking-[0.35em] text-slate-500">Promedio general</p>
@@ -542,9 +1058,84 @@ export const InstrumentResults: React.FC = () => {
         </div>
       ) : null}
 
-      {hasTestData(tests) ? (
+      {firmnessAdaptability ? (
+        <Card
+          className="relative overflow-hidden rounded-[28px] border border-white/35 bg-white/80 shadow-[0_34px_85px_-60px_rgba(79,70,229,0.3)] backdrop-blur"
+          padding="lg"
+        >
+          <div
+            aria-hidden="true"
+            className={`absolute inset-0 bg-gradient-to-br ${firmnessBalanceMeta?.accent ?? 'from-[#E0E7FF]/70 via-white to-[#FBCFE8]/60'} opacity-60`}
+          />
+          <div className="relative space-y-6">
+            <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+              <div className="space-y-2">
+                <span className="text-xs font-semibold uppercase tracking-[0.35em] text-slate-500">Balance actitudinal</span>
+                <h2 className="text-xl font-semibold text-slate-900">Firmeza vs Adaptabilidad</h2>
+                <p className="text-sm text-slate-600">
+                  Comparativo porcentual del instrumento de salud (tema 139) que pondera la relación entre firmeza y adaptabilidad.
+                </p>
+              </div>
+              {firmnessBalanceMeta ? (
+                <div className="rounded-2xl border border-white/60 bg-white/70 px-4 py-3 text-right shadow-[0_18px_45px_-40px_rgba(79,70,229,0.35)]">
+                  <p className="text-xs font-semibold uppercase tracking-[0.35em] text-slate-500">Balance actual</p>
+                  <p className={`text-base font-semibold ${firmnessBalanceMeta.tone}`}>{firmnessBalanceMeta.title}</p>
+                </div>
+              ) : null}
+            </div>
+            {renderSectionDateSelect(
+              'firmnessAdaptability',
+              'Corte firmeza/adaptabilidad',
+              'Selecciona la fecha de referencia para este balance.',
+            )}
+            <div className="grid gap-5 md:grid-cols-2">
+              {firmnessAdaptabilityAxes.map((axis) => (
+                <div
+                  key={axis.key}
+                  className="rounded-2xl border border-white/60 bg-white/70 p-5 shadow-[0_18px_45px_-40px_rgba(79,70,229,0.35)]"
+                >
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-semibold text-slate-900">{axis.label}</p>
+                    <span className={`text-sm font-semibold ${axis.tone}`}>{axis.percentage.toFixed(1)}%</span>
+                  </div>
+                  <p className="mt-2 text-xs text-slate-500">Total acumulado: {axis.sum.toFixed(2)}</p>
+                  <div className="mt-4 h-2 w-full overflow-hidden rounded-full bg-slate-100">
+                    <div
+                      className={`h-full rounded-full bg-gradient-to-r ${axis.barClass}`}
+                      style={{ width: `${Math.min(Math.max(axis.percentage, 0), 100)}%` }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="rounded-2xl border border-white/60 bg-white/70 p-5">
+                <p className="text-xs font-semibold uppercase tracking-[0.35em] text-slate-500">Diferencia porcentual</p>
+                <p className={`text-3xl font-semibold ${firmnessBalanceMeta?.tone ?? 'text-slate-900'}`}>
+                  {firmnessAdaptability.difference.toFixed(1)}%
+                </p>
+                <p className="mt-2 text-sm text-slate-600">
+                  {firmnessBalanceMeta?.description ?? 'Comparativo entre ambos ejes actitudinales.'}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-dashed border-white/60 bg-white/50 p-5">
+                <p className="text-xs font-semibold uppercase tracking-[0.35em] text-slate-500">Total de puntos</p>
+                <p className="text-2xl font-semibold text-slate-900">{firmnessAdaptability.total.toFixed(2)}</p>
+                <p className="mt-2 text-sm text-slate-500">
+                  Los porcentajes se calculan sobre la suma combinada de respuestas para ambos ejes.
+                </p>
+              </div>
+            </div>
+          </div>
+        </Card>
+      ) : null}
+
+      {hasTestsData ? (
         <div className="space-y-6">
-          <h2 className="text-xl font-semibold text-slate-900">Tests especializados</h2>
+          <div className="space-y-3">
+            <h2 className="text-xl font-semibold text-slate-900">Tests especializados</h2>
+            {renderSectionDateSelect('tests', 'Corte de tests', 'Selecciona la fecha que deseas revisar.')}
+          </div>
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
             {orderedTests.map((key) => {
               const meta = TEST_METADATA[key];
@@ -592,12 +1183,20 @@ export const InstrumentResults: React.FC = () => {
 
       {healthDiagnostics.length ? (
         <div className="space-y-6">
-          <h2 className="text-xl font-semibold text-slate-900">Diagnóstico de salud</h2>
+          <div className="space-y-3">
+            <h2 className="text-xl font-semibold text-slate-900">Diagnóstico de salud</h2>
+            {renderSectionDateSelect('diagnostics', 'Corte de diagnósticos', 'Explora mediciones previas en esta sección.')}
+          </div>
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
             {healthDiagnostics.map((item: HealthDiagnosticResult, index) => {
               const badgeClass = buildBadgeClass(item.colorTexto);
               const toneClass = mapToneClass(item.colorTexto);
               const statusLabel = diagnosticStatusFromColor(item.colorTexto);
+              const answers = item.responses ?? [];
+              const visibleAnswers = answers.filter((response) => {
+                const answerLabel = response?.answer ?? '';
+                return answerLabel.trim().length > 0;
+              });
               return (
                 <Card
                   key={`${item.id ?? 'diagnostic'}-${index}`}
@@ -616,9 +1215,37 @@ export const InstrumentResults: React.FC = () => {
                       </span>
                     </div>
                     {item.enunciado ? <p className="text-sm text-slate-600">{item.enunciado}</p> : null}
-                    <div className="rounded-2xl border border-white/60 bg-white/70 p-5">
-                      <p className="text-xs font-semibold uppercase tracking-[0.35em] text-slate-500">Total</p>
-                      <p className={`text-3xl font-semibold ${toneClass}`}>{item.total.toFixed(2)}</p>
+                    <div className="rounded-2xl border border-white/60 bg-white/70 p-5 space-y-5">
+                      <div className="space-y-3">
+                        <p className="text-xs font-semibold uppercase tracking-[0.35em] text-slate-500">Respuestas registradas</p>
+                        {visibleAnswers.length ? (
+                          <ul className="space-y-2">
+                            {visibleAnswers.map((response: HealthDiagnosticResponse, responseIndex) => {
+                              const questionLabel = response.question?.trim();
+                              const answerLabel = response.answer?.trim() ?? '';
+                              return (
+                                <li
+                                  key={`${questionLabel ?? 'respuesta'}-${responseIndex}-${answerLabel}`}
+                                  className="rounded-xl border border-white/60 bg-white/80 px-3 py-2 shadow-[0_18px_45px_-40px_rgba(59,130,246,0.45)]"
+                                >
+                                  {questionLabel ? (
+                                    <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-slate-500">
+                                      {questionLabel}
+                                    </p>
+                                  ) : null}
+                                  <p className="text-sm text-slate-700">{answerLabel}</p>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        ) : (
+                          <p className="text-sm text-slate-500">Sin respuestas registradas.</p>
+                        )}
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-[0.35em] text-slate-500">Total</p>
+                        <p className={`text-3xl font-semibold ${toneClass}`}>{item.total.toFixed(2)}</p>
+                      </div>
                     </div>
                   </div>
                 </Card>
@@ -630,7 +1257,9 @@ export const InstrumentResults: React.FC = () => {
 
       {hasWellnessData ? (
         <div className="space-y-6">
-          <h2 className="text-xl font-semibold text-slate-900">Bienestar integral</h2>
+            <div className="space-y-3">
+              <h2 className="text-xl font-semibold text-slate-900">Bienestar integral</h2>
+            </div>
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
             {wheelOfLife.length ? (
               <Card
@@ -648,29 +1277,79 @@ export const InstrumentResults: React.FC = () => {
                       {wheelOfLife.length} tópicos
                     </span>
                   </div>
+                  {renderSectionDateSelect('wellnessLife', 'Corte rueda de vida', 'Selecciona la fecha de referencia para esta rueda.')}
                   <p className="text-sm text-slate-600">Promedios generales por dimensión con escala 0-10.</p>
                   <div className="rounded-2xl border border-white/60 bg-white/70 p-4">
-                    <ul className="space-y-3">
-                      {[...wheelOfLife]
-                        .sort((a: WheelResult, b: WheelResult) => b.average - a.average)
-                        .map((item, index) => {
-                          const width = wheelValueToPercent(item.average);
-                          return (
-                            <li key={`${item.topic ?? 'life'}-${index}`} className="space-y-2">
-                              <div className="flex items-center justify-between">
-                                <span className="text-sm font-medium text-slate-700">{item.topic ?? `Dimensión ${index + 1}`}</span>
-                                <span className="text-lg font-semibold text-slate-900">{item.average.toFixed(2)}</span>
-                              </div>
-                              <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
-                                <div
-                                  className="h-full rounded-full bg-gradient-to-r from-[#FB7185]/70 to-[#F97316]/80"
-                                  style={{ width: `${width}%` }}
-                                />
-                              </div>
-                            </li>
-                          );
-                        })}
-                    </ul>
+                    <div className="space-y-6">
+                      <div className="h-72">
+                        {lifeRadarData.length ? (
+                          <ResponsiveContainer width="100%" height="100%">
+                            <RadarChart
+                              data={lifeRadarData}
+                              outerRadius="75%"
+                              startAngle={90}
+                              endAngle={-270}
+                            >
+                              <defs>
+                                <linearGradient id={lifeRadarGradientId} x1="50%" y1="0%" x2="50%" y2="100%">
+                                  <stop offset="0%" stopColor="#fb7185" stopOpacity={0.85} />
+                                  <stop offset="100%" stopColor="#f97316" stopOpacity={0.45} />
+                                </linearGradient>
+                              </defs>
+                              <PolarGrid gridType="polygon" stroke="#e2e8f0" radialLines={false} />
+                              <PolarAngleAxis dataKey="topicLabel" tick={<WheelAxisTick />} />
+                              <PolarRadiusAxis
+                                angle={90}
+                                domain={[0, 10]}
+                                tickCount={6}
+                                axisLine={false}
+                                tickLine={false}
+                                tick={{ fill: '#94a3b8', fontSize: 11 }}
+                              />
+                              <Radar
+                                name="Promedio"
+                                dataKey="average"
+                                stroke="#fb7185"
+                                strokeWidth={2}
+                                fill={`url(#${lifeRadarGradientId})`}
+                                fillOpacity={0.8}
+                              />
+                              <RadarTooltip content={lifeRadarTooltip} cursor={{ stroke: '#94a3b8', strokeDasharray: '4 4' }} />
+                            </RadarChart>
+                          </ResponsiveContainer>
+                        ) : (
+                          <div className="flex h-full items-center justify-center rounded-xl border border-dashed border-slate-200 bg-white/60 p-6 text-sm text-slate-500">
+                            No hay datos suficientes para graficar.
+                          </div>
+                        )}
+                      </div>
+                      <div className="space-y-3">
+                        {sortedWheelOfLife.length ? (
+                          <ul className="space-y-3">
+                            {sortedWheelOfLife.map((item: WheelResult, index) => {
+                              const width = wheelValueToPercent(item.average);
+                              const label = item.topic?.trim().length ? item.topic.trim() : `Dimensión ${index + 1}`;
+                              return (
+                                <li key={`${label}-${index}`} className="space-y-2">
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-sm font-medium text-slate-700">{label}</span>
+                                    <span className="text-lg font-semibold text-slate-900">{item.average.toFixed(2)}</span>
+                                  </div>
+                                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+                                    <div
+                                      className="h-full rounded-full bg-gradient-to-r from-[#FB7185]/70 to-[#F97316]/80"
+                                      style={{ width: `${width}%` }}
+                                    />
+                                  </div>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        ) : (
+                          <p className="text-sm text-slate-500">Sin registros suficientes para la tabla.</p>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 </div>
               </Card>
@@ -692,29 +1371,79 @@ export const InstrumentResults: React.FC = () => {
                       {wheelOfHealth.length} tópicos
                     </span>
                   </div>
+                  {renderSectionDateSelect('wellnessHealth', 'Corte rueda de salud', 'Selecciona la fecha de referencia para esta rueda.')}
                   <p className="text-sm text-slate-600">Referencias promediadas por dimensión de bienestar físico.</p>
                   <div className="rounded-2xl border border-white/60 bg-white/70 p-4">
-                    <ul className="space-y-3">
-                      {[...wheelOfHealth]
-                        .sort((a: WheelResult, b: WheelResult) => b.average - a.average)
-                        .map((item, index) => {
-                          const width = wheelValueToPercent(item.average);
-                          return (
-                            <li key={`${item.topic ?? 'health'}-${index}`} className="space-y-2">
-                              <div className="flex items-center justify-between">
-                                <span className="text-sm font-medium text-slate-700">{item.topic ?? `Dimensión ${index + 1}`}</span>
-                                <span className="text-lg font-semibold text-slate-900">{item.average.toFixed(2)}</span>
-                              </div>
-                              <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
-                                <div
-                                  className="h-full rounded-full bg-gradient-to-r from-[#34D399]/70 to-[#10B981]/80"
-                                  style={{ width: `${width}%` }}
-                                />
-                              </div>
-                            </li>
-                          );
-                        })}
-                    </ul>
+                    <div className="space-y-6">
+                      <div className="h-72">
+                        {healthRadarData.length ? (
+                          <ResponsiveContainer width="100%" height="100%">
+                            <RadarChart
+                              data={healthRadarData}
+                              outerRadius="75%"
+                              startAngle={90}
+                              endAngle={-270}
+                            >
+                              <defs>
+                                <linearGradient id={healthRadarGradientId} x1="50%" y1="0%" x2="50%" y2="100%">
+                                  <stop offset="0%" stopColor="#34d399" stopOpacity={0.85} />
+                                  <stop offset="100%" stopColor="#10b981" stopOpacity={0.45} />
+                                </linearGradient>
+                              </defs>
+                              <PolarGrid gridType="polygon" stroke="#d1fae5" radialLines={false} />
+                              <PolarAngleAxis dataKey="topicLabel" tick={<WheelAxisTick />} />
+                              <PolarRadiusAxis
+                                angle={90}
+                                domain={[0, 10]}
+                                tickCount={6}
+                                axisLine={false}
+                                tickLine={false}
+                                tick={{ fill: '#6ee7b7', fontSize: 11 }}
+                              />
+                              <Radar
+                                name="Promedio"
+                                dataKey="average"
+                                stroke="#10b981"
+                                strokeWidth={2}
+                                fill={`url(#${healthRadarGradientId})`}
+                                fillOpacity={0.8}
+                              />
+                              <RadarTooltip content={healthRadarTooltip} cursor={{ stroke: '#34d399', strokeDasharray: '4 4' }} />
+                            </RadarChart>
+                          </ResponsiveContainer>
+                        ) : (
+                          <div className="flex h-full items-center justify-center rounded-xl border border-dashed border-slate-200 bg-white/60 p-6 text-sm text-slate-500">
+                            No hay datos suficientes para graficar.
+                          </div>
+                        )}
+                      </div>
+                      <div className="space-y-3">
+                        {sortedWheelOfHealth.length ? (
+                          <ul className="space-y-3">
+                            {sortedWheelOfHealth.map((item, index) => {
+                              const width = wheelValueToPercent(item.average);
+                              const label = item.topic?.trim().length ? item.topic.trim() : `Dimensión ${index + 1}`;
+                              return (
+                                <li key={`${label}-${index}`} className="space-y-2">
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-sm font-medium text-slate-700">{label}</span>
+                                    <span className="text-lg font-semibold text-slate-900">{item.average.toFixed(2)}</span>
+                                  </div>
+                                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+                                    <div
+                                      className="h-full rounded-full bg-gradient-to-r from-[#34D399]/70 to-[#10B981]/80"
+                                      style={{ width: `${width}%` }}
+                                    />
+                                  </div>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        ) : (
+                          <p className="text-sm text-slate-500">Sin registros suficientes para la tabla.</p>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 </div>
               </Card>
@@ -736,28 +1465,65 @@ export const InstrumentResults: React.FC = () => {
                       {regiflex.predominant ?? 'Sin dato'}
                     </span>
                   </div>
+                  {renderSectionDateSelect('wellnessRegiflex', 'Corte Regiflex', 'Selecciona la fecha de referencia para este análisis.')}
                   <p className="text-sm text-slate-600">Comparativo entre flexibilidad y rigidez según respuestas recientes.</p>
                   <div className="rounded-2xl border border-white/60 bg-white/70 p-4">
-                    <ul className="space-y-3">
-                      {regiflex.entries.map((entry, index) => {
-                        const denominator = regiflexTotal > 0 ? regiflexTotal : 1;
-                        const width = Math.min(Math.max((entry.sum / denominator) * 100, 0), 100);
-                        return (
-                          <li key={`${entry.topic ?? 'regiflex'}-${index}`} className="space-y-2">
-                            <div className="flex items-center justify-between">
-                              <span className="text-sm font-medium text-slate-700">{entry.topic ?? `Tendencia ${index + 1}`}</span>
-                              <span className="text-lg font-semibold text-slate-900">{entry.sum.toFixed(2)}</span>
-                            </div>
-                            <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
-                              <div
-                                className="h-full rounded-full bg-gradient-to-r from-[#818CF8]/70 to-[#6366F1]/80"
-                                style={{ width: `${width}%` }}
-                              />
-                            </div>
-                          </li>
-                        );
-                      })}
-                    </ul>
+                    <div className="space-y-6">
+                      <div className="h-72">
+                        {regiflexPieData.length ? (
+                          <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                              <Pie
+                                data={regiflexPieData}
+                                dataKey="value"
+                                nameKey="topicLabel"
+                                innerRadius="45%"
+                                outerRadius="75%"
+                                paddingAngle={4}
+                                stroke="#ffffff"
+                                strokeWidth={1.5}
+                              >
+                                {regiflexPieData.map((_, index) => (
+                                  <Cell key={`regiflex-slice-${index}`} fill={REGIFLEX_COLORS[index % REGIFLEX_COLORS.length]} />
+                                ))}
+                              </Pie>
+                              <PieTooltip content={regiflexPieTooltip} cursor={{ stroke: '#6366f1', strokeDasharray: '4 4' }} />
+                            </PieChart>
+                          </ResponsiveContainer>
+                        ) : (
+                          <div className="flex h-full items-center justify-center rounded-xl border border-dashed border-slate-200 bg-white/60 p-6 text-sm text-slate-500">
+                            No hay datos suficientes para graficar.
+                          </div>
+                        )}
+                      </div>
+                      <div className="space-y-3">
+                        {sortedRegiflexEntries.length ? (
+                          <ul className="space-y-3">
+                            {sortedRegiflexEntries.map((entry, index) => {
+                              const denominator = regiflexTotal > 0 ? regiflexTotal : 1;
+                              const width = Math.min(Math.max((entry.value / denominator) * 100, 0), 100);
+                              const label = entry.topicLabel?.trim().length ? entry.topicLabel.trim() : `Tendencia ${index + 1}`;
+                              return (
+                                <li key={`${label}-${index}`} className="space-y-2">
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-sm font-medium text-slate-700">{label}</span>
+                                    <span className="text-lg font-semibold text-slate-900">{entry.value.toFixed(2)}</span>
+                                  </div>
+                                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+                                    <div
+                                      className="h-full rounded-full bg-gradient-to-r from-[#818CF8]/70 to-[#6366F1]/80"
+                                      style={{ width: `${width}%` }}
+                                    />
+                                  </div>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        ) : (
+                          <p className="text-sm text-slate-500">Sin registros suficientes para la tabla.</p>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 </div>
               </Card>
@@ -778,6 +1544,7 @@ export const InstrumentResults: React.FC = () => {
                 Promedios por tópicos con interpretación inmediata según las respuestas recientes.
               </p>
             </div>
+            {renderSectionDateSelect('dailyReview', 'Corte de seguimiento diario', 'Explora diferentes jornadas registradas.')}
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {dailyReview.map((entry: DailyReviewResult, index) => {
                 const badgeClass = buildBadgeClass(entry.color);
@@ -811,70 +1578,7 @@ export const InstrumentResults: React.FC = () => {
         </Card>
       ) : null}
 
-      <Card className="rounded-[28px] border border-white/35 bg-white/75 shadow-[0_30px_75px_-55px_rgba(15,23,42,0.45)] backdrop-blur" padding="lg">
-        <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
-          <div className="flex items-center gap-3">
-            <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-[#C7D2FE]/40 to-[#DBEAFE]/70 text-[#4338CA]">
-              <BarChart3 className="h-5 w-5" />
-            </span>
-            <div>
-              <h2 className="text-lg font-semibold text-slate-900">Planes de evolución</h2>
-              <p className="text-sm text-slate-600">
-                Define escenarios y crea colecciones de métricas personalizadas para tus próximos seguimientos.
-              </p>
-            </div>
-          </div>
-          <Button
-            type="button"
-            variant="primary"
-            className="bg-gradient-to-r from-[#1D4ED8] via-[#4338CA] to-[#6D28D9] text-white shadow-[0_20px_45px_-28px_rgba(37,99,235,0.7)] hover:brightness-110"
-          >
-            Configurar tablero
-          </Button>
-        </div>
-      </Card>
-
-      <Card className="rounded-[28px] border border-white/35 bg-white/80 shadow-[0_30px_85px_-55px_rgba(15,23,42,0.45)] backdrop-blur" padding="lg">
-        <div className="grid gap-6 lg:grid-cols-[2fr,3fr]">
-          <div className="flex flex-col justify-between">
-            <div className="space-y-4">
-              <span className="inline-flex items-center gap-2 rounded-full border border-white/60 bg-white/60 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.35em] text-[#4338CA]">
-                Agenda
-              </span>
-              <h2 className="text-lg font-semibold text-slate-900">Seguimiento temporal</h2>
-              <p className="text-sm text-slate-600">
-                Mantén tu cronología de hallazgos, próximos encuentros y hitos destacados vinculados a cada instrumento respondido.
-              </p>
-            </div>
-            <Button
-              type="button"
-              variant="outline"
-              className="mt-6 w-max border border-white/60 bg-white/60 text-[#4338CA] backdrop-blur hover:bg-white"
-            >
-              <Calendar className="mr-2 h-4 w-4" />
-              Ver agenda completa
-            </Button>
-          </div>
-
-          <div className="space-y-4">
-            {timelineMilestones.map((milestone) => (
-              <div
-                key={milestone.title}
-                className="rounded-2xl border border-white/60 bg-white/60 p-5 shadow-[0_18px_45px_-35px_rgba(79,70,229,0.45)]"
-              >
-                <div className="flex items-center justify-between">
-                  <h3 className="text-base font-semibold text-slate-900">{milestone.title}</h3>
-                  <span className="rounded-full border border-white/50 bg-white/70 px-3 py-1 text-xs font-semibold uppercase tracking-[0.35em] text-slate-500">
-                    {milestone.tag}
-                  </span>
-                </div>
-                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-500">{milestone.date}</p>
-                <p className="mt-2 text-sm text-slate-600">{milestone.description}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </Card>
+    
     </section>
   );
 };

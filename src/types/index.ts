@@ -191,10 +191,17 @@ export interface BaseVitalRecord {
   source: VitalSource;
 }
 
+export interface VitalPhoto {
+  type: string;
+  label: string;
+  path: string;
+}
+
 export interface NumericVitalRecord extends BaseVitalRecord {
   value: number | null;
   rawValue: string | null;
   unit: string | null;
+  photos?: VitalPhoto[];
 }
 
 export interface BloodPressureRecord extends BaseVitalRecord {
