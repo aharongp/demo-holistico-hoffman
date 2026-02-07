@@ -39,7 +39,10 @@ export const SignupForm: React.FC = () => {
     }
 
     // Save medical identification locally for demo purposes
-    const storedUser = JSON.parse(localStorage.getItem('hoffman_user') || 'null');
+    const storedUserRaw =
+      localStorage.getItem('hoffmann_user') ??
+      localStorage.getItem('hoffman_user');
+    const storedUser = JSON.parse(storedUserRaw || 'null');
     if (storedUser) {
       const medRecId = `medrec-${Date.now().toString()}`;
       const medical = {
@@ -52,9 +55,13 @@ export const SignupForm: React.FC = () => {
         createdAt: new Date().toISOString(),
       };
 
-      const existing = JSON.parse(localStorage.getItem('hoffman_medical_history') || '[]');
+      const existingRaw =
+        localStorage.getItem('hoffmann_medical_history') ??
+        localStorage.getItem('hoffman_medical_history');
+      const existing = JSON.parse(existingRaw || '[]');
       existing.push(medical);
-      localStorage.setItem('hoffman_medical_history', JSON.stringify(existing));
+      localStorage.setItem('hoffmann_medical_history', JSON.stringify(existing));
+      localStorage.removeItem('hoffman_medical_history');
     }
 
     navigate('/dashboard');

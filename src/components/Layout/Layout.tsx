@@ -31,8 +31,8 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         <header className="sm:hidden fixed inset-x-0 top-0 z-30 border-b border-white/70 bg-gradient-to-b from-[#f7f7f7] via-white to-[#e5e7eb] shadow-lg">
           <div className="mx-auto flex max-w-6xl items-center justify-between px-5 py-4">
             <div>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.4em] text-slate-400">Hoffman</p>
-              <h1 className="text-lg font-bold text-slate-800">Sistema Hoffman</h1>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.4em] text-slate-400">Hoffmann</p>
+              <h1 className="text-lg font-bold text-slate-800">Sistema Hoffmann</h1>
             </div>
             <button
               onClick={() => setSidebarOpen(true)}

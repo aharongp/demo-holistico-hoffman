@@ -56,7 +56,9 @@ const readStoredUserId = (): number | null => {
   }
 
   try {
-    const raw = window.localStorage.getItem('hoffman_user');
+    const raw =
+      window.localStorage.getItem('hoffmann_user') ??
+      window.localStorage.getItem('hoffman_user');
     if (!raw) {
       return null;
     }

@@ -191,7 +191,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ onClose }) => {
     <div className={`flex h-full w-full flex-col border-r border-white/60 ${sidebarBackgroundClass} shadow-2xl`}>
       <div className="flex items-center justify-between border-b border-white/70 bg-white/70 px-5 py-5 backdrop-blur">
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.4em] text-slate-400">Hoffman</p>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.4em] text-slate-400">Hoffmann</p>
           <h1 className="text-xl font-bold text-slate-800">Sistema Holístico</h1>
         </div>
         {onClose && (

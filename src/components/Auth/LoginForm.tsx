@@ -38,7 +38,7 @@ export const LoginForm: React.FC = () => {
           <div className="grid items-center gap-10 lg:grid-cols-[1.1fr_0.9fr]">
             <div className="space-y-8 text-center lg:text-left">
               <p className="inline-flex items-center rounded-full border border-white/60 bg-white/40 px-4 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-slate-600 shadow-sm backdrop-blur">
-                Hoffman Sistema Holistico
+                Hoffmann Sistema Holistico
               </p>
               <div className="space-y-4">
                 <h1 className="text-3xl font-semibold text-slate-900 sm:text-4xl lg:text-5xl">

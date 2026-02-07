@@ -42,9 +42,12 @@ interface ChangePasswordInput {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const USER_STORAGE_KEY = 'hoffman_user';
-const TOKEN_STORAGE_KEY = 'hoffman_token';
-const TOKEN_EXP_STORAGE_KEY = 'hoffman_token_exp';
+const USER_STORAGE_KEY = 'hoffmann_user';
+const TOKEN_STORAGE_KEY = 'hoffmann_token';
+const TOKEN_EXP_STORAGE_KEY = 'hoffmann_token_exp';
+const LEGACY_USER_STORAGE_KEY = 'hoffman_user';
+const LEGACY_TOKEN_STORAGE_KEY = 'hoffman_token';
+const LEGACY_TOKEN_EXP_STORAGE_KEY = 'hoffman_token_exp';
 
 const normalizeRole = (role: string | null | undefined): UserRole => {
   const value = (role ?? '').toString().trim().toLowerCase();
@@ -144,6 +147,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     localStorage.removeItem(USER_STORAGE_KEY);
     localStorage.removeItem(TOKEN_STORAGE_KEY);
     localStorage.removeItem(TOKEN_EXP_STORAGE_KEY);
+    localStorage.removeItem(LEGACY_USER_STORAGE_KEY);
+    localStorage.removeItem(LEGACY_TOKEN_STORAGE_KEY);
+    localStorage.removeItem(LEGACY_TOKEN_EXP_STORAGE_KEY);
   }, []);
 
   const saveSession = useCallback((nextUser: User, accessToken: string, expiresIn?: unknown) => {
@@ -151,6 +157,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setToken(accessToken);
     localStorage.setItem(USER_STORAGE_KEY, serializeUser(nextUser));
     localStorage.setItem(TOKEN_STORAGE_KEY, accessToken);
+    localStorage.removeItem(LEGACY_USER_STORAGE_KEY);
+    localStorage.removeItem(LEGACY_TOKEN_STORAGE_KEY);
+    localStorage.removeItem(LEGACY_TOKEN_EXP_STORAGE_KEY);
 
     if (expiresIn !== undefined && expiresIn !== null) {
       const expiresMs = parseExpiresIn(expiresIn);
@@ -395,9 +404,34 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     let cancelled = false;
 
     const bootstrap = () => {
-      const storedToken = localStorage.getItem(TOKEN_STORAGE_KEY);
-      const storedUserRaw = localStorage.getItem(USER_STORAGE_KEY);
-      const expiresAtRaw = localStorage.getItem(TOKEN_EXP_STORAGE_KEY);
+      const readWithMigration = (currentKey: string, legacyKey: string) => {
+        const currentValue = localStorage.getItem(currentKey);
+        if (currentValue !== null) {
+          localStorage.removeItem(legacyKey);
+          return currentValue;
+        }
+
+        const legacyValue = localStorage.getItem(legacyKey);
+        if (legacyValue !== null) {
+          localStorage.setItem(currentKey, legacyValue);
+          localStorage.removeItem(legacyKey);
+        }
+
+        return legacyValue;
+      };
+
+      const storedToken = readWithMigration(
+        TOKEN_STORAGE_KEY,
+        LEGACY_TOKEN_STORAGE_KEY,
+      );
+      const storedUserRaw = readWithMigration(
+        USER_STORAGE_KEY,
+        LEGACY_USER_STORAGE_KEY,
+      );
+      const expiresAtRaw = readWithMigration(
+        TOKEN_EXP_STORAGE_KEY,
+        LEGACY_TOKEN_EXP_STORAGE_KEY,
+      );
 
       if (storedToken && tokenIsExpired(expiresAtRaw)) {
         clearSession();
@@ -419,6 +453,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         } catch (error) {
           console.error('Failed to hydrate stored user', error);
           localStorage.removeItem(USER_STORAGE_KEY);
+          localStorage.removeItem(LEGACY_USER_STORAGE_KEY);
         }
       }
 
