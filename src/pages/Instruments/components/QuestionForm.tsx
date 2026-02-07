@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import { Button } from '../../../components/UI/Button';
-import { Question, QuestionOption } from '../../../types';
+import { InstrumentTopic, Question, QuestionOption } from '../../../types';
 
 type QuestionFormMode = 'create' | 'edit';
 
@@ -11,6 +11,7 @@ type QuestionFormValues = {
   order: number | '';
   required: boolean;
   options: QuestionOption[];
+  topicId: string;
 };
 
 type QuestionFormSubmitPayload = {
@@ -19,6 +20,7 @@ type QuestionFormSubmitPayload = {
   order?: number;
   required: boolean;
   options?: QuestionOption[];
+  topicId?: string | null;
 };
 
 type QuestionFormProps = {
@@ -27,6 +29,7 @@ type QuestionFormProps = {
   onSubmit: (values: QuestionFormSubmitPayload) => Promise<void> | void;
   onCancel: () => void;
   isSubmitting?: boolean;
+  topics: InstrumentTopic[];
 };
 
 const QUESTION_TYPE_OPTIONS: Array<{ value: Question['type']; label: string }> = [
@@ -95,6 +98,7 @@ export const QuestionForm: React.FC<QuestionFormProps> = ({
   onSubmit,
   onCancel,
   isSubmitting = false,
+  topics = [],
 }) => {
   const defaults: QuestionFormValues = useMemo(() => {
     const baseType = initialValues?.type ?? 'text';
@@ -125,12 +129,25 @@ export const QuestionForm: React.FC<QuestionFormProps> = ({
       ? ensureOptionFields(normalizedOptions)
       : normalizedOptions;
 
+    const resolveTopic = () => {
+      const rawTopic = initialValues?.topicId;
+      if (rawTopic === null || typeof rawTopic === 'undefined') {
+        return '';
+      }
+      if (typeof rawTopic === 'string') {
+        return rawTopic;
+      }
+      const text = String(rawTopic).trim();
+      return text.length ? text : '';
+    };
+
     return {
       text: initialValues?.text ?? '',
       type: baseType,
       order: typeof initialValues?.order === 'number' ? initialValues.order : '',
       required: initialValues?.required ?? true,
       options: preparedOptions,
+      topicId: resolveTopic(),
     };
   }, [initialValues]);
 
@@ -141,11 +158,12 @@ export const QuestionForm: React.FC<QuestionFormProps> = ({
     order: null,
     required: null,
     options: null,
+    topicId: null,
   });
 
   useEffect(() => {
     setValues(defaults);
-    setErrors({ text: null, type: null, order: null, required: null, options: null });
+    setErrors({ text: null, type: null, order: null, required: null, options: null, topicId: null });
   }, [defaults]);
 
   const handleChange = (field: keyof QuestionFormValues) => (
@@ -179,6 +197,10 @@ export const QuestionForm: React.FC<QuestionFormProps> = ({
           return { ...prev, order: numericValue };
         }
         return prev;
+      }
+
+      if (field === 'topicId') {
+        return { ...prev, topicId: target.value };
       }
 
       if (field === 'required' && target instanceof HTMLInputElement && target.type === 'checkbox') {
@@ -246,6 +268,7 @@ export const QuestionForm: React.FC<QuestionFormProps> = ({
       order: null,
       required: null,
       options: null,
+      topicId: null,
     };
 
     const trimmedText = values.text.trim();
@@ -310,6 +333,9 @@ export const QuestionForm: React.FC<QuestionFormProps> = ({
       required: values.required,
     };
 
+    const topicIdValue = values.topicId.trim();
+    payload.topicId = topicIdValue.length ? topicIdValue : null;
+
     const sanitizedOptions = normalizeOptionEntries(values.options);
     if (requiresOptions(values.type) && sanitizedOptions.length) {
       payload.options = sanitizedOptions;
@@ -324,6 +350,42 @@ export const QuestionForm: React.FC<QuestionFormProps> = ({
 
   return (
     <form className="space-y-6" onSubmit={handleSubmit}>
+      <div className="space-y-2">
+        <label className="block text-sm font-medium text-gray-700" htmlFor="question-topic">
+          Tópico asociado
+        </label>
+        <select
+          id="question-topic"
+          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          value={values.topicId}
+          onChange={handleChange('topicId')}
+          disabled={isSubmitting}
+        >
+          <option value="">Sin tópico</option>
+          {values.topicId && !topics.some((topic) => {
+            const rawId = topic.id ?? '';
+            const topicIdValue = typeof rawId === 'string' ? rawId : String(rawId);
+            return topicIdValue === values.topicId;
+          }) ? (
+            <option value={values.topicId}>Tópico no disponible</option>
+          ) : null}
+          {topics.map((topic) => {
+            const value = topic.id ?? '';
+            const optionValue = typeof value === 'string' ? value : String(value);
+            return (
+              <option key={topic.id} value={optionValue}>
+                {topic.name}
+              </option>
+            );
+          })}
+        </select>
+        {topics.length === 0 ? (
+          <p className="text-xs text-gray-500">
+            Agrega tópicos al instrumento para poder asociarlos a las preguntas.
+          </p>
+        ) : null}
+      </div>
+
       <div className="space-y-2">
         <label className="block text-sm font-medium text-gray-700" htmlFor="question-text">
           Pregunta

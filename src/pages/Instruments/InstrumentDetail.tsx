@@ -6,7 +6,7 @@ import { Button } from '../../components/UI/Button';
 import { Table } from '../../components/UI/Table';
 import { Modal } from '../../components/UI/Modal';
 import { useApp } from '../../context/AppContext';
-import { Instrument, Patient, Question, QuestionOption } from '../../types';
+import { Instrument, InstrumentTopic, Patient, Question, QuestionOption } from '../../types';
 import { QuestionForm } from './components/QuestionForm';
 
 type PreviewOption = { key: string; label: string; color?: string | null };
@@ -127,6 +127,10 @@ export const InstrumentDetail: React.FC = () => {
     updateQuestion,
     deleteQuestion,
     assignInstrumentToPatients,
+    getInstrumentTopics,
+    createInstrumentTopic,
+    updateInstrumentTopic,
+    deleteInstrumentTopic,
     patients,
     programs,
   } = useApp();
@@ -151,9 +155,31 @@ export const InstrumentDetail: React.FC = () => {
   const [assignStatusFilter, setAssignStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
   const [assignAssignmentFilter, setAssignAssignmentFilter] = useState<'all' | 'assigned' | 'unassigned'>('all');
   const [assignGenderFilter, setAssignGenderFilter] = useState<'all' | Patient['gender']>('all');
+  const [activeTab, setActiveTab] = useState<'overview' | 'questions' | 'topics'>('overview');
+  const [isTopicModalOpen, setIsTopicModalOpen] = useState(false);
+  const [topicFormMode, setTopicFormMode] = useState<'create' | 'edit'>('create');
+  const [topicFormName, setTopicFormName] = useState('');
+  const [topicFormVisible, setTopicFormVisible] = useState(true);
+  const [topicFormError, setTopicFormError] = useState<string | null>(null);
+  const [isTopicSaving, setIsTopicSaving] = useState(false);
+  const [topicSelection, setTopicSelection] = useState<InstrumentTopic | null>(null);
+  const [topicDeletionTarget, setTopicDeletionTarget] = useState<InstrumentTopic | null>(null);
+  const [isTopicDeleting, setIsTopicDeleting] = useState(false);
+  const [topicDeletionError, setTopicDeletionError] = useState<string | null>(null);
+  const topicsLoadedRef = useRef(false);
 
   const formatQuestionType = useCallback((type: Question['type']): string => {
     return QUESTION_TYPE_LABEL[type] ?? type;
+  }, []);
+
+  const formatTopicVisibility = useCallback((topic: InstrumentTopic): string => {
+    if (topic.isVisible === true) {
+      return 'Sí';
+    }
+    if (topic.isVisible === false) {
+      return 'No';
+    }
+    return '—';
   }, []);
 
   const sortQuestions = useCallback((list: Question[]): Question[] => {
@@ -170,6 +196,25 @@ export const InstrumentDetail: React.FC = () => {
     }
     return instrument.questions.filter((question) => question.required);
   }, [instrument]);
+
+  const instrumentTopics = useMemo(() => {
+    if (!instrument?.topics?.length) {
+      return [] as InstrumentTopic[];
+    }
+    return [...instrument.topics].sort((a, b) => a.name.localeCompare(b.name, 'es', { sensitivity: 'base' }));
+  }, [instrument]);
+
+  const currentInstrumentId = instrument?.id ?? null;
+
+  useEffect(() => {
+    topicsLoadedRef.current = false;
+  }, [instrumentId]);
+
+  const tabOptions = useMemo(() => ([
+    { value: 'overview' as const, label: 'Resumen' },
+    { value: 'questions' as const, label: 'Preguntas' },
+    { value: 'topics' as const, label: 'Tópicos' },
+  ]), []);
 
   const programNameById = useMemo(() => {
     const lookup: Record<string, string> = {};
@@ -449,6 +494,77 @@ export const InstrumentDetail: React.FC = () => {
     };
   }, [instrumentId, getInstrumentDetails]);
 
+  useEffect(() => {
+    if (!currentInstrumentId) {
+      return;
+    }
+
+    if (instrument?.topics && instrument.topics.length) {
+      topicsLoadedRef.current = true;
+      return;
+    }
+
+    if (topicsLoadedRef.current) {
+      return;
+    }
+
+    let cancelled = false;
+    topicsLoadedRef.current = true;
+
+    (async () => {
+      try {
+        const topics = await getInstrumentTopics(currentInstrumentId);
+        if (cancelled) {
+          return;
+        }
+        setInstrument((prev) => {
+          if (!prev || prev.id !== currentInstrumentId) {
+            return prev;
+          }
+          return { ...prev, topics };
+        });
+      } catch (prefetchError) {
+        console.error('Failed to preload topics for instrument detail', prefetchError);
+        if (!cancelled) {
+          topicsLoadedRef.current = false;
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentInstrumentId, instrument?.topics?.length, getInstrumentTopics]);
+
+  useEffect(() => {
+    if (!currentInstrumentId || activeTab !== 'topics') {
+      return;
+    }
+
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const topics = await getInstrumentTopics(currentInstrumentId);
+        if (cancelled) {
+          return;
+        }
+        setInstrument((prev) => {
+          if (!prev || prev.id !== currentInstrumentId) {
+            return prev;
+          }
+          return { ...prev, topics };
+        });
+      } catch (refreshError) {
+        console.error('Failed to refresh topics for instrument detail', refreshError);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, currentInstrumentId, getInstrumentTopics]);
+
   const handleOpenCreateForm = useCallback(() => {
     if (!instrument) return;
     setFormMode('create');
@@ -470,7 +586,7 @@ export const InstrumentDetail: React.FC = () => {
     setActionError(null);
   }, []);
 
-  const handleSubmitForm = useCallback(async (values: { text: string; type: Question['type']; order?: number; required: boolean; options?: string[] }) => {
+  const handleSubmitForm = useCallback(async (values: { text: string; type: Question['type']; order?: number; required: boolean; options?: QuestionOption[]; topicId?: string | null }) => {
     if (!instrument) return;
     setIsSaving(true);
     try {
@@ -589,8 +705,128 @@ export const InstrumentDetail: React.FC = () => {
       const next = new Set(prev);
       filteredPatients.forEach((patient) => next.add(patient.id));
       return Array.from(next);
+
     });
   }, [filteredPatients]);
+
+
+  const handleOpenCreateTopic = useCallback(() => {
+    setTopicFormMode('create');
+    setTopicSelection(null);
+    setTopicFormName('');
+    setTopicFormVisible(true);
+    setTopicFormError(null);
+    setIsTopicModalOpen(true);
+  }, []);
+
+  const handleOpenEditTopic = useCallback((topic: InstrumentTopic) => {
+    setTopicFormMode('edit');
+    setTopicSelection(topic);
+    setTopicFormName(topic.name);
+    setTopicFormVisible(topic.isVisible !== false);
+    setTopicFormError(null);
+    setIsTopicModalOpen(true);
+  }, []);
+
+  const handleCloseTopicModal = useCallback(() => {
+    if (isTopicSaving) {
+      return;
+    }
+    setIsTopicModalOpen(false);
+    setTopicSelection(null);
+    setTopicFormError(null);
+  }, [isTopicSaving]);
+
+  const handleSubmitTopicForm = useCallback(async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!currentInstrumentId) {
+      return;
+    }
+
+    const trimmedName = topicFormName.trim();
+    if (!trimmedName.length) {
+      setTopicFormError('El nombre del tópico es obligatorio.');
+      return;
+    }
+
+    setIsTopicSaving(true);
+    setTopicFormError(null);
+
+    try {
+      const input = {
+        name: trimmedName,
+        isVisible: topicFormVisible,
+      };
+
+      let topic: InstrumentTopic;
+      if (topicFormMode === 'edit' && topicSelection) {
+        topic = await updateInstrumentTopic(currentInstrumentId, topicSelection.id, input);
+      } else {
+        topic = await createInstrumentTopic(currentInstrumentId, input);
+      }
+
+      setInstrument((prev) => {
+        if (!prev || prev.id !== currentInstrumentId) {
+          return prev;
+        }
+        const previous = Array.isArray(prev.topics) ? prev.topics : [];
+        const next = [...previous.filter((existing) => existing.id !== topic.id), topic]
+          .sort((a, b) => a.name.localeCompare(b.name, 'es', { sensitivity: 'base' }));
+        return { ...prev, topics: next };
+      });
+
+      setIsTopicModalOpen(false);
+      setTopicSelection(null);
+    } catch (submitError) {
+      console.error('Failed to save topic', submitError);
+      const message = submitError instanceof Error ? submitError.message : 'No se pudo guardar el tópico.';
+      setTopicFormError(message);
+    } finally {
+      setIsTopicSaving(false);
+    }
+  }, [currentInstrumentId, topicFormName, topicFormVisible, topicFormMode, topicSelection, createInstrumentTopic, updateInstrumentTopic]);
+
+  const handleConfirmDeleteTopic = useCallback((topic: InstrumentTopic) => {
+    setTopicDeletionTarget(topic);
+    setTopicDeletionError(null);
+  }, []);
+
+  const handleCancelDeleteTopic = useCallback(() => {
+    if (isTopicDeleting) {
+      return;
+    }
+    setTopicDeletionTarget(null);
+    setTopicDeletionError(null);
+  }, [isTopicDeleting]);
+
+  const handleDeleteTopic = useCallback(async () => {
+    if (!currentInstrumentId || !topicDeletionTarget) {
+      return;
+    }
+
+    setIsTopicDeleting(true);
+    setTopicDeletionError(null);
+
+    try {
+      await deleteInstrumentTopic(currentInstrumentId, topicDeletionTarget.id);
+      const removedTopicId = topicDeletionTarget.id;
+      setInstrument((prev) => {
+        if (!prev || prev.id !== currentInstrumentId) {
+          return prev;
+        }
+        const previous = Array.isArray(prev.topics) ? prev.topics : [];
+        const next = previous.filter((topic) => topic.id !== removedTopicId);
+        return { ...prev, topics: next };
+      });
+      setTopicDeletionTarget(null);
+    } catch (deleteError) {
+      console.error('Failed to delete topic', deleteError);
+      const message = deleteError instanceof Error ? deleteError.message : 'No se pudo eliminar el tópico.';
+      setTopicDeletionError(message);
+    } finally {
+      setIsTopicDeleting(false);
+    }
+  }, [currentInstrumentId, topicDeletionTarget, deleteInstrumentTopic]);
 
   const handleAssignSubmit = useCallback(async () => {
     if (!instrument?.instrumentTypeId) {
@@ -701,6 +937,63 @@ export const InstrumentDetail: React.FC = () => {
       ),
     },
   ], [formatQuestionType, handleDeleteQuestion, handleOpenEditForm, isSaving, pendingQuestionId]);
+  const topicColumns = useMemo(() => [
+    {
+      key: 'name',
+      header: 'Nombre',
+      render: (topic: InstrumentTopic) => (
+        <div className="space-y-1">
+          <p className="font-medium text-slate-900">{topic.name}</p>
+          <p className="text-xs text-slate-500">{topic.createdBy ?? '—'}</p>
+        </div>
+      ),
+    },
+    {
+      key: 'visibility',
+      header: 'Visible',
+      render: (topic: InstrumentTopic) => formatTopicVisibility(topic),
+    },
+    {
+      key: 'updatedAt',
+      header: 'Actualizado',
+      render: (topic: InstrumentTopic) => formatDateTime(topic.updatedAt ?? topic.createdAt ?? null),
+    },
+    {
+      key: 'actions',
+      header: '',
+      className: 'text-right',
+      render: (topic: InstrumentTopic) => (
+        <div className="flex justify-end gap-2">
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={(event) => {
+              event.stopPropagation();
+              handleOpenEditTopic(topic);
+            }}
+            disabled={isTopicSaving || isTopicDeleting}
+          >
+            <Edit3 className="mr-1 h-4 w-4" />
+            <span className="hidden sm:inline">Modificar</span>
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="danger"
+            onClick={(event) => {
+              event.stopPropagation();
+              handleConfirmDeleteTopic(topic);
+            }}
+            disabled={isTopicDeleting}
+          >
+            <Trash2 className="mr-1 h-4 w-4" />
+            <span className="hidden sm:inline">Eliminar</span>
+          </Button>
+        </div>
+      ),
+    },
+  ], [formatTopicVisibility, handleConfirmDeleteTopic, handleOpenEditTopic, isTopicDeleting, isTopicSaving]);
 
   if (isLoading) {
     return (
@@ -821,130 +1114,319 @@ export const InstrumentDetail: React.FC = () => {
         </div>
       </div>
 
-      <Card className="border border-white/50 bg-white/85 shadow-[0_30px_90px_rgba(15,23,42,0.12)] backdrop-blur">
-        <div className="p-6 space-y-6">
-          <div className="flex items-start gap-3">
-            <div className="rounded-2xl bg-slate-900/5 p-3 text-slate-600">
-              <BookOpen className="w-5 h-5" />
+      <div className="flex flex-wrap items-center gap-3">
+        {tabOptions.map((tab) => {
+          const isActive = activeTab === tab.value;
+          const badgeCount = (() => {
+            if (tab.value === 'questions') {
+              return instrument.questions.length;
+            }
+            if (tab.value === 'topics') {
+              return instrumentTopics.length;
+            }
+            return null;
+          })();
+          return (
+            <button
+              key={tab.value}
+              type="button"
+              onClick={() => setActiveTab(tab.value)}
+              className={`flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition ${
+                isActive
+                  ? 'bg-gradient-to-r from-[#1F2937] via-[#303A4A] to-[#4B5563] text-white shadow-[0_18px_35px_rgba(31,41,55,0.25)]'
+                  : 'border border-white/60 bg-white/70 text-slate-600 shadow-inner shadow-white/40 hover:text-slate-900'
+              }`}
+              aria-pressed={isActive}
+            >
+              <span>{tab.label}</span>
+              {badgeCount !== null ? (
+                <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${isActive ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'}`}>
+                  {badgeCount}
+                </span>
+              ) : null}
+            </button>
+          );
+        })}
+      </div>
+
+      {activeTab === 'overview' ? (
+        <Card className="border border-white/50 bg-white/85 shadow-[0_30px_90px_rgba(15,23,42,0.12)] backdrop-blur">
+          <div className="p-6 space-y-6">
+            <div className="flex items-start gap-3">
+              <div className="rounded-2xl bg-slate-900/5 p-3 text-slate-600">
+                <BookOpen className="w-5 h-5" />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold text-slate-900">Descripción</h2>
+                <p className="text-slate-600 mt-1 leading-relaxed">
+                  {instrument.description || 'Sin descripción disponible para este instrumento.'}
+                </p>
+              </div>
             </div>
-            <div>
-              <h2 className="text-lg font-semibold text-slate-900">Descripción</h2>
-              <p className="text-slate-600 mt-1 leading-relaxed">
-                {instrument.description || 'Sin descripción disponible para este instrumento.'}
-              </p>
+
+            <div className="grid grid-cols-1 gap-4 text-sm text-slate-700 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="flex flex-col rounded-2xl border border-white/60 bg-white/70 p-4">
+                <span className="uppercase text-xs text-slate-400">Tema</span>
+                <span className="font-semibold text-slate-900">{instrument.subjectName ?? '—'}</span>
+              </div>
+              <div className="flex flex-col rounded-2xl border border-white/60 bg-white/70 p-4">
+                <span className="uppercase text-xs text-slate-400">Tipo de instrumento</span>
+                <span className="font-semibold text-slate-900">{instrument.instrumentTypeId ?? '—'}</span>
+              </div>
+              <div className="flex flex-col rounded-2xl border border-white/60 bg-white/70 p-4">
+                <span className="uppercase text-xs text-slate-400">Disponibilidad</span>
+                <span className="font-semibold text-slate-900">{instrument.availability ?? '—'}</span>
+              </div>
+              <div className="flex flex-col rounded-2xl border border-white/60 bg-white/70 p-4">
+                <span className="uppercase text-xs text-slate-400">Recurso</span>
+                <span className="font-semibold text-slate-900">{instrument.resource ?? '—'}</span>
+              </div>
+              <div className="flex flex-col rounded-2xl border border-white/60 bg-white/70 p-4">
+                <span className="uppercase text-xs text-slate-400">Entrega de resultados</span>
+                <span className="font-semibold text-slate-900">
+                  {instrument.resultDelivery ? (instrument.resultDelivery === 'sistema' ? 'Sistema' : 'Programado') : '—'}
+                </span>
+              </div>
+              <div className="flex flex-col rounded-2xl border border-white/60 bg-white/70 p-4">
+                <span className="uppercase text-xs text-slate-400">Resalta respuestas</span>
+                <span className="font-semibold text-slate-900">{instrument.colorResponse === 1 ? 'Sí' : 'No'}</span>
+              </div>
+              <div className="flex flex-col rounded-2xl border border-white/60 bg-white/70 p-4">
+                <span className="uppercase text-xs text-slate-400">Estado</span>
+                <span className={`font-semibold ${instrument.isActive ? 'text-emerald-600' : 'text-rose-600'}`}>
+                  {instrument.isActive ? 'Activo' : 'Inactivo'}
+                </span>
+              </div>
+              <div className="flex flex-col rounded-2xl border border-white/60 bg-white/70 p-4">
+                <span className="uppercase text-xs text-slate-400">Duración estimada</span>
+                <span className="font-semibold text-slate-900">{formatDuration(instrument.estimatedDuration)}</span>
+              </div>
+              <div className="flex flex-col rounded-2xl border border-white/60 bg-white/70 p-4">
+                <span className="uppercase text-xs text-slate-400">Creado por</span>
+                <span className="font-semibold text-slate-900">{instrument.createdBy ?? '—'}</span>
+              </div>
+              <div className="flex flex-col rounded-2xl border border-white/60 bg-white/70 p-4">
+                <span className="uppercase text-xs text-slate-400">Fecha de creación</span>
+                <span className="font-semibold text-slate-900">{formatDateTime(instrument.createdAt)}</span>
+              </div>
+              <div className="flex flex-col rounded-2xl border border-white/60 bg-white/70 p-4">
+                <span className="uppercase text-xs text-slate-400">Última actualización</span>
+                <span className="font-semibold text-slate-900">{formatDateTime(instrument.updatedAt)}</span>
+              </div>
             </div>
           </div>
+        </Card>
+      ) : null}
 
-          <div className="grid grid-cols-1 gap-4 text-sm text-slate-700 sm:grid-cols-2 lg:grid-cols-3">
-            <div className="flex flex-col rounded-2xl border border-white/60 bg-white/70 p-4">
-              <span className="uppercase text-xs text-slate-400">Tema</span>
-              <span className="font-semibold text-slate-900">{instrument.subjectName ?? '—'}</span>
+      {activeTab === 'questions' ? (
+        <Card className="border border-white/50 bg-white/85 shadow-[0_30px_90px_rgba(15,23,42,0.12)] backdrop-blur">
+          <div className="p-6 space-y-4">
+            {assignSuccessMessage ? (
+              <div className="rounded-2xl border border-emerald-200/70 bg-emerald-50/80 px-4 py-3 text-sm text-emerald-700">
+                {assignSuccessMessage}
+              </div>
+            ) : null}
+
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <h2 className="text-xl font-semibold text-slate-900">Preguntas</h2>
+                <p className="text-sm text-slate-600">
+                  {instrument.questions.length ? `Total de preguntas: ${instrument.questions.length}` : 'Este instrumento aún no tiene preguntas registradas.'}
+                </p>
+              </div>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleOpenPreview}
+                  disabled={activeQuestions.length === 0}
+                  className="rounded-full border border-white/60 bg-white/60 px-5 py-2 text-sm font-semibold text-slate-700 shadow-inner shadow-white/40 backdrop-blur disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Previsualizar preguntas
+                </Button>
+                <Button
+                  type="button"
+                  variant="primary"
+                  onClick={handleOpenCreateForm}
+                  disabled={isSaving || Boolean(pendingQuestionId)}
+                  className="rounded-full bg-gradient-to-r from-[#1F2937] via-[#303A4A] to-[#4B5563] px-5 py-2 text-sm font-semibold text-white shadow-lg shadow-slate-900/30 transition hover:translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Agregar pregunta
+                </Button>
+              </div>
             </div>
-            <div className="flex flex-col rounded-2xl border border-white/60 bg-white/70 p-4">
-              <span className="uppercase text-xs text-slate-400">Tipo de instrumento</span>
-              <span className="font-semibold text-slate-900">{instrument.instrumentTypeId ?? '—'}</span>
-            </div>
-            <div className="flex flex-col rounded-2xl border border-white/60 bg-white/70 p-4">
-              <span className="uppercase text-xs text-slate-400">Disponibilidad</span>
-              <span className="font-semibold text-slate-900">{instrument.availability ?? '—'}</span>
-            </div>
-            <div className="flex flex-col rounded-2xl border border-white/60 bg-white/70 p-4">
-              <span className="uppercase text-xs text-slate-400">Recurso</span>
-              <span className="font-semibold text-slate-900">{instrument.resource ?? '—'}</span>
-            </div>
-            <div className="flex flex-col rounded-2xl border border-white/60 bg-white/70 p-4">
-              <span className="uppercase text-xs text-slate-400">Entrega de resultados</span>
-              <span className="font-semibold text-slate-900">
-                {instrument.resultDelivery ? (instrument.resultDelivery === 'sistema' ? 'Sistema' : 'Programado') : '—'}
-              </span>
-            </div>
-            <div className="flex flex-col rounded-2xl border border-white/60 bg-white/70 p-4">
-              <span className="uppercase text-xs text-slate-400">Resalta respuestas</span>
-              <span className="font-semibold text-slate-900">{instrument.colorResponse === 1 ? 'Sí' : 'No'}</span>
-            </div>
-            <div className="flex flex-col rounded-2xl border border-white/60 bg-white/70 p-4">
-              <span className="uppercase text-xs text-slate-400">Estado</span>
-              <span className={`font-semibold ${instrument.isActive ? 'text-emerald-600' : 'text-rose-600'}`}>
-                {instrument.isActive ? 'Activo' : 'Inactivo'}
-              </span>
-            </div>
-            <div className="flex flex-col rounded-2xl border border-white/60 bg-white/70 p-4">
-              <span className="uppercase text-xs text-slate-400">Duración estimada</span>
-              <span className="font-semibold text-slate-900">{formatDuration(instrument.estimatedDuration)}</span>
-            </div>
-            <div className="flex flex-col rounded-2xl border border-white/60 bg-white/70 p-4">
-              <span className="uppercase text-xs text-slate-400">Creado por</span>
-              <span className="font-semibold text-slate-900">{instrument.createdBy ?? '—'}</span>
-            </div>
-            <div className="flex flex-col rounded-2xl border border-white/60 bg-white/70 p-4">
-              <span className="uppercase text-xs text-slate-400">Fecha de creación</span>
-              <span className="font-semibold text-slate-900">{formatDateTime(instrument.createdAt)}</span>
-            </div>
-            <div className="flex flex-col rounded-2xl border border-white/60 bg-white/70 p-4">
-              <span className="uppercase text-xs text-slate-400">Última actualización</span>
-              <span className="font-semibold text-slate-900">{formatDateTime(instrument.updatedAt)}</span>
-            </div>
+
+            {!isFormOpen && actionError ? (
+              <div className="rounded-2xl border border-rose-200/70 bg-rose-50/80 px-4 py-3 text-sm text-rose-600">
+                {actionError}
+              </div>
+            ) : null}
+
+            {instrument.questions.length === 0 ? (
+              <div className="rounded-3xl border border-white/60 bg-white/70 py-10 text-center text-sm text-slate-500">
+                No hay preguntas registradas para este instrumento.
+              </div>
+            ) : (
+              <Table
+                data={instrument.questions}
+                columns={questionColumns}
+                rowKey={(question) => question.id}
+              />
+            )}
           </div>
-        </div>
-      </Card>
+        </Card>
+      ) : null}
 
-      <Card className="border border-white/50 bg-white/85 shadow-[0_30px_90px_rgba(15,23,42,0.12)] backdrop-blur">
-        <div className="p-6 space-y-4">
-          {assignSuccessMessage ? (
-            <div className="rounded-2xl border border-emerald-200/70 bg-emerald-50/80 px-4 py-3 text-sm text-emerald-700">
-              {assignSuccessMessage}
+      {activeTab === 'topics' ? (
+        <Card className="border border-white/50 bg-white/85 shadow-[0_30px_90px_rgba(15,23,42,0.12)] backdrop-blur">
+          <div className="p-6 space-y-4">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.35em] text-slate-500">
+                  <BookOpen className="h-4 w-4" />
+                  <span>Tópicos</span>
+                </div>
+                <p className="text-sm text-slate-600">
+                  {instrumentTopics.length
+                    ? `Total de tópicos: ${instrumentTopics.length}`
+                    : 'Este instrumento aún no tiene tópicos registrados.'}
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="primary"
+                  onClick={handleOpenCreateTopic}
+                  disabled={isTopicSaving || isTopicModalOpen}
+                  className="flex items-center gap-2 rounded-full bg-gradient-to-r from-[#1F2937] via-[#303A4A] to-[#4B5563] px-5 py-2 text-sm font-semibold text-white shadow-lg shadow-slate-900/30 transition hover:translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <Plus className="h-4 w-4" />
+                  Agregar tópico
+                </Button>
+              </div>
             </div>
-          ) : null}
 
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <h2 className="text-xl font-semibold text-slate-900">Preguntas</h2>
-              <p className="text-sm text-slate-600">
-                {instrument.questions.length ? `Total de preguntas: ${instrument.questions.length}` : 'Este instrumento aún no tiene preguntas registradas.'}
-              </p>
-            </div>
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={handleOpenPreview}
-                disabled={activeQuestions.length === 0}
-                className="rounded-full border border-white/60 bg-white/60 px-5 py-2 text-sm font-semibold text-slate-700 shadow-inner shadow-white/40 backdrop-blur disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                Previsualizar preguntas
-              </Button>
-              <Button
-                type="button"
-                variant="primary"
-                onClick={handleOpenCreateForm}
-                disabled={isSaving || Boolean(pendingQuestionId)}
-                className="rounded-full bg-gradient-to-r from-[#1F2937] via-[#303A4A] to-[#4B5563] px-5 py-2 text-sm font-semibold text-white shadow-lg shadow-slate-900/30 transition hover:translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Agregar pregunta
-              </Button>
-            </div>
+            {instrumentTopics.length === 0 ? (
+              <div className="rounded-3xl border border-white/60 bg-white/70 py-10 text-center text-sm text-slate-500">
+                No hay tópicos registrados para este instrumento.
+              </div>
+            ) : (
+              <Table
+                data={instrumentTopics}
+                columns={topicColumns}
+                rowKey={(topic) => topic.id}
+              />
+            )}
           </div>
+        </Card>
+      ) : null}
 
-          {!isFormOpen && actionError ? (
+      <Modal
+        isOpen={isTopicModalOpen}
+        onClose={handleCloseTopicModal}
+        title={topicFormMode === 'create' ? 'Agregar tópico' : 'Editar tópico'}
+        size="sm"
+      >
+        <form onSubmit={handleSubmitTopicForm} className="space-y-4">
+          {topicFormError ? (
             <div className="rounded-2xl border border-rose-200/70 bg-rose-50/80 px-4 py-3 text-sm text-rose-600">
-              {actionError}
+              {topicFormError}
             </div>
           ) : null}
 
-          {instrument.questions.length === 0 ? (
-            <div className="rounded-3xl border border-white/60 bg-white/70 py-10 text-center text-sm text-slate-500">
-              No hay preguntas registradas para este instrumento.
-            </div>
-          ) : (
-            <Table
-              data={instrument.questions}
-              columns={questionColumns}
-              rowKey={(question) => question.id}
+          <div>
+            <label
+              htmlFor="topic-name"
+              className="mb-2 block text-xs font-semibold uppercase tracking-[0.35em] text-slate-500"
+            >
+              Nombre del tópico
+            </label>
+            <input
+              id="topic-name"
+              type="text"
+              value={topicFormName}
+              onChange={(event) => setTopicFormName(event.target.value)}
+              className="w-full rounded-2xl border border-slate-200/70 bg-white/90 px-3 py-2 text-sm text-slate-700 shadow-inner focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200"
+              placeholder="Ej. Salud emocional"
+              disabled={isTopicSaving}
             />
-          )}
+          </div>
+
+          <label className="inline-flex items-center gap-2 text-sm text-slate-700">
+            <input
+              type="checkbox"
+              checked={topicFormVisible}
+              onChange={(event) => setTopicFormVisible(event.target.checked)}
+              disabled={isTopicSaving}
+              className="h-4 w-4 rounded border-slate-300 text-slate-700 focus:ring-slate-400"
+            />
+            <span>Mostrar este tópico en el instrumento</span>
+          </label>
+
+          <div className="flex justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleCloseTopicModal}
+              disabled={isTopicSaving}
+              className="rounded-full px-5 py-2 text-sm"
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              disabled={isTopicSaving}
+              className="rounded-full px-5 py-2 text-sm"
+            >
+              {isTopicSaving ? 'Guardando...' : 'Guardar'}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal
+        isOpen={Boolean(topicDeletionTarget)}
+        onClose={handleCancelDeleteTopic}
+        title="Eliminar tópico"
+        size="sm"
+      >
+        <div className="space-y-4">
+          {topicDeletionError ? (
+            <div className="rounded-2xl border border-rose-200/70 bg-rose-50/80 px-4 py-3 text-sm text-rose-600">
+              {topicDeletionError}
+            </div>
+          ) : null}
+
+          <p className="text-sm text-slate-600">
+            ¿Deseas eliminar el tópico{' '}
+            <span className="font-semibold text-slate-900">{topicDeletionTarget?.name ?? 'este tópico'}</span>?
+            Esta acción no se puede deshacer.
+          </p>
+
+          <div className="flex justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleCancelDeleteTopic}
+              disabled={isTopicDeleting}
+              className="rounded-full px-5 py-2 text-sm"
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              variant="danger"
+              onClick={handleDeleteTopic}
+              disabled={isTopicDeleting}
+              className="rounded-full px-5 py-2 text-sm"
+            >
+              {isTopicDeleting ? 'Eliminando...' : 'Eliminar'}
+            </Button>
+          </div>
         </div>
-      </Card>
+      </Modal>
 
       <Modal
         isOpen={isAssignModalOpen}
@@ -1142,6 +1624,7 @@ export const InstrumentDetail: React.FC = () => {
               type: selectedQuestion.type,
               order: typeof selectedQuestion.order === 'number' ? selectedQuestion.order : undefined,
               required: selectedQuestion.required,
+              topicId: selectedQuestion.topicId ?? undefined,
               options: (() => {
                 const normalizeOption = (option: QuestionOption | string | null | undefined): QuestionOption | null => {
                   if (!option) {
@@ -1200,6 +1683,7 @@ export const InstrumentDetail: React.FC = () => {
             }}
             onCancel={handleCloseForm}
             isSubmitting={isSaving}
+            topics={instrumentTopics}
           />
         </div>
       </Modal>

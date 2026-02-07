@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback, useMemo, useRef } from 'react';
-import { Patient, Instrument, Assignment, Program, ProgramActivity, ProgramDetails, EvolutionEntry, DashboardStats, GenderDistributionSlice, PatientsByProgramSlice, InstrumentType, Question, QuestionAnswer, QuestionOption, Ribbon, PatientPunctualityRecord, CreatePatientPunctualityInput, UpdatePatientPunctualityInput } from '../types';
+import { Patient, Instrument, Assignment, Program, ProgramActivity, ProgramDetails, EvolutionEntry, DashboardStats, GenderDistributionSlice, PatientsByProgramSlice, InstrumentType, InstrumentTopic, Question, QuestionAnswer, QuestionOption, Ribbon, PatientPunctualityRecord, CreatePatientPunctualityInput, UpdatePatientPunctualityInput } from '../types';
 import { useAuth } from './AuthContext';
 
 type ProgramInput = {
@@ -490,6 +490,9 @@ const sortQuestionsList = (list: Question[]): Question[] =>
     return a.id.localeCompare(b.id);
   });
 
+const sortTopicsList = (list: InstrumentTopic[]): InstrumentTopic[] =>
+  [...list].sort((a, b) => a.name.localeCompare(b.name, 'es', { sensitivity: 'base' }));
+
 const mapAnswerFromApi = (raw: any): QuestionAnswer => {
   const idValue = raw?.id ?? raw?.respuesta_id ?? raw?.answerId ?? raw?.answer_id ?? raw?.idRespuesta ?? raw?.id_respuesta;
   const resolvedId = (() => {
@@ -527,6 +530,7 @@ const mapQuestionFromApi = (raw: any): Question => {
   const orderValue = raw?.orden ?? raw?.order ?? 0;
   const requiredFlag = raw?.habilitada ?? raw?.required;
   const optionsValue = raw?.opciones ?? raw?.options;
+  const topicValue = raw?.id_topico ?? raw?.topicId ?? raw?.topico_id ?? raw?.topicoId ?? raw?.topic_id ?? null;
 
   const required = typeof requiredFlag === 'boolean'
     ? requiredFlag
@@ -589,6 +593,24 @@ const mapQuestionFromApi = (raw: any): Question => {
 
   const mergedOptions = optionsFromAnswers.length ? optionsFromAnswers : fallbackOptions;
 
+  const resolvedTopicId = (() => {
+    if (topicValue === null || typeof topicValue === 'undefined') {
+      return null;
+    }
+    if (typeof topicValue === 'number') {
+      return Number.isFinite(topicValue) ? String(topicValue) : null;
+    }
+    const text = String(topicValue).trim();
+    if (!text.length) {
+      return null;
+    }
+    const numeric = Number(text);
+    if (Number.isFinite(numeric)) {
+      return String(numeric);
+    }
+    return text;
+  })();
+
   return {
     id: String(idValue ?? ''),
     text: text.length ? text : `Pregunta ${idValue ?? ''}`,
@@ -597,6 +619,69 @@ const mapQuestionFromApi = (raw: any): Question => {
     answers: mappedAnswers,
     required,
     order: normalizedOrder,
+    topicId: resolvedTopicId,
+  };
+};
+
+const mapInstrumentTopicFromApi = (raw: any): InstrumentTopic => {
+  const idValue = raw?.id ?? raw?.topicId ?? raw?.topico_id ?? raw?.topicoId;
+  const instrumentIdValue = raw?.id_instrumento ?? raw?.instrumentId ?? raw?.instrumento_id ?? null;
+  const nameValue = raw?.nombre ?? raw?.name ?? '';
+  const createdAt = parseDate(raw?.created_at ?? raw?.createdAt);
+  const updatedAt = parseDate(raw?.updated_at ?? raw?.updatedAt);
+
+  const toBoolean = (value: unknown): boolean | null => {
+    if (value === null || typeof value === 'undefined') {
+      return null;
+    }
+
+    if (typeof value === 'boolean') {
+      return value;
+    }
+
+    if (typeof value === 'number') {
+      return value !== 0;
+    }
+
+    if (typeof value === 'string') {
+      const normalized = value.trim().toLowerCase();
+      if (!normalized) return null;
+      if (['0', 'false', 'no', 'inactivo'].includes(normalized)) {
+        return false;
+      }
+      if (['1', 'true', 'si', 'sí', 'yes', 'activo'].includes(normalized)) {
+        return true;
+      }
+      const numeric = Number(normalized);
+      if (Number.isFinite(numeric)) {
+        return numeric !== 0;
+      }
+    }
+
+    return null;
+  };
+
+  const resolvedId = (() => {
+    if (idValue === null || typeof idValue === 'undefined') {
+      return `topic-${Math.random().toString(36).slice(2, 11)}`;
+    }
+    const stringified = String(idValue);
+    return stringified.trim().length ? stringified : `topic-${Math.random().toString(36).slice(2, 11)}`;
+  })();
+
+  const resolvedName = String(nameValue ?? '').trim();
+
+  return {
+    id: resolvedId,
+    instrumentId:
+      instrumentIdValue === null || typeof instrumentIdValue === 'undefined' || instrumentIdValue === ''
+        ? null
+        : String(instrumentIdValue),
+    name: resolvedName.length ? resolvedName : resolvedId,
+    createdBy: raw?.user_created ?? raw?.userCreated ?? null,
+    createdAt,
+    updatedAt,
+    isVisible: toBoolean(raw?.show),
   };
 };
 
@@ -667,10 +752,37 @@ const buildAnswersFromOptions = (questionId: string, options: QuestionOption[]):
     updatedAt: null,
   }));
 
+const normalizeTopicIdentifier = (value: unknown): { normalized: string | null; payload: number | string | undefined } => {
+  if (value === null || typeof value === 'undefined') {
+    return { normalized: null, payload: undefined };
+  }
+
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) {
+      return { normalized: null, payload: undefined };
+    }
+    const numeric = Math.trunc(value);
+    return { normalized: String(numeric), payload: numeric };
+  }
+
+  const text = String(value).trim();
+  if (!text.length) {
+    return { normalized: null, payload: undefined };
+  }
+
+  const numeric = Number(text);
+  if (Number.isFinite(numeric)) {
+    return { normalized: String(numeric), payload: numeric };
+  }
+
+  return { normalized: text, payload: text };
+};
+
 type InstrumentMappingOverrides = {
   name?: string | null;
   subjectName?: string | null;
   questions?: Question[] | null;
+  topics?: InstrumentTopic[] | null;
 };
 
 type QuestionInput = {
@@ -679,6 +791,13 @@ type QuestionInput = {
   order?: number | null;
   required?: boolean;
   options?: QuestionOption[] | null;
+  topicId?: string | null;
+};
+
+type InstrumentTopicInput = {
+  name: string;
+  isVisible?: boolean | null;
+  createdBy?: string | null;
 };
 
 const mapInstrumentFromApi = (raw: any, overrides: InstrumentMappingOverrides = {}): Instrument => {
@@ -691,6 +810,18 @@ const mapInstrumentFromApi = (raw: any, overrides: InstrumentMappingOverrides = 
   const questions = Array.isArray(overrideQuestions)
     ? overrideQuestions
     : (overrideQuestions === null ? [] : baseQuestions);
+
+  const rawTopics = Array.isArray(raw?.topicos)
+    ? raw.topicos
+    : Array.isArray(raw?.topics)
+      ? raw.topics
+      : [];
+  const baseTopics = rawTopics.map((topic: any) => mapInstrumentTopicFromApi(topic));
+  const overrideTopics = overrides.topics;
+
+  const topics = Array.isArray(overrideTopics)
+    ? overrideTopics
+    : (overrideTopics === null ? [] : baseTopics);
 
   const normalizeBoolean = (value: any, defaultValue = true): boolean => {
     if (typeof value === 'boolean') {
@@ -774,7 +905,7 @@ const mapInstrumentFromApi = (raw: any, overrides: InstrumentMappingOverrides = 
     name: resolvedName,
     description: (raw?.descripcion ?? raw?.description ?? '').toString(),
     category: (raw?.categoria ?? raw?.category ?? 'psychological') as Instrument['category'],
-  questions: sortQuestionsList(Array.isArray(questions) ? questions : []),
+    questions: sortQuestionsList(Array.isArray(questions) ? questions : []),
     estimatedDuration: (() => {
       const durationValue = raw?.duracion_estimada ?? raw?.estimatedDuration;
       const numeric = Number(durationValue);
@@ -795,6 +926,7 @@ const mapInstrumentFromApi = (raw: any, overrides: InstrumentMappingOverrides = 
     colorResponse: normalizeColorFlag(raw?.color_respuesta ?? raw?.colorResponse ?? raw?.colores_respuesta ?? raw?.coloresRespuesta),
     createdBy: typeof raw?.user_created === 'string' ? raw.user_created : (typeof raw?.userCreated === 'string' ? raw.userCreated : null),
     updatedAt: updatedAt ?? null,
+    topics: sortTopicsList(Array.isArray(topics) ? topics : []),
   };
 
   return instrument;
@@ -824,6 +956,41 @@ const mapInstrumentTypeFromApi = (raw: any): InstrumentType => {
 const sortInstrumentTypes = (list: InstrumentType[]): InstrumentType[] =>
   [...list].sort((a, b) => a.name.localeCompare(b.name, 'es', { sensitivity: 'base' }));
 
+const buildInstrumentTopicPayload = (input: InstrumentTopicInput): Record<string, unknown> => {
+  const payload: Record<string, unknown> = {};
+
+  const rawName = typeof input.name === 'string' ? input.name.trim() : '';
+  if (!rawName.length) {
+    throw new Error('El nombre del tópico es obligatorio.');
+  }
+  payload.nombre = rawName;
+
+  if (Object.prototype.hasOwnProperty.call(input, 'createdBy')) {
+    const creator = input.createdBy;
+    if (typeof creator === 'string') {
+      const trimmed = creator.trim();
+      payload.user_created = trimmed.length ? trimmed : null;
+    } else {
+      payload.user_created = creator ?? null;
+    }
+  }
+
+  if (Object.prototype.hasOwnProperty.call(input, 'isVisible')) {
+    const visibility = input.isVisible;
+    if (visibility === null) {
+      payload.show = null;
+    } else if (typeof visibility === 'boolean') {
+      payload.show = visibility;
+    } else if (typeof visibility === 'number') {
+      payload.show = visibility !== 0;
+    } else {
+      payload.show = Boolean(visibility);
+    }
+  }
+
+  return payload;
+};
+
 interface AppContextType {
   // State
   patients: Patient[];
@@ -849,6 +1016,10 @@ interface AppContextType {
   updateQuestion: (instrumentId: string, questionId: string, input: QuestionInput) => Promise<Question>;
   deleteQuestion: (instrumentId: string, questionId: string) => Promise<boolean>;
   assignInstrumentToPatients: (instrumentTypeId: string, patientIds: string[]) => Promise<void>;
+  getInstrumentTopics: (instrumentId: string) => Promise<InstrumentTopic[]>;
+  createInstrumentTopic: (instrumentId: string, input: InstrumentTopicInput) => Promise<InstrumentTopic>;
+  updateInstrumentTopic: (instrumentId: string, topicId: string, input: InstrumentTopicInput) => Promise<InstrumentTopic>;
+  deleteInstrumentTopic: (instrumentId: string, topicId: string) => Promise<boolean>;
   
   addAssignment: (assignment: Omit<Assignment, 'id' | 'assignedAt'>) => void;
   updateAssignment: (id: string, assignment: Partial<Assignment>) => void;
@@ -950,6 +1121,7 @@ const mockInstruments: Instrument[] = [
     resource: 'Documento PDF',
     resultDelivery: null,
     colorResponse: 0,
+    topics: [],
   },
 ];
 
@@ -1892,8 +2064,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         console.error('Failed to fetch questions list', error);
         return null;
       });
+      const topicsRequest = fetch(`${apiBase}/instruments/${numericId}/topics`).catch((error) => {
+        console.error('Failed to fetch instrument topics list', error);
+        return null;
+      });
 
-      const [instrumentResponse, questionsResponse] = await Promise.all([instrumentRequest, questionsRequest]);
+      const [instrumentResponse, questionsResponse, topicsResponse] = await Promise.all([
+        instrumentRequest,
+        questionsRequest,
+        topicsRequest,
+      ]);
 
       if (instrumentResponse.status === 404) {
         return fallback;
@@ -1936,6 +2116,28 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
       if (!questionList.length && fallback?.questions?.length) {
         questionList = fallback.questions.map((question) => ({ ...question }));
+      }
+
+      let topicsList: InstrumentTopic[] = [];
+      if (topicsResponse && topicsResponse.ok) {
+        try {
+          const topicsPayload = await topicsResponse.json();
+          if (Array.isArray(topicsPayload)) {
+            topicsList = sortTopicsList(
+              topicsPayload
+                .map((topic: any) => mapInstrumentTopicFromApi(topic))
+                .filter((topic: InstrumentTopic) => Boolean(topic.name)),
+            );
+          }
+        } catch (topicsError) {
+          console.error('Failed to parse instrument topics payload', topicsError);
+        }
+      } else if (topicsResponse && topicsResponse.status === 404) {
+        topicsList = [];
+      }
+
+      if (!topicsList.length && fallback?.topics?.length) {
+        topicsList = sortTopicsList(fallback.topics.map((topic) => ({ ...topic })));
       }
 
       if (questionList.length) {
@@ -2003,6 +2205,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         name: topicName ?? undefined,
         subjectName: topicName ?? undefined,
         questions: questionList,
+        topics: topicsList,
       });
 
       setInstruments((prev) => {
@@ -2031,6 +2234,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const normalizedOptions = questionTypeRequiresOptions(input.type)
       ? normalizeQuestionOptions(input.options ?? [])
       : [];
+    const { normalized: normalizedTopicId, payload: topicPayloadValue } = normalizeTopicIdentifier(input.topicId ?? null);
 
     const nextOrder = typeof input.order === 'number' && Number.isFinite(input.order)
       ? input.order
@@ -2047,6 +2251,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         required: typeof input.required === 'boolean' ? input.required : true,
         answers: baseAnswers,
         options: normalizedOptions.length ? normalizedOptions : undefined,
+        topicId: normalizedTopicId,
       };
     };
 
@@ -2071,6 +2276,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       order: nextOrder,
       isEnabled: typeof input.required === 'boolean' ? input.required : true,
     };
+
+    if (typeof topicPayloadValue !== 'undefined') {
+      payload.topicId = topicPayloadValue;
+    }
 
     const createAnswersForQuestion = async (questionId: number, options: QuestionOption[]): Promise<QuestionAnswer[]> => {
       const createdAnswers: QuestionAnswer[] = [];
@@ -2111,6 +2320,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
       const data = await response.json();
       let createdQuestion = mapQuestionFromApi(data);
+
+      if (!createdQuestion.topicId && normalizedTopicId) {
+        createdQuestion = { ...createdQuestion, topicId: normalizedTopicId };
+      }
 
       if (questionTypeRequiresOptions(createdQuestion.type) && normalizedOptions.length) {
         const numericQuestionId = Number(createdQuestion.id);
@@ -2161,6 +2374,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const sanitizedOptions = questionTypeRequiresOptions(input.type)
       ? normalizeQuestionOptions(input.options ?? [])
       : [];
+    const topicChangeProvided = Object.prototype.hasOwnProperty.call(input, 'topicId');
+    const { normalized: normalizedTopicId, payload: topicPayloadValue } = normalizeTopicIdentifier(
+      topicChangeProvided ? input.topicId ?? null : existingQuestion?.topicId ?? null,
+    );
 
     const buildLocalQuestion = (): Question => {
       const answers = sanitizedOptions.length ? buildAnswersFromOptions(questionId, sanitizedOptions) : [];
@@ -2176,6 +2393,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           : (typeof existingQuestion?.required === 'boolean' ? existingQuestion.required : true),
         answers,
         options: sanitizedOptions.length ? sanitizedOptions : undefined,
+        topicId: normalizedTopicId ?? null,
       };
     };
 
@@ -2220,6 +2438,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     if (Object.prototype.hasOwnProperty.call(input, 'required')) {
       payload.isEnabled = typeof input.required === 'boolean' ? input.required : undefined;
+    }
+
+    if (topicChangeProvided) {
+      payload.topicId = normalizedTopicId === null ? null : topicPayloadValue;
     }
 
     const syncAnswersForQuestion = async (desiredOptions: QuestionOption[]): Promise<QuestionAnswer[]> => {
@@ -2384,10 +2606,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         })),
       );
 
+      const resolvedTopicId = topicChangeProvided
+        ? normalizedTopicId
+        : (normalizedQuestion.topicId ?? normalizedTopicId);
+
       const nextQuestion: Question = {
         ...normalizedQuestion,
         answers: updatedAnswers,
         options: optionPairs.length ? optionPairs : undefined,
+        topicId: resolvedTopicId ?? null,
       };
 
       applyQuestionToState(nextQuestion);
@@ -2514,6 +2741,224 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     if (errors.length) {
       throw new Error(errors.join(' | '));
+    }
+  }, [apiBase]);
+
+  const getInstrumentTopics = useCallback(async (instrumentId: string): Promise<InstrumentTopic[]> => {
+    const numericInstrumentId = Number(instrumentId);
+    const resolvedInstrumentId = Number.isNaN(numericInstrumentId)
+      ? String(instrumentId)
+      : String(numericInstrumentId);
+
+    if (Number.isNaN(numericInstrumentId)) {
+      const fallback = instrumentsRef.current.find((instrument) => instrument.id === resolvedInstrumentId);
+      return sortTopicsList(fallback?.topics ?? []);
+    }
+
+    try {
+      const response = await fetch(`${apiBase}/instruments/${numericInstrumentId}/topics`);
+      if (response.status === 404) {
+        setInstruments(prev => prev.map(inst => (
+          inst.id === resolvedInstrumentId ? { ...inst, topics: [] } : inst
+        )));
+        return [];
+      }
+
+      if (!response.ok) {
+        const text = await response.text().catch(() => null);
+        throw new Error(text || `No se pudieron obtener los tópicos (status ${response.status})`);
+      }
+
+      const payload = await response.json();
+      const topics = Array.isArray(payload)
+        ? sortTopicsList(payload.map((topic: any) => mapInstrumentTopicFromApi(topic)))
+        : [];
+
+      setInstruments(prev => prev.map(inst => (
+        inst.id === resolvedInstrumentId ? { ...inst, topics } : inst
+      )));
+
+      return topics;
+    } catch (error) {
+      console.error(`Failed to load topics for instrument ${instrumentId}`, error);
+      throw error instanceof Error ? error : new Error('Error desconocido al obtener los tópicos del instrumento');
+    }
+  }, [apiBase]);
+
+  const createInstrumentTopic = useCallback(async (instrumentId: string, input: InstrumentTopicInput): Promise<InstrumentTopic> => {
+    const payload = buildInstrumentTopicPayload(input);
+    const numericInstrumentId = Number(instrumentId);
+    const resolvedInstrumentId = Number.isNaN(numericInstrumentId)
+      ? String(instrumentId)
+      : String(numericInstrumentId);
+
+    const applyInsert = (topic: InstrumentTopic) => {
+      setInstruments(prev => prev.map(inst => {
+        if (inst.id !== resolvedInstrumentId) {
+          return inst;
+        }
+        const previous = Array.isArray(inst.topics) ? inst.topics : [];
+        const nextTopics = sortTopicsList([
+          ...previous.filter(existing => existing.id !== topic.id),
+          topic,
+        ]);
+        return { ...inst, topics: nextTopics };
+      }));
+    };
+
+    if (Number.isNaN(numericInstrumentId)) {
+      const now = new Date();
+      const topic: InstrumentTopic = {
+        id: `temp-topic-${Date.now()}`,
+        instrumentId: resolvedInstrumentId,
+        name: String(payload.nombre ?? input.name ?? '').trim() || `Tópico ${Date.now()}`,
+        createdBy: typeof payload.user_created === 'string' ? payload.user_created : input.createdBy ?? null,
+        createdAt: now,
+        updatedAt: now,
+        isVisible: typeof payload.show === 'boolean' ? payload.show : null,
+      };
+      applyInsert(topic);
+      return topic;
+    }
+
+    try {
+      const response = await fetch(`${apiBase}/instruments/${numericInstrumentId}/topics`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const text = await response.text().catch(() => null);
+        throw new Error(text || `No se pudo crear el tópico (status ${response.status})`);
+      }
+
+      const data = await response.json();
+      const topic = mapInstrumentTopicFromApi(data);
+      applyInsert(topic);
+      return topic;
+    } catch (error) {
+      console.error(`Failed to create topic for instrument ${instrumentId}`, error);
+      throw error instanceof Error ? error : new Error('Error desconocido al crear el tópico');
+    }
+  }, [apiBase]);
+
+  const updateInstrumentTopic = useCallback(async (
+    instrumentId: string,
+    topicId: string,
+    input: InstrumentTopicInput,
+  ): Promise<InstrumentTopic> => {
+    const payload = buildInstrumentTopicPayload(input);
+    const numericInstrumentId = Number(instrumentId);
+    const numericTopicId = Number(topicId);
+    const resolvedInstrumentId = Number.isNaN(numericInstrumentId)
+      ? String(instrumentId)
+      : String(numericInstrumentId);
+    const resolvedTopicId = Number.isNaN(numericTopicId)
+      ? String(topicId)
+      : String(numericTopicId);
+
+    const applyUpdate = (topic: InstrumentTopic) => {
+      setInstruments(prev => prev.map(inst => {
+        if (inst.id !== resolvedInstrumentId) {
+          return inst;
+        }
+        const previous = Array.isArray(inst.topics) ? inst.topics : [];
+        const nextTopics = sortTopicsList([
+          ...previous.filter(existing => existing.id !== topic.id),
+          topic,
+        ]);
+        return { ...inst, topics: nextTopics };
+      }));
+    };
+
+    if (Number.isNaN(numericInstrumentId) || Number.isNaN(numericTopicId)) {
+      const now = new Date();
+      const topic: InstrumentTopic = {
+        id: resolvedTopicId,
+        instrumentId: resolvedInstrumentId,
+        name: String(payload.nombre ?? input.name ?? '').trim() || resolvedTopicId,
+        createdBy: typeof payload.user_created === 'string' ? payload.user_created : input.createdBy ?? null,
+        createdAt: now,
+        updatedAt: now,
+        isVisible: typeof payload.show === 'boolean' ? payload.show : null,
+      };
+      applyUpdate(topic);
+      return topic;
+    }
+
+    try {
+      const response = await fetch(`${apiBase}/instruments/${numericInstrumentId}/topics/${numericTopicId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const text = await response.text().catch(() => null);
+        throw new Error(text || `No se pudo actualizar el tópico (status ${response.status})`);
+      }
+
+      const data = await response.json();
+      const topic = mapInstrumentTopicFromApi(data);
+      applyUpdate(topic);
+      return topic;
+    } catch (error) {
+      console.error(`Failed to update topic ${topicId} for instrument ${instrumentId}`, error);
+      throw error instanceof Error ? error : new Error('Error desconocido al actualizar el tópico');
+    }
+  }, [apiBase]);
+
+  const deleteInstrumentTopic = useCallback(async (instrumentId: string, topicId: string): Promise<boolean> => {
+    const numericInstrumentId = Number(instrumentId);
+    const numericTopicId = Number(topicId);
+    const resolvedInstrumentId = Number.isNaN(numericInstrumentId)
+      ? String(instrumentId)
+      : String(numericInstrumentId);
+    const resolvedTopicId = Number.isNaN(numericTopicId)
+      ? String(topicId)
+      : String(numericTopicId);
+
+    const applyRemoval = () => {
+      setInstruments(prev => prev.map(inst => {
+        if (inst.id !== resolvedInstrumentId) {
+          return inst;
+        }
+        const previous = Array.isArray(inst.topics) ? inst.topics : [];
+        const nextTopics = previous.filter(topic => topic.id !== resolvedTopicId);
+        return { ...inst, topics: nextTopics };
+      }));
+    };
+
+    if (Number.isNaN(numericInstrumentId) || Number.isNaN(numericTopicId)) {
+      applyRemoval();
+      return true;
+    }
+
+    try {
+      const response = await fetch(`${apiBase}/instruments/${numericInstrumentId}/topics/${numericTopicId}`, {
+        method: 'DELETE',
+      });
+
+      if (response.status === 404) {
+        applyRemoval();
+        return true;
+      }
+
+      if (!response.ok) {
+        const text = await response.text().catch(() => null);
+        throw new Error(text || `No se pudo eliminar el tópico (status ${response.status})`);
+      }
+
+      applyRemoval();
+      return true;
+    } catch (error) {
+      console.error(`Failed to delete topic ${topicId} for instrument ${instrumentId}`, error);
+      throw error instanceof Error ? error : new Error('Error desconocido al eliminar el tópico');
     }
   }, [apiBase]);
 
@@ -3076,6 +3521,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     updateQuestion,
     deleteQuestion,
     assignInstrumentToPatients,
+    getInstrumentTopics,
+    createInstrumentTopic,
+    updateInstrumentTopic,
+    deleteInstrumentTopic,
     addAssignment,
     updateAssignment,
     reloadRibbons,

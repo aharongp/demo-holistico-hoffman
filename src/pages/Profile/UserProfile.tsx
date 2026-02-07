@@ -1,16 +1,17 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { User, Camera, Save, Eye, EyeOff } from 'lucide-react';
 import { Card } from '../../components/UI/Card';
 import { Button } from '../../components/UI/Button';
 import { useAuth } from '../../context/AuthContext';
 
 export const UserProfile: React.FC = () => {
-  const { user } = useAuth();
+  const { user, updateProfile, changePassword } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [profileImage, setProfileImage] = useState<string | null>(user?.avatar || null);
+  const [isSaving, setIsSaving] = useState(false);
   
   const [formData, setFormData] = useState({
     firstName: user?.firstName || '',
@@ -22,10 +23,28 @@ export const UserProfile: React.FC = () => {
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [serverError, setServerError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!user) return;
+
+    setFormData({
+      firstName: user.firstName || '',
+      lastName: user.lastName || '',
+      email: user.email || '',
+      currentPassword: '',
+      newPassword: '',
+      confirmPassword: '',
+    });
+    setProfileImage(user.avatar || null);
+  }, [user]);
 
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
+      setServerError(null);
+      setSuccessMessage(null);
       if (file.size > 5 * 1024 * 1024) { // 5MB limit
         setErrors(prev => ({ ...prev, image: 'La imagen debe ser menor a 5MB' }));
         return;
@@ -78,31 +97,62 @@ export const UserProfile: React.FC = () => {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+    setServerError(null);
+    setSuccessMessage(null);
+
     if (!validateForm()) {
       return;
     }
 
-    // Here you would typically make an API call to update the user profile
-    console.log('Profile update data:', {
-      ...formData,
-      profileImage,
-    });
+    setIsSaving(true);
 
-    // Reset password fields after successful update
-    setFormData(prev => ({
-      ...prev,
-      currentPassword: '',
-      newPassword: '',
-      confirmPassword: '',
-    }));
+    try {
+      const updatedUser = await updateProfile({
+        firstName: formData.firstName.trim(),
+        lastName: formData.lastName.trim(),
+        email: formData.email.trim(),
+        avatar: profileImage ?? null,
+      });
 
-    setIsEditing(false);
-    
-    // Show success message (you could add a toast notification here)
-    alert('¡Perfil actualizado correctamente!');
+      if (!updatedUser) {
+        throw new Error('No se pudo actualizar el perfil');
+      }
+
+      if (formData.newPassword) {
+        await changePassword({
+          currentPassword: formData.currentPassword,
+          newPassword: formData.newPassword,
+        });
+      }
+
+      setSuccessMessage(
+        formData.newPassword
+          ? 'Perfil y contraseña actualizados correctamente'
+          : 'Perfil actualizado correctamente',
+      );
+
+      setIsEditing(false);
+      setFormData({
+        firstName: updatedUser.firstName || '',
+        lastName: updatedUser.lastName || '',
+        email: updatedUser.email || '',
+        currentPassword: '',
+        newPassword: '',
+        confirmPassword: '',
+      });
+      setProfileImage(updatedUser.avatar || null);
+      setErrors({});
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'No se pudo actualizar el perfil';
+      setServerError(message);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleCancel = () => {
@@ -116,6 +166,11 @@ export const UserProfile: React.FC = () => {
     });
     setProfileImage(user?.avatar || null);
     setErrors({});
+    setServerError(null);
+    setSuccessMessage(null);
+    setShowCurrentPassword(false);
+    setShowNewPassword(false);
+    setShowConfirmPassword(false);
     setIsEditing(false);
   };
 
@@ -160,6 +215,7 @@ export const UserProfile: React.FC = () => {
                     type="file"
                     accept="image/*"
                     onChange={handleImageUpload}
+                    disabled={isSaving}
                     className="hidden"
                   />
                 </label>
@@ -178,7 +234,12 @@ export const UserProfile: React.FC = () => {
 
           {!isEditing && (
             <Button
-              onClick={() => setIsEditing(true)}
+              onClick={() => {
+                setIsEditing(true);
+                setServerError(null);
+                setSuccessMessage(null);
+              }}
+              disabled={isSaving}
               className="mt-5 w-full bg-gradient-to-r from-sky-500 to-cyan-500 text-white shadow-lg shadow-cyan-200/70 hover:opacity-95"
               size="sm"
             >
@@ -193,6 +254,18 @@ export const UserProfile: React.FC = () => {
             className="rounded-[28px] border-white/60 bg-white/90 shadow-xl shadow-sky-100/60 backdrop-blur"
           >
             <form onSubmit={handleSubmit} className="space-y-8">
+              {serverError && (
+                <div className="rounded-2xl border border-rose-100 bg-rose-50 px-4 py-3 text-sm text-rose-600">
+                  {serverError}
+                </div>
+              )}
+
+              {successMessage && (
+                <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-600">
+                  {successMessage}
+                </div>
+              )}
+
               <div>
                 <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Datos básicos</p>
                 <h3 className="mt-2 text-xl font-semibold text-slate-900">Información personal</h3>
@@ -204,9 +277,9 @@ export const UserProfile: React.FC = () => {
                       type="text"
                       value={formData.firstName}
                       onChange={(e) => setFormData(prev => ({ ...prev, firstName: e.target.value }))}
-                      disabled={!isEditing}
+                      disabled={!isEditing || isSaving}
                       className={`w-full rounded-2xl border border-transparent bg-white/80 px-4 py-3 text-sm text-slate-700 shadow-inner focus:ring-2 focus:ring-sky-200 focus:border-sky-200 ${
-                        !isEditing ? 'cursor-not-allowed opacity-60' : ''
+                          !isEditing || isSaving ? 'cursor-not-allowed opacity-60' : ''
                       }`}
                     />
                     {errors.firstName && (
@@ -220,9 +293,9 @@ export const UserProfile: React.FC = () => {
                       type="text"
                       value={formData.lastName}
                       onChange={(e) => setFormData(prev => ({ ...prev, lastName: e.target.value }))}
-                      disabled={!isEditing}
+                      disabled={!isEditing || isSaving}
                       className={`w-full rounded-2xl border border-transparent bg-white/80 px-4 py-3 text-sm text-slate-700 shadow-inner focus:ring-2 focus:ring-sky-200 focus:border-sky-200 ${
-                        !isEditing ? 'cursor-not-allowed opacity-60' : ''
+                          !isEditing || isSaving ? 'cursor-not-allowed opacity-60' : ''
                       }`}
                     />
                     {errors.lastName && (
@@ -237,9 +310,9 @@ export const UserProfile: React.FC = () => {
                     type="email"
                     value={formData.email}
                     onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
-                    disabled={!isEditing}
+                    disabled={!isEditing || isSaving}
                     className={`w-full rounded-2xl border border-transparent bg-white/80 px-4 py-3 text-sm text-slate-700 shadow-inner focus:ring-2 focus:ring-sky-200 focus:border-sky-200 ${
-                      !isEditing ? 'cursor-not-allowed opacity-60' : ''
+                      !isEditing || isSaving ? 'cursor-not-allowed opacity-60' : ''
                     }`}
                   />
                   {errors.email && (
@@ -262,12 +335,18 @@ export const UserProfile: React.FC = () => {
                           type={showCurrentPassword ? 'text' : 'password'}
                           value={formData.currentPassword}
                           onChange={(e) => setFormData(prev => ({ ...prev, currentPassword: e.target.value }))}
-                          className="w-full rounded-2xl border border-transparent bg-white/80 px-4 py-3 pr-12 text-sm text-slate-700 shadow-inner focus:ring-2 focus:ring-sky-200 focus:border-sky-200"
+                          disabled={isSaving}
+                          className={`w-full rounded-2xl border border-transparent bg-white/80 px-4 py-3 pr-12 text-sm text-slate-700 shadow-inner focus:ring-2 focus:ring-sky-200 focus:border-sky-200 ${
+                            isSaving ? 'cursor-not-allowed opacity-60' : ''
+                          }`}
                         />
                         <button
                           type="button"
                           onClick={() => setShowCurrentPassword(!showCurrentPassword)}
-                          className="absolute inset-y-0 right-3 flex items-center text-slate-400"
+                          disabled={isSaving}
+                          className={`absolute inset-y-0 right-3 flex items-center text-slate-400 ${
+                            isSaving ? 'opacity-60' : ''
+                          }`}
                         >
                           {showCurrentPassword ? (
                             <EyeOff className="h-4 w-4" />
@@ -289,12 +368,18 @@ export const UserProfile: React.FC = () => {
                             type={showNewPassword ? 'text' : 'password'}
                             value={formData.newPassword}
                             onChange={(e) => setFormData(prev => ({ ...prev, newPassword: e.target.value }))}
-                            className="w-full rounded-2xl border border-transparent bg-white/80 px-4 py-3 pr-12 text-sm text-slate-700 shadow-inner focus:ring-2 focus:ring-sky-200 focus:border-sky-200"
+                            disabled={isSaving}
+                            className={`w-full rounded-2xl border border-transparent bg-white/80 px-4 py-3 pr-12 text-sm text-slate-700 shadow-inner focus:ring-2 focus:ring-sky-200 focus:border-sky-200 ${
+                              isSaving ? 'cursor-not-allowed opacity-60' : ''
+                            }`}
                           />
                           <button
                             type="button"
                             onClick={() => setShowNewPassword(!showNewPassword)}
-                            className="absolute inset-y-0 right-3 flex items-center text-slate-400"
+                            disabled={isSaving}
+                            className={`absolute inset-y-0 right-3 flex items-center text-slate-400 ${
+                              isSaving ? 'opacity-60' : ''
+                            }`}
                           >
                             {showNewPassword ? (
                               <EyeOff className="h-4 w-4" />
@@ -315,12 +400,18 @@ export const UserProfile: React.FC = () => {
                             type={showConfirmPassword ? 'text' : 'password'}
                             value={formData.confirmPassword}
                             onChange={(e) => setFormData(prev => ({ ...prev, confirmPassword: e.target.value }))}
-                            className="w-full rounded-2xl border border-transparent bg-white/80 px-4 py-3 pr-12 text-sm text-slate-700 shadow-inner focus:ring-2 focus:ring-sky-200 focus:border-sky-200"
+                            disabled={isSaving}
+                            className={`w-full rounded-2xl border border-transparent bg-white/80 px-4 py-3 pr-12 text-sm text-slate-700 shadow-inner focus:ring-2 focus:ring-sky-200 focus:border-sky-200 ${
+                              isSaving ? 'cursor-not-allowed opacity-60' : ''
+                            }`}
                           />
                           <button
                             type="button"
                             onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                            className="absolute inset-y-0 right-3 flex items-center text-slate-400"
+                            disabled={isSaving}
+                            className={`absolute inset-y-0 right-3 flex items-center text-slate-400 ${
+                              isSaving ? 'opacity-60' : ''
+                            }`}
                           >
                             {showConfirmPassword ? (
                               <EyeOff className="h-4 w-4" />
@@ -345,16 +436,18 @@ export const UserProfile: React.FC = () => {
                       type="button"
                       variant="outline"
                       onClick={handleCancel}
+                      disabled={isSaving}
                       className="w-full border-sky-100 bg-white/80 text-slate-700 hover:bg-white sm:w-auto"
                     >
                       Cancelar
                     </Button>
                     <Button
                       type="submit"
+                      disabled={isSaving}
                       className="w-full bg-gradient-to-r from-sky-500 via-cyan-500 to-blue-500 text-white shadow-lg shadow-sky-200/70 hover:opacity-95 sm:w-auto"
                     >
                       <Save className="mr-2 h-4 w-4" />
-                      Guardar cambios
+                      {isSaving ? 'Guardando...' : 'Guardar cambios'}
                     </Button>
                   </div>
                 </div>

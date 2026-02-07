@@ -51,7 +51,7 @@ export interface Instrument {
   updatedAt?: Date | null;
 }
 
-export interface InstrumentType {
+  topics?: InstrumentTopic[]; // Optional topics for the instrument
   id: string;
   name: string;
   description?: string | null;
@@ -64,6 +64,15 @@ export interface InstrumentType {
 export interface QuestionAnswer {
   id: string;
   label: string;
+export interface InstrumentTopic {
+  id: string;
+  instrumentId: string | null;
+  name: string;
+  createdBy?: string | null;
+  createdAt?: Date | null;
+  updatedAt?: Date | null;
+  isVisible?: boolean | null;
+}
   value?: string | null;
   color?: string | null;
   createdBy?: string | null;
@@ -84,6 +93,7 @@ export interface Question {
   answers?: QuestionAnswer[];
   required: boolean;
   order: number;
+  topicId?: string | null;
 }
 
 export interface Assignment {

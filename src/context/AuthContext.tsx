@@ -9,6 +9,8 @@ interface AuthContextType {
   register: (userData: RegisterData) => Promise<boolean>;
   refreshProfile: () => Promise<User | null>;
   validateToken: () => Promise<boolean>;
+  updateProfile: (data: UpdateProfileInput) => Promise<User | null>;
+  changePassword: (data: ChangePasswordInput) => Promise<boolean>;
   isLoading: boolean;
   getDashboardPath: (role: UserRole) => string;
 }
@@ -24,6 +26,18 @@ interface RegisterData {
   birthDate?: string | null;
   gender?: string | null;
   contactPhone?: string | null;
+}
+
+interface UpdateProfileInput {
+  firstName: string;
+  lastName: string;
+  email: string;
+  avatar?: string | null;
+}
+
+interface ChangePasswordInput {
+  currentPassword: string;
+  newPassword: string;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -239,6 +253,92 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   }, [apiBase, token, clearSession, saveSession]);
 
+  const updateProfile = useCallback(
+    async (profileData: UpdateProfileInput): Promise<User | null> => {
+      const activeToken = token ?? localStorage.getItem(TOKEN_STORAGE_KEY);
+
+      if (!activeToken) {
+        throw new Error('No hay una sesión activa');
+      }
+
+      try {
+        const res = await fetch(`${apiBase}/auth/profile`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${activeToken}`,
+          },
+          body: JSON.stringify(profileData),
+        });
+
+        if (!res.ok) {
+          if (res.status === 401) {
+            clearSession();
+          }
+
+          const errBody = await res.json().catch(() => null);
+          const message = errBody?.message ?? 'No se pudo actualizar el perfil';
+          const formatted = Array.isArray(message) ? message.join(', ') : message;
+          throw new Error(formatted);
+        }
+
+        const data = await res.json();
+        const mappedUser = hydrateUser(data);
+        saveSession(mappedUser, activeToken);
+        return mappedUser;
+      } catch (error) {
+        console.error('Profile update failed', error);
+        if (error instanceof Error) {
+          throw error;
+        }
+        throw new Error('No se pudo actualizar el perfil');
+      }
+    },
+    [apiBase, token, saveSession, clearSession],
+  );
+
+  const changePassword = useCallback(
+    async (passwords: ChangePasswordInput): Promise<boolean> => {
+      const activeToken = token ?? localStorage.getItem(TOKEN_STORAGE_KEY);
+
+      if (!activeToken) {
+        throw new Error('No hay una sesión activa');
+      }
+
+      try {
+        const res = await fetch(`${apiBase}/auth/password`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${activeToken}`,
+          },
+          body: JSON.stringify(passwords),
+        });
+
+        if (!res.ok) {
+          if (res.status === 401) {
+            clearSession();
+          }
+
+          const errBody = await res.json().catch(() => null);
+          const message = errBody?.message ?? 'No se pudo actualizar la contraseña';
+          const formatted = Array.isArray(message) ? message.join(', ') : message;
+          throw new Error(formatted);
+        }
+
+        await res.json().catch(() => null);
+        return true;
+      } catch (error) {
+        console.error('Password change failed', error);
+        if (error instanceof Error) {
+          throw error;
+        }
+        throw new Error('No se pudo actualizar la contraseña');
+      }
+    },
+    [apiBase, token, clearSession],
+  );
+
   const logout = useCallback(() => {
     clearSession();
   }, [clearSession]);
@@ -346,9 +446,23 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     register,
     refreshProfile,
     validateToken,
+    updateProfile,
+    changePassword,
     isLoading,
     getDashboardPath,
-  }), [user, token, login, logout, register, refreshProfile, validateToken, isLoading, getDashboardPath]);
+  }), [
+    user,
+    token,
+    login,
+    logout,
+    register,
+    refreshProfile,
+    validateToken,
+    updateProfile,
+    changePassword,
+    isLoading,
+    getDashboardPath,
+  ]);
 
   return (
     <AuthContext.Provider value={value}>
