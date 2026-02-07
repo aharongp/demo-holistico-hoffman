@@ -149,9 +149,26 @@ export const UserManagement: React.FC = () => {
     }
   };
 
-  const handleDelete = (userId: string) => {
-    if (confirm('¿Seguro que deseas eliminar este usuario?')) {
+  const handleDelete = async (userId: string) => {
+    const shouldDelete = confirm('¿Seguro que deseas eliminar este usuario?');
+    if (!shouldDelete) return;
+
+    setError(null);
+
+    try {
+      const response = await fetch(`${apiBase}/users/${userId}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        const errBody = await response.json().catch(() => null);
+        const message = errBody?.message ?? `No se pudo eliminar el usuario (estado ${response.status})`;
+        throw new Error(Array.isArray(message) ? message.join(', ') : message);
+      }
+
       setUsers(prev => prev.filter(u => u.id !== userId));
+    } catch (err: any) {
+      setError(err?.message ?? 'Error eliminando usuario');
     }
   };
 

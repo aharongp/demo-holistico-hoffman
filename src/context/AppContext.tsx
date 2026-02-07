@@ -1241,30 +1241,49 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     isActive: (typeof p.activo !== 'undefined') ? Boolean(p.activo) : true,
   });
 
-  // Load patients from backend on mount
+  // Load patients from backend whenever authentication changes
   useEffect(() => {
-    let mounted = true;
-    (async () => {
-      try {
-        const res = await fetch(`${apiBase}/patient`);
-        if (!res.ok) throw new Error(`Failed to fetch patients: ${res.status}`);
-        const data = await res.json();
-        if (!mounted) return;
-        const mapped = Array.isArray(data) ? data.map(mapPacienteToPatient) : [];
-          // if API returns no patients, keep mocks so UI doesn't appear empty
-          if (mapped.length > 0) {
-            setPatients(mapped);
-          } else {
-            setPatients(mockPatients);
-          }
-      } catch (err) {
-        // fallback to mocks on error
+    let cancelled = false;
+
+    const loadPatients = async () => {
+      if (!token) {
         setPatients(mockPatients);
-        console.error('Error loading patients from API, using mock data.', err);
+        return;
       }
-    })();
-    return () => { mounted = false; };
-  }, [apiBase]);
+
+      try {
+        const res = await fetch(`${apiBase}/patient`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        if (!res.ok) {
+          throw new Error(`Failed to fetch patients: ${res.status}`);
+        }
+
+        const data = await res.json();
+        if (cancelled) return;
+
+        const mapped = Array.isArray(data) ? data.map(mapPacienteToPatient) : [];
+
+        if (mapped.length > 0) {
+          setPatients(mapped);
+        } else {
+          setPatients(mockPatients);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setPatients(mockPatients);
+          console.error('Error loading patients from API, using mock data.', err);
+        }
+      }
+    };
+
+    void loadPatients();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [apiBase, token]);
 
   // Load programs from backend on mount
   useEffect(() => {

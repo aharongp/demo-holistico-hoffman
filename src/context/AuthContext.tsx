@@ -19,6 +19,11 @@ interface RegisterData {
   firstName: string;
   lastName: string;
   role: UserRole;
+  nationalId?: string | null;
+  insuranceNumber?: string | null;
+  birthDate?: string | null;
+  gender?: string | null;
+  contactPhone?: string | null;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -238,10 +243,53 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     clearSession();
   }, [clearSession]);
 
-  const register = useCallback(async (_userData: RegisterData): Promise<boolean> => {
-    console.warn('Registration is not enabled in this build.');
-    return false;
-  }, []);
+  const register = useCallback(
+    async (userData: RegisterData): Promise<boolean> => {
+      setIsLoading(true);
+      try {
+        const res = await fetch(`${apiBase}/auth/register`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            email: userData.email,
+            password: userData.password,
+            firstName: userData.firstName,
+            lastName: userData.lastName,
+            role: userData.role,
+            nationalId: userData.nationalId,
+            insuranceNumber: userData.insuranceNumber,
+            birthDate: userData.birthDate,
+            gender: userData.gender,
+            contactPhone: userData.contactPhone,
+          }),
+        });
+
+        if (!res.ok) {
+          const errBody = await res.json().catch(() => null);
+          const message = errBody?.message ?? `Registration failed with status ${res.status}`;
+          throw new Error(Array.isArray(message) ? message.join(', ') : message);
+        }
+
+        const data = await res.json();
+        if (!data?.accessToken || !data?.user) {
+          throw new Error('Respuesta de registro inválida');
+        }
+
+        const mappedUser = hydrateUser(data.user);
+        saveSession(mappedUser, data.accessToken, data.expiresIn);
+        return true;
+      } catch (error) {
+        console.error('Registration failed', error);
+        clearSession();
+        return false;
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [apiBase, saveSession, clearSession],
+  );
 
   useEffect(() => {
     let cancelled = false;
