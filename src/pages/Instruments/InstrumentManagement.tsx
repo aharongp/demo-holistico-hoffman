@@ -63,6 +63,7 @@ export const InstrumentManagement: React.FC = () => {
     deleteInstrumentType,
   } = useApp();
   const { user: currentUser } = useAuth();
+  const isAdmin = currentUser?.role === 'administrator';
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'all' | 'themes' | 'criteria'>('all');
   const [searchTerm] = useState('');
@@ -301,6 +302,10 @@ export const InstrumentManagement: React.FC = () => {
   }, []);
 
   const handleOpenTypeModal = useCallback((instrumentType?: InstrumentType) => {
+    if (!isAdmin) {
+      setTypeError('Solo los administradores pueden gestionar tipos de instrumento.');
+      return;
+    }
     if (instrumentType) {
       setEditingInstrumentType(instrumentType);
       setTypeFormData({
@@ -314,12 +319,16 @@ export const InstrumentManagement: React.FC = () => {
     }
     setTypeError(null);
     setIsTypeModalOpen(true);
-  }, []);
+  }, [isAdmin]);
 
   const handleTypeSubmit = useCallback(
     async (event: React.FormEvent<HTMLFormElement>) => {
       event.preventDefault();
       if (typeSaving) return;
+      if (!isAdmin) {
+        setTypeError('Solo los administradores pueden gestionar tipos de instrumento.');
+        return;
+      }
 
       const trimmedName = typeFormData.name.trim();
       if (!trimmedName) {
@@ -365,11 +374,15 @@ export const InstrumentManagement: React.FC = () => {
         setTypeSaving(false);
       }
     },
-    [closeTypeModal, createInstrumentType, editingInstrumentType, resourceAuthor, typeFormData, typeSaving, updateInstrumentType],
+    [closeTypeModal, createInstrumentType, editingInstrumentType, isAdmin, resourceAuthor, typeFormData, typeSaving, updateInstrumentType],
   );
 
   const handleDeleteType = useCallback(
     async (instrumentType: InstrumentType) => {
+      if (!isAdmin) {
+        setTypeError('Solo los administradores pueden gestionar tipos de instrumento.');
+        return;
+      }
       if (!confirm(`¿Eliminar el tipo de instrumento "${instrumentType.name}"?`)) {
         return;
       }
@@ -391,10 +404,14 @@ export const InstrumentManagement: React.FC = () => {
         setDeletingTypeId(null);
       }
     },
-    [activeInstrumentType, deleteInstrumentType, getInstrumentFormDefaults],
+    [activeInstrumentType, deleteInstrumentType, getInstrumentFormDefaults, isAdmin],
   );
 
   const handleOpenSubjectModal = useCallback((subject?: Subject) => {
+    if (!isAdmin) {
+      setSubjectsError('Solo los administradores pueden gestionar temas.');
+      return;
+    }
     if (subject) {
       setEditingSubject(subject);
       setSubjectFormData({
@@ -408,9 +425,13 @@ export const InstrumentManagement: React.FC = () => {
     }
     setSubjectsError(null);
     setIsSubjectModalOpen(true);
-  }, []);
+  }, [isAdmin]);
 
   const handleOpenCriterionModal = useCallback((criterion?: Criterion) => {
+    if (!isAdmin) {
+      setCriteriaError('Solo los administradores pueden gestionar criterios.');
+      return;
+    }
     if (criterion) {
       setEditingCriterion(criterion);
       setCriterionFormData({
@@ -423,11 +444,15 @@ export const InstrumentManagement: React.FC = () => {
     }
     setCriteriaError(null);
     setIsCriterionModalOpen(true);
-  }, []);
+  }, [isAdmin]);
 
   const handleSubjectSubmit = useCallback(async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (subjectSaving) return;
+    if (!isAdmin) {
+      setSubjectsError('Solo los administradores pueden gestionar temas.');
+      return;
+    }
 
     const trimmedName = subjectFormData.name.trim();
     if (!trimmedName) {
@@ -479,11 +504,15 @@ export const InstrumentManagement: React.FC = () => {
     } finally {
       setSubjectSaving(false);
     }
-  }, [apiBase, closeSubjectModal, editingSubject, mapSubjectFromApi, resourceAuthor, sortSubjects, subjectFormData, subjectSaving]);
+  }, [apiBase, closeSubjectModal, editingSubject, isAdmin, mapSubjectFromApi, resourceAuthor, sortSubjects, subjectFormData, subjectSaving]);
 
   const handleCriterionSubmit = useCallback(async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (criterionSaving) return;
+    if (!isAdmin) {
+      setCriteriaError('Solo los administradores pueden gestionar criterios.');
+      return;
+    }
 
     const trimmedName = criterionFormData.name.trim();
     if (!trimmedName) {
@@ -534,9 +563,13 @@ export const InstrumentManagement: React.FC = () => {
     } finally {
       setCriterionSaving(false);
     }
-  }, [apiBase, closeCriterionModal, criterionFormData, criterionSaving, editingCriterion, mapCriterionFromApi, resourceAuthor, sortCriteria]);
+  }, [apiBase, closeCriterionModal, criterionFormData, criterionSaving, editingCriterion, isAdmin, mapCriterionFromApi, resourceAuthor, sortCriteria]);
 
   const handleDeleteSubject = useCallback(async (subject: Subject) => {
+    if (!isAdmin) {
+      setSubjectsError('Solo los administradores pueden gestionar temas.');
+      return;
+    }
     if (!confirm(`¿Eliminar el tema "${subject.name}"?`)) {
       return;
     }
@@ -557,9 +590,13 @@ export const InstrumentManagement: React.FC = () => {
     } catch (error: any) {
       setSubjectsError(error?.message ?? 'Error eliminando el tema');
     }
-  }, [apiBase]);
+  }, [apiBase, isAdmin]);
 
   const handleDeleteCriterion = useCallback(async (criterion: Criterion) => {
+    if (!isAdmin) {
+      setCriteriaError('Solo los administradores pueden gestionar criterios.');
+      return;
+    }
     if (!confirm(`¿Eliminar el criterio "${criterion.name}"?`)) {
       return;
     }
@@ -580,7 +617,7 @@ export const InstrumentManagement: React.FC = () => {
     } catch (error: any) {
       setCriteriaError(error?.message ?? 'Error eliminando el criterio');
     }
-  }, [apiBase]);
+  }, [apiBase, isAdmin]);
 
   const subjectColumns = useMemo(
     () => [
@@ -623,33 +660,37 @@ export const InstrumentManagement: React.FC = () => {
         header: 'Acciones',
         render: (subject: Subject) => (
           <div className="flex space-x-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={(event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                handleOpenSubjectModal(subject);
-              }}
-            >
-              <Edit className="w-4 h-4" />
-            </Button>
-            <Button
-              variant="danger"
-              size="sm"
-              onClick={(event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                handleDeleteSubject(subject);
-              }}
-            >
-              <Trash2 className="w-4 h-4" />
-            </Button>
+            {isAdmin ? (
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    handleOpenSubjectModal(subject);
+                  }}
+                >
+                  <Edit className="w-4 h-4" />
+                </Button>
+                <Button
+                  variant="danger"
+                  size="sm"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    handleDeleteSubject(subject);
+                  }}
+                >
+                  <Trash2 className="w-4 h-4" />
+                </Button>
+              </>
+            ) : null}
           </div>
         ),
       },
     ],
-    [handleDeleteSubject, handleOpenSubjectModal],
+    [handleDeleteSubject, handleOpenSubjectModal, isAdmin],
   );
 
   const criteriaColumns = useMemo(
@@ -673,41 +714,46 @@ export const InstrumentManagement: React.FC = () => {
         header: 'Creado por',
         render: (criterion: Criterion) => criterion.createdBy ?? '—',
       },
-      {
-        key: 'actions',
-        header: 'Acciones',
-        render: (criterion: Criterion) => (
-          <div className="flex space-x-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={(event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                handleOpenCriterionModal(criterion);
-              }}
-            >
-              <Edit className="w-4 h-4" />
-            </Button>
-            <Button
-              variant="danger"
-              size="sm"
-              onClick={(event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                handleDeleteCriterion(criterion);
-              }}
-            >
-              <Trash2 className="w-4 h-4" />
-            </Button>
-          </div>
-        ),
-      },
-    ],
-    [handleDeleteCriterion, handleOpenCriterionModal],
+      isAdmin
+        ? {
+            key: 'actions',
+            header: 'Acciones',
+            render: (criterion: Criterion) => (
+              <div className="flex space-x-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    handleOpenCriterionModal(criterion);
+                  }}
+                >
+                  <Edit className="w-4 h-4" />
+                </Button>
+                <Button
+                  variant="danger"
+                  size="sm"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    handleDeleteCriterion(criterion);
+                  }}
+                >
+                  <Trash2 className="w-4 h-4" />
+                </Button>
+              </div>
+            ),
+          }
+        : null,
+    ].filter(Boolean),
+    [handleDeleteCriterion, handleOpenCriterionModal, isAdmin],
   );
 
   const handleOpenModal = (instrument?: Instrument) => {
+    if (!isAdmin) {
+      return;
+    }
     setInstrumentSaving(false);
     if (instrument) {
       setEditingInstrument(instrument);
@@ -731,6 +777,10 @@ export const InstrumentManagement: React.FC = () => {
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (instrumentSaving) return;
+    if (!isAdmin) {
+      setInstrumentError('Solo los administradores pueden crear o editar instrumentos.');
+      return;
+    }
 
     setInstrumentError(null);
 
@@ -783,6 +833,9 @@ export const InstrumentManagement: React.FC = () => {
   };
 
   const handleDelete = async (instrumentId: string) => {
+    if (!isAdmin) {
+      return;
+    }
     if (!confirm('¿Seguro que deseas eliminar este instrumento?')) {
       return;
     }
@@ -843,26 +896,30 @@ export const InstrumentManagement: React.FC = () => {
           >
             <Eye className="w-4 h-4" />
           </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={(event) => {
-              event.stopPropagation();
-              handleOpenModal(instrument);
-            }}
-          >
-            <Edit className="w-4 h-4" />
-          </Button>
-          <Button
-            variant="danger"
-            size="sm"
-            onClick={(event) => {
-              event.stopPropagation();
-              handleDelete(instrument.id);
-            }}
-          >
-            <Trash2 className="w-4 h-4" />
-          </Button>
+          {isAdmin ? (
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  handleOpenModal(instrument);
+                }}
+              >
+                <Edit className="w-4 h-4" />
+              </Button>
+              <Button
+                variant="danger"
+                size="sm"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  handleDelete(instrument.id);
+                }}
+              >
+                <Trash2 className="w-4 h-4" />
+              </Button>
+            </>
+          ) : null}
         </div>
       ),
     },
@@ -957,6 +1014,11 @@ export const InstrumentManagement: React.FC = () => {
         </div>
 
   <Card className="border border-white/50 bg-white/85 shadow-[0_30px_90px_rgba(15,23,42,0.12)] backdrop-blur" padding="lg">
+        {!isAdmin && (
+          <div className="mb-6 rounded-3xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            Solo los administradores pueden crear, editar o eliminar instrumentos, tipos y temas.
+          </div>
+        )}
         {/* Tab content switch */}
   {activeTab === 'all' && (
           <div className="py-4">
@@ -972,14 +1034,18 @@ export const InstrumentManagement: React.FC = () => {
                   className="w-full rounded-3xl border border-white/60 bg-white/70 pl-10 pr-4 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-300"
                 />
               </div>
-              <Button
-                onClick={() => handleOpenTypeModal()}
-                size="sm"
-                className="rounded-full bg-gradient-to-r from-[#1F2937] via-[#303A4A] to-[#4B5563] px-5 py-2 text-sm font-semibold text-white shadow-lg shadow-slate-900/30 transition hover:translate-y-0.5"
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Nuevo tipo
-              </Button>
+              {isAdmin ? (
+                <Button
+                  onClick={() => handleOpenTypeModal()}
+                  size="sm"
+                  className="rounded-full bg-gradient-to-r from-[#1F2937] via-[#303A4A] to-[#4B5563] px-5 py-2 text-sm font-semibold text-white shadow-lg shadow-slate-900/30 transition hover:translate-y-0.5"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Nuevo tipo
+                </Button>
+              ) : (
+                <span className="text-xs text-slate-500">Acceso de solo lectura para tipos registrados.</span>
+              )}
             </div>
             {typeError && !isTypeModalOpen && (
               <div className="mb-4 text-sm text-red-600">{typeError}</div>
@@ -1072,34 +1138,36 @@ export const InstrumentManagement: React.FC = () => {
                             </span>
                           )}
                         </div>
-                        <div className="flex items-center space-x-2">
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={(event) => {
-                              event.preventDefault();
-                              event.stopPropagation();
-                              handleOpenTypeModal(type);
-                            }}
-                            disabled={typeSaving || deletingTypeId === type.id}
-                          >
-                            <Edit className="w-4 h-4" />
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="danger"
-                            size="sm"
-                            onClick={(event) => {
-                              event.preventDefault();
-                              event.stopPropagation();
-                              handleDeleteType(type);
-                            }}
-                            disabled={deletingTypeId === type.id || typeSaving}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
+                        {isAdmin ? (
+                          <div className="flex items-center space-x-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={(event) => {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                handleOpenTypeModal(type);
+                              }}
+                              disabled={typeSaving || deletingTypeId === type.id}
+                            >
+                              <Edit className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="danger"
+                              size="sm"
+                              onClick={(event) => {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                handleDeleteType(type);
+                              }}
+                              disabled={deletingTypeId === type.id || typeSaving}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        ) : null}
                       </div>
                       <p className="min-h-[48px] break-words text-sm text-slate-600">
                         {type.description ?? 'Sin descripción'}
@@ -1125,14 +1193,18 @@ export const InstrumentManagement: React.FC = () => {
                 {showAllInstrumentsTable ? 'Ocultar tabla de instrumentos' : 'Ver tabla de instrumentos'}
               </Button>
               {activeInstrumentType ? (
-                <Button
-                  onClick={() => handleOpenModal()}
-                  disabled={subjects.length === 0}
-                  className="rounded-full bg-gradient-to-r from-[#1F2937] via-[#303A4A] to-[#4B5563] px-5 py-2 text-sm font-semibold text-white shadow-lg shadow-slate-900/30 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  <Plus className="w-4 h-4 mr-2" />
-                  Agregar instrumento
-                </Button>
+                isAdmin ? (
+                  <Button
+                    onClick={() => handleOpenModal()}
+                    disabled={subjects.length === 0}
+                    className="rounded-full bg-gradient-to-r from-[#1F2937] via-[#303A4A] to-[#4B5563] px-5 py-2 text-sm font-semibold text-white shadow-lg shadow-slate-900/30 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Agregar instrumento
+                  </Button>
+                ) : (
+                  <span className="text-xs text-slate-500">Solo los administradores pueden agregar instrumentos.</span>
+                )
               ) : (
                 <span className="text-xs text-gray-500">
                   Selecciona un tipo de instrumento para habilitar la creación.
@@ -1162,14 +1234,18 @@ export const InstrumentManagement: React.FC = () => {
                 <h2 className="text-lg font-semibold">Temas</h2>
                 <p className="text-sm text-gray-600">Listado de todos los temas disponibles en la plataforma.</p>
               </div>
-              <Button
-                onClick={() => handleOpenSubjectModal()}
-                size="sm"
-                className="rounded-full bg-gradient-to-r from-[#1F2937] via-[#303A4A] to-[#4B5563] px-5 py-2 text-sm font-semibold text-white shadow-lg shadow-slate-900/30 transition hover:translate-y-0.5"
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Nuevo tema
-              </Button>
+              {isAdmin ? (
+                <Button
+                  onClick={() => handleOpenSubjectModal()}
+                  size="sm"
+                  className="rounded-full bg-gradient-to-r from-[#1F2937] via-[#303A4A] to-[#4B5563] px-5 py-2 text-sm font-semibold text-white shadow-lg shadow-slate-900/30 transition hover:translate-y-0.5"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Nuevo tema
+                </Button>
+              ) : (
+                <span className="text-xs text-slate-500">Solo lectura: contacta a un administrador para crear nuevos temas.</span>
+              )}
             </div>
             {subjectsLoading && (
               <div className="text-sm text-gray-600 mb-4">Cargando temas...</div>
@@ -1197,10 +1273,14 @@ export const InstrumentManagement: React.FC = () => {
                 <h2 className="text-lg font-semibold">Criterios</h2>
                 <p className="text-sm text-gray-600">Administración de criterios asociados a instrumentos y preguntas.</p>
               </div>
-              <Button onClick={() => handleOpenCriterionModal()} size="sm" className="rounded-full bg-gradient-to-r from-[#1F2937] via-[#303A4A] to-[#4B5563] px-5 py-2 text-sm font-semibold text-white shadow-lg shadow-slate-900/30 transition hover:translate-y-0.5">
-                <Plus className="w-4 h-4 mr-2" />
-                Nuevo criterio
-              </Button>
+              {isAdmin ? (
+                <Button onClick={() => handleOpenCriterionModal()} size="sm" className="rounded-full bg-gradient-to-r from-[#1F2937] via-[#303A4A] to-[#4B5563] px-5 py-2 text-sm font-semibold text-white shadow-lg shadow-slate-900/30 transition hover:translate-y-0.5">
+                  <Plus className="w-4 h-4 mr-2" />
+                  Nuevo criterio
+                </Button>
+              ) : (
+                <span className="text-xs text-slate-500">Solo los administradores pueden crear criterios.</span>
+              )}
             </div>
             {criteriaLoading && (
               <div className="text-sm text-gray-600 mb-4">Cargando criterios...</div>
@@ -1230,123 +1310,130 @@ export const InstrumentManagement: React.FC = () => {
         size="lg"
       >
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Tema asociado</label>
-            <select
-              required
-              value={formData.subjectId}
-              onChange={(event) => setFormData((prev) => ({ ...prev, subjectId: event.target.value }))}
-              className="w-full rounded-2xl border border-gray-300 bg-white/70 px-3 py-2 text-sm text-slate-900 focus:border-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-300"
-            >
-              <option value="">Selecciona un tema</option>
-              {subjects.map((subject) => (
-                <option key={subject.id} value={subject.id}>
-                  {subject.name}
-                </option>
-              ))}
-            </select>
-            {currentInstrumentTypeName && (
-              <p className="mt-2 text-xs text-gray-500">
-                Tipo de instrumento seleccionado: {currentInstrumentTypeName}
-              </p>
-            )}
-            {subjects.length === 0 && (
-              <p className="mt-2 text-xs text-gray-500">Debes crear al menos un tema antes de registrar un instrumento.</p>
-            )}
-          </div>
+          {!isAdmin && (
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+              No tienes permisos para modificar instrumentos.
+            </div>
+          )}
+          <fieldset disabled={!isAdmin || instrumentSaving} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Tema asociado</label>
+              <select
+                required
+                value={formData.subjectId}
+                onChange={(event) => setFormData((prev) => ({ ...prev, subjectId: event.target.value }))}
+                className="w-full rounded-2xl border border-gray-300 bg-white/70 px-3 py-2 text-sm text-slate-900 focus:border-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-300"
+              >
+                <option value="">Selecciona un tema</option>
+                {subjects.map((subject) => (
+                  <option key={subject.id} value={subject.id}>
+                    {subject.name}
+                  </option>
+                ))}
+              </select>
+              {currentInstrumentTypeName && (
+                <p className="mt-2 text-xs text-gray-500">
+                  Tipo de instrumento seleccionado: {currentInstrumentTypeName}
+                </p>
+              )}
+              {subjects.length === 0 && (
+                <p className="mt-2 text-xs text-gray-500">Debes crear al menos un tema antes de registrar un instrumento.</p>
+              )}
+            </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Descripción</label>
-            <textarea
-              value={formData.description}
-              onChange={(event) => setFormData((prev) => ({ ...prev, description: event.target.value }))}
-              rows={3}
-              className="w-full rounded-2xl border border-gray-300 bg-white/70 px-3 py-2 text-sm text-slate-900 focus:border-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-300"
-              placeholder="Describe brevemente el instrumento"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Disponible en</label>
-            <select
-              value={formData.resource}
-              onChange={(event) => setFormData((prev) => ({ ...prev, resource: event.target.value }))}
-              className="w-full rounded-2xl border border-gray-300 bg-white/70 px-3 py-2 text-sm text-slate-900 focus:border-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-300"
-            >
-              {RESOURCE_OPTIONS.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Disponible para:</label>
-            <select
-              value={formData.availability}
-              onChange={(event) => setFormData((prev) => ({ ...prev, availability: event.target.value }))}
-              className="w-full rounded-2xl border border-gray-300 bg-white/70 px-3 py-2 text-sm text-slate-900 focus:border-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-300"
-            >
-              {AUDIENCE_OPTIONS.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Los resultados serán por:</label>
-            <select
-              value={formData.resultDelivery ?? ''}
-              onChange={(event) =>
-                setFormData((prev) => ({
-                  ...prev,
-                  resultDelivery: event.target.value ? (event.target.value as Exclude<ResultDeliveryOption, null>) : null,
-                }))
-              }
-              className="w-full rounded-2xl border border-gray-300 bg-white/70 px-3 py-2 text-sm text-slate-900 focus:border-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-300"
-            >
-              {RESULT_DELIVERY_OPTIONS.map((option) => (
-                <option key={option.value ?? 'none'} value={option.value ?? ''}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">¿Colores en la respuesta del instrumento?</label>
-            <select
-              value={String(formData.colorResponse)}
-              onChange={(event) =>
-                setFormData((prev) => ({
-                  ...prev,
-                  colorResponse: event.target.value === '1' ? 1 : 0,
-                }))
-              }
-              className="w-full rounded-2xl border border-gray-300 bg-white/70 px-3 py-2 text-sm text-slate-900 focus:border-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-300"
-            >
-              {COLOR_RESPONSE_OPTIONS.map((option) => (
-                <option key={option.value} value={String(option.value)}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="flex items-center justify-between">
-            <label className="inline-flex items-center space-x-2 text-sm text-gray-700">
-              <input
-                type="checkbox"
-                checked={formData.isActive}
-                onChange={(event) => setFormData((prev) => ({ ...prev, isActive: event.target.checked }))}
-                className="h-4 w-4 rounded border-gray-300 bg-white/70 text-gray-600 focus:ring-gray-400"
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Descripción</label>
+              <textarea
+                value={formData.description}
+                onChange={(event) => setFormData((prev) => ({ ...prev, description: event.target.value }))}
+                rows={3}
+                className="w-full rounded-2xl border border-gray-300 bg-white/70 px-3 py-2 text-sm text-slate-900 focus:border-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-300"
+                placeholder="Describe brevemente el instrumento"
               />
-              <span>Activo</span>
-            </label>
-          </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Disponible en</label>
+              <select
+                value={formData.resource}
+                onChange={(event) => setFormData((prev) => ({ ...prev, resource: event.target.value }))}
+                className="w-full rounded-2xl border border-gray-300 bg-white/70 px-3 py-2 text-sm text-slate-900 focus:border-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-300"
+              >
+                {RESOURCE_OPTIONS.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Disponible para:</label>
+              <select
+                value={formData.availability}
+                onChange={(event) => setFormData((prev) => ({ ...prev, availability: event.target.value }))}
+                className="w-full rounded-2xl border border-gray-300 bg-white/70 px-3 py-2 text-sm text-slate-900 focus:border-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-300"
+              >
+                {AUDIENCE_OPTIONS.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Los resultados serán por:</label>
+              <select
+                value={formData.resultDelivery ?? ''}
+                onChange={(event) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    resultDelivery: event.target.value ? (event.target.value as Exclude<ResultDeliveryOption, null>) : null,
+                  }))
+                }
+                className="w-full rounded-2xl border border-gray-300 bg-white/70 px-3 py-2 text-sm text-slate-900 focus:border-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-300"
+              >
+                {RESULT_DELIVERY_OPTIONS.map((option) => (
+                  <option key={option.value ?? 'none'} value={option.value ?? ''}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">¿Colores en la respuesta del instrumento?</label>
+              <select
+                value={String(formData.colorResponse)}
+                onChange={(event) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    colorResponse: event.target.value === '1' ? 1 : 0,
+                  }))
+                }
+                className="w-full rounded-2xl border border-gray-300 bg-white/70 px-3 py-2 text-sm text-slate-900 focus:border-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-300"
+              >
+                {COLOR_RESPONSE_OPTIONS.map((option) => (
+                  <option key={option.value} value={String(option.value)}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <label className="inline-flex items-center space-x-2 text-sm text-gray-700">
+                <input
+                  type="checkbox"
+                  checked={formData.isActive}
+                  onChange={(event) => setFormData((prev) => ({ ...prev, isActive: event.target.checked }))}
+                  className="h-4 w-4 rounded border-gray-300 bg-white/70 text-gray-600 focus:ring-gray-400"
+                />
+                <span>Activo</span>
+              </label>
+            </div>
+          </fieldset>
 
           {instrumentError && (
             <div className="text-sm text-red-600">{instrumentError}</div>
@@ -1361,7 +1448,7 @@ export const InstrumentManagement: React.FC = () => {
             >
               Cancelar
             </Button>
-            <Button type="submit" disabled={instrumentSaving}>
+            <Button type="submit" disabled={!isAdmin || instrumentSaving}>
               {instrumentSaving
                 ? 'Guardando...'
                 : editingInstrument
@@ -1378,44 +1465,51 @@ export const InstrumentManagement: React.FC = () => {
         title={editingInstrumentType ? 'Editar tipo de instrumento' : 'Nuevo tipo de instrumento'}
       >
         <form onSubmit={handleTypeSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Nombre</label>
-            <input
-              type="text"
-              required
-              value={typeFormData.name}
-              onChange={(event) => setTypeFormData((prev) => ({ ...prev, name: event.target.value }))}
-              className="w-full rounded-2xl border border-gray/60 bg-white/70 px-3 py-2 text-sm text-slate-900 focus:border-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-300"
-              placeholder="Ingresa el nombre del tipo"
-            />
-          </div>
+          {!isAdmin && (
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+              No tienes permisos para modificar tipos de instrumento.
+            </div>
+          )}
+          <fieldset disabled={!isAdmin || typeSaving} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Nombre</label>
+              <input
+                type="text"
+                required
+                value={typeFormData.name}
+                onChange={(event) => setTypeFormData((prev) => ({ ...prev, name: event.target.value }))}
+                className="w-full rounded-2xl border border-gray/60 bg-white/70 px-3 py-2 text-sm text-slate-900 focus:border-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-300"
+                placeholder="Ingresa el nombre del tipo"
+              />
+            </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Descripción</label>
-            <textarea
-              value={typeFormData.description}
-              onChange={(event) => setTypeFormData((prev) => ({ ...prev, description: event.target.value }))}
-              rows={3}
-              className="w-full rounded-2xl border border-gray/60 bg-white/70 px-3 py-2 text-sm text-slate-900 focus:border-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-300"
-              placeholder="Describe brevemente el tipo de instrumento"
-            />
-          </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Descripción</label>
+              <textarea
+                value={typeFormData.description}
+                onChange={(event) => setTypeFormData((prev) => ({ ...prev, description: event.target.value }))}
+                rows={3}
+                className="w-full rounded-2xl border border-gray/60 bg-white/70 px-3 py-2 text-sm text-slate-900 focus:border-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-300"
+                placeholder="Describe brevemente el tipo de instrumento"
+              />
+            </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Criterio asociado</label>
-            <select
-              value={typeFormData.criterionId}
-              onChange={(event) => setTypeFormData((prev) => ({ ...prev, criterionId: event.target.value }))}
-              className="w-full rounded-2xl border border-gray/60 bg-white/70 px-3 py-2 text-sm text-slate-900 focus:border-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-300"
-            >
-              <option value="">Sin criterio</option>
-              {criteria.map((criterion) => (
-                <option key={criterion.id} value={criterion.id}>
-                  {criterion.name}
-                </option>
-              ))}
-            </select>
-          </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Criterio asociado</label>
+              <select
+                value={typeFormData.criterionId}
+                onChange={(event) => setTypeFormData((prev) => ({ ...prev, criterionId: event.target.value }))}
+                className="w-full rounded-2xl border border-gray/60 bg-white/70 px-3 py-2 text-sm text-slate-900 focus:border-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-300"
+              >
+                <option value="">Sin criterio</option>
+                {criteria.map((criterion) => (
+                  <option key={criterion.id} value={criterion.id}>
+                    {criterion.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </fieldset>
 
           {typeError && (
             <div className="text-sm text-red-600">{typeError}</div>
@@ -1425,7 +1519,7 @@ export const InstrumentManagement: React.FC = () => {
             <Button type="button" variant="outline" onClick={closeTypeModal} disabled={typeSaving}>
               Cancelar
             </Button>
-            <Button type="submit" disabled={typeSaving}>
+            <Button type="submit" disabled={!isAdmin || typeSaving}>
               {typeSaving ? 'Guardando...' : editingInstrumentType ? 'Actualizar tipo' : 'Crear tipo'}
             </Button>
           </div>
@@ -1482,44 +1576,51 @@ export const InstrumentManagement: React.FC = () => {
         title={editingSubject ? 'Editar tema' : 'Agregar tema'}
       >
         <form onSubmit={handleSubjectSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Nombre</label>
-            <input
-              type="text"
-              required
-              value={subjectFormData.name}
-              onChange={(event) => setSubjectFormData((prev) => ({ ...prev, name: event.target.value }))}
-              className="w-full rounded-2xl border border-gray/60 bg-white/70 px-3 py-2 text-sm text-slate-900 focus:border-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-300"
-              placeholder="Ingresa el nombre del tema"
-            />
-          </div>
+          {!isAdmin && (
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+              No tienes permisos para modificar temas.
+            </div>
+          )}
+          <fieldset disabled={!isAdmin || subjectSaving} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Nombre</label>
+              <input
+                type="text"
+                required
+                value={subjectFormData.name}
+                onChange={(event) => setSubjectFormData((prev) => ({ ...prev, name: event.target.value }))}
+                className="w-full rounded-2xl border border-gray/60 bg-white/70 px-3 py-2 text-sm text-slate-900 focus:border-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-300"
+                placeholder="Ingresa el nombre del tema"
+              />
+            </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Descripción</label>
-            <textarea
-              value={subjectFormData.description}
-              onChange={(event) => setSubjectFormData((prev) => ({ ...prev, description: event.target.value }))}
-              rows={3}
-              className="w-full rounded-2xl border border-gray/60 bg-white/70 px-3 py-2 text-sm text-slate-900 focus:border-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-300"
-              placeholder="Descripción breve del tema"
-            />
-          </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Descripción</label>
+              <textarea
+                value={subjectFormData.description}
+                onChange={(event) => setSubjectFormData((prev) => ({ ...prev, description: event.target.value }))}
+                rows={3}
+                className="w-full rounded-2xl border border-gray/60 bg-white/70 px-3 py-2 text-sm text-slate-900 focus:border-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-300"
+                placeholder="Descripción breve del tema"
+              />
+            </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Tipo de instrumento</label>
-            <select
-              value={subjectFormData.instrumentType}
-              onChange={(event) => setSubjectFormData((prev) => ({ ...prev, instrumentType: event.target.value }))}
-              className="w-full rounded-2xl border border-gray/60 bg-white/70 px-3 py-2 text-sm text-slate-900 focus:border-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-300"
-            >
-              <option value="">Selecciona un tipo (opcional)</option>
-              {instrumentTypes.map((type) => (
-                <option key={type.id} value={type.name}>
-                  {type.name || `Tipo ${type.id}`}
-                </option>
-              ))}
-            </select>
-          </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Tipo de instrumento</label>
+              <select
+                value={subjectFormData.instrumentType}
+                onChange={(event) => setSubjectFormData((prev) => ({ ...prev, instrumentType: event.target.value }))}
+                className="w-full rounded-2xl border border-gray/60 bg-white/70 px-3 py-2 text-sm text-slate-900 focus:border-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-300"
+              >
+                <option value="">Selecciona un tipo (opcional)</option>
+                {instrumentTypes.map((type) => (
+                  <option key={type.id} value={type.name}>
+                    {type.name || `Tipo ${type.id}`}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </fieldset>
 
           {subjectsError && (
             <div className="text-sm text-red-600">{subjectsError}</div>
@@ -1529,7 +1630,7 @@ export const InstrumentManagement: React.FC = () => {
             <Button type="button" variant="outline" onClick={closeSubjectModal} disabled={subjectSaving}>
               Cancelar
             </Button>
-            <Button type="submit" disabled={subjectSaving}>
+            <Button type="submit" disabled={!isAdmin || subjectSaving}>
               {subjectSaving ? 'Guardando...' : editingSubject ? 'Actualizar' : 'Crear'}
             </Button>
           </div>

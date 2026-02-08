@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Calendar, Clock, Edit, FileText, Loader2, Plus, Trash2, User } from 'lucide-react';
 import { Card } from '../../components/UI/Card';
@@ -6,6 +6,7 @@ import { Button } from '../../components/UI/Button';
 import { Modal } from '../../components/UI/Modal';
 import { Table } from '../../components/UI/Table';
 import { useApp } from '../../context/AppContext';
+import { useAuth } from '../../context/AuthContext';
 import { ProgramActivity, ProgramDetails } from '../../types';
 
 const DAY_OPTIONS = [
@@ -38,6 +39,8 @@ export const ProgramDetail: React.FC = () => {
   const { programId } = useParams<{ programId: string }>();
   const navigate = useNavigate();
   const { getProgramDetails, addProgramActivity, updateProgramActivity, deleteProgramActivity } = useApp();
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'administrator';
 
   const [program, setProgram] = useState<ProgramDetails | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -77,7 +80,10 @@ export const ProgramDetail: React.FC = () => {
     };
   }, [programId, getProgramDetails]);
 
-  const handleOpenModal = (activity?: ProgramActivity) => {
+  const handleOpenModal = useCallback((activity?: ProgramActivity) => {
+    if (!isAdmin) {
+      return;
+    }
     if (activity) {
       setEditingActivity(activity);
       setFormState({
@@ -91,7 +97,7 @@ export const ProgramDetail: React.FC = () => {
       setFormState(initialFormState);
     }
     setIsModalOpen(true);
-  };
+  }, [isAdmin]);
 
   const handleCloseModal = () => {
     if (isSaving) return;
@@ -106,7 +112,7 @@ export const ProgramDetail: React.FC = () => {
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!program || !programId) return;
+    if (!program || !programId || !isAdmin) return;
 
     if (!formState.day) {
       alert('Selecciona un día para la actividad.');
@@ -152,8 +158,8 @@ export const ProgramDetail: React.FC = () => {
     }
   };
 
-  const handleDeleteActivity = async (activity: ProgramActivity) => {
-    if (!programId || !program) return;
+  const handleDeleteActivity = useCallback(async (activity: ProgramActivity) => {
+    if (!programId || !isAdmin) return;
 
     if (!confirm(`¿Seguro que deseas eliminar la actividad "${activity.name}"?`)) {
       return;
@@ -178,7 +184,7 @@ export const ProgramDetail: React.FC = () => {
       console.error('No se pudo eliminar la actividad', error);
       alert('No se pudo eliminar la actividad. Intenta nuevamente.');
     }
-  };
+  }, [deleteProgramActivity, isAdmin, programId]);
 
   const sortedActivities = useMemo(() => {
     if (!program) return [] as ProgramActivity[];
@@ -199,14 +205,14 @@ export const ProgramDetail: React.FC = () => {
     });
   }, [program]);
 
-  const formatDateTime = (value?: Date | null) => {
+  const formatDateTime = useCallback((value?: Date | null) => {
     if (!value) return '—';
     try {
       return value.toLocaleString();
     } catch {
       return '—';
     }
-  };
+  }, []);
 
   const activityStats = useMemo(() => {
     if (!program) {
@@ -235,75 +241,82 @@ export const ProgramDetail: React.FC = () => {
     };
   }, [program, sortedActivities]);
 
-  const activityColumns = [
-    {
-      key: 'name',
-      header: 'Actividad',
-      render: (activity: ProgramActivity) => (
-        <div className="flex flex-col">
-          <span className="font-medium text-gray-900">{activity.name}</span>
-          {activity.description && (
-            <span className="text-sm text-gray-600">{activity.description}</span>
-          )}
-        </div>
-      ),
-    },
-    {
-      key: 'schedule',
-      header: 'Horario',
-      render: (activity: ProgramActivity) => (
-        <div className="flex flex-col text-sm text-gray-700">
-          <span className="flex items-center gap-1">
-            <Calendar className="w-4 h-4 text-gray-400" />
-            {activity.day ? DAY_LABEL_MAP[activity.day] ?? activity.day : 'Sin día'}
-          </span>
-          <span className="flex items-center gap-1">
-            <Clock className="w-4 h-4 text-gray-400" />
-            {activity.time ?? 'Sin hora'}
-          </span>
-        </div>
-      ),
-    },
-    {
-      key: 'meta',
-      header: 'Meta',
-      render: (activity: ProgramActivity) => (
-        <div className="flex flex-col text-sm text-gray-700">
-          <span className="flex items-center gap-1">
-            <User className="w-4 h-4 text-gray-400" />
-            {activity.createdBy ?? '—'}
-          </span>
-          <span className="flex items-center gap-1">
-            <Clock className="w-4 h-4 text-gray-400" />
-            {formatDateTime(activity.createdAt)}
-          </span>
-        </div>
-      ),
-    },
-    {
-      key: 'actions',
-      header: 'Acciones',
-      className: 'text-right',
-      render: (activity: ProgramActivity) => (
-        <div className="flex justify-end gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => handleOpenModal(activity)}
-          >
-            <Edit className="w-4 h-4" />
-          </Button>
-          <Button
-            variant="danger"
-            size="sm"
-            onClick={() => handleDeleteActivity(activity)}
-          >
-            <Trash2 className="w-4 h-4" />
-          </Button>
-        </div>
-      ),
-    },
-  ];
+  const activityColumns = useMemo(() => {
+    const base = [
+      {
+        key: 'name',
+        header: 'Actividad',
+        render: (activity: ProgramActivity) => (
+          <div className="flex flex-col">
+            <span className="font-medium text-gray-900">{activity.name}</span>
+            {activity.description && (
+              <span className="text-sm text-gray-600">{activity.description}</span>
+            )}
+          </div>
+        ),
+      },
+      {
+        key: 'schedule',
+        header: 'Horario',
+        render: (activity: ProgramActivity) => (
+          <div className="flex flex-col text-sm text-gray-700">
+            <span className="flex items-center gap-1">
+              <Calendar className="w-4 h-4 text-gray-400" />
+              {activity.day ? DAY_LABEL_MAP[activity.day] ?? activity.day : 'Sin día'}
+            </span>
+            <span className="flex items-center gap-1">
+              <Clock className="w-4 h-4 text-gray-400" />
+              {activity.time ?? 'Sin hora'}
+            </span>
+          </div>
+        ),
+      },
+      {
+        key: 'meta',
+        header: 'Meta',
+        render: (activity: ProgramActivity) => (
+          <div className="flex flex-col text-sm text-gray-700">
+            <span className="flex items-center gap-1">
+              <User className="w-4 h-4 text-gray-400" />
+              {activity.createdBy ?? '—'}
+            </span>
+            <span className="flex items-center gap-1">
+              <Clock className="w-4 h-4 text-gray-400" />
+              {formatDateTime(activity.createdAt)}
+            </span>
+          </div>
+        ),
+      },
+    ];
+
+    if (isAdmin) {
+      base.push({
+        key: 'actions',
+        header: 'Acciones',
+        className: 'text-right',
+        render: (activity: ProgramActivity) => (
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleOpenModal(activity)}
+            >
+              <Edit className="w-4 h-4" />
+            </Button>
+            <Button
+              variant="danger"
+              size="sm"
+              onClick={() => handleDeleteActivity(activity)}
+            >
+              <Trash2 className="w-4 h-4" />
+            </Button>
+          </div>
+        ),
+      });
+    }
+
+    return base;
+  }, [formatDateTime, handleDeleteActivity, handleOpenModal, isAdmin]);
 
   if (isLoading) {
     return (
@@ -354,13 +367,15 @@ export const ProgramDetail: React.FC = () => {
                 Cuántico
               </span>
             </div>
-            <Button
-              onClick={() => handleOpenModal()}
-              className="rounded-full bg-gradient-to-r from-[#0EA5E9] via-[#6366F1] to-[#A855F7] px-6 py-2 text-sm font-semibold text-white shadow-[0_20px_55px_rgba(14,165,233,0.35)] hover:opacity-95"
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              Añadir actividad
-            </Button>
+            {isAdmin ? (
+              <Button
+                onClick={() => handleOpenModal()}
+                className="rounded-full bg-gradient-to-r from-[#0EA5E9] via-[#6366F1] to-[#A855F7] px-6 py-2 text-sm font-semibold text-white shadow-[0_20px_55px_rgba(14,165,233,0.35)] hover:opacity-95"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Añadir actividad
+              </Button>
+            ) : null}
           </div>
           <div className="space-y-4">
             <div>
@@ -407,14 +422,16 @@ export const ProgramDetail: React.FC = () => {
             <h2 className="text-2xl font-semibold text-slate-900">Actividades</h2>
             <p className="text-sm text-slate-600">Organiza y programa las sesiones asociadas al plan.</p>
           </div>
-          <Button
-            variant="outline"
-            onClick={() => handleOpenModal()}
-            className="rounded-full border border-white/60 bg-white/50 px-5 py-2 text-sm font-semibold text-slate-600 backdrop-blur hover:text-slate-900"
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            Nueva actividad
-          </Button>
+          {isAdmin ? (
+            <Button
+              variant="outline"
+              onClick={() => handleOpenModal()}
+              className="rounded-full border border-white/60 bg-white/50 px-5 py-2 text-sm font-semibold text-slate-600 backdrop-blur hover:text-slate-900"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Nueva actividad
+            </Button>
+          ) : null}
         </div>
 
         {sortedActivities.length === 0 ? (
@@ -439,65 +456,71 @@ export const ProgramDetail: React.FC = () => {
         size="md"
       >
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Nombre de la actividad
-            </label>
-            <input
-              type="text"
-              required
-              value={formState.name}
-              onChange={handleInputChange('name')}
-              className="w-full rounded-2xl border border-gray/60 bg-white/70 px-3 py-2 text-sm text-slate-900 focus:border-[#A5B4FC] focus:outline-none focus:ring-2 focus:ring-[#C7D2FE]"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Descripción
-            </label>
-            <textarea
-              value={formState.description}
-              onChange={handleInputChange('description')}
-              rows={3}
-              className="w-full rounded-2xl border border-gray/60 bg-white/70 px-3 py-2 text-sm text-slate-900 focus:border-[#A5B4FC] focus:outline-none focus:ring-2 focus:ring-[#C7D2FE]"
-            />
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {!isAdmin ? (
+            <p className="text-sm text-slate-500">
+              Solo los administradores pueden crear o modificar actividades.
+            </p>
+          ) : null}
+          <fieldset disabled={!isAdmin} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Día sugerido
-              </label>
-              <select
-                required
-                value={formState.day}
-                onChange={event => setFormState(prev => ({ ...prev, day: event.target.value }))}
-                className="w-full rounded-2xl border border-gray/60 bg-white/70 px-3 py-2 text-sm text-slate-900 focus:border-[#A5B4FC] focus:outline-none focus:ring-2 focus:ring-[#C7D2FE]"
-              >
-                <option value="" disabled>
-                  Selecciona un día
-                </option>
-                {DAY_OPTIONS.map(option => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Hora sugerida
+                Nombre de la actividad
               </label>
               <input
-                type="time"
-                value={formState.time}
-                onChange={handleInputChange('time')}
+                type="text"
+                required
+                value={formState.name}
+                onChange={handleInputChange('name')}
                 className="w-full rounded-2xl border border-gray/60 bg-white/70 px-3 py-2 text-sm text-slate-900 focus:border-[#A5B4FC] focus:outline-none focus:ring-2 focus:ring-[#C7D2FE]"
               />
             </div>
-          </div>
 
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Descripción
+              </label>
+              <textarea
+                value={formState.description}
+                onChange={handleInputChange('description')}
+                rows={3}
+                className="w-full rounded-2xl border border-gray/60 bg-white/70 px-3 py-2 text-sm text-slate-900 focus:border-[#A5B4FC] focus:outline-none focus:ring-2 focus:ring-[#C7D2FE]"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Día sugerido
+                </label>
+                <select
+                  required
+                  value={formState.day}
+                  onChange={event => setFormState(prev => ({ ...prev, day: event.target.value }))}
+                  className="w-full rounded-2xl border border-gray/60 bg-white/70 px-3 py-2 text-sm text-slate-900 focus:border-[#A5B4FC] focus:outline-none focus:ring-2 focus:ring-[#C7D2FE]"
+                >
+                  <option value="" disabled>
+                    Selecciona un día
+                  </option>
+                  {DAY_OPTIONS.map(option => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Hora sugerida
+                </label>
+                <input
+                  type="time"
+                  value={formState.time}
+                  onChange={handleInputChange('time')}
+                  className="w-full rounded-2xl border border-gray/60 bg-white/70 px-3 py-2 text-sm text-slate-900 focus:border-[#A5B4FC] focus:outline-none focus:ring-2 focus:ring-[#C7D2FE]"
+                />
+              </div>
+            </div>
+          </fieldset>
           <div className="flex justify-end gap-3 pt-4">
             <Button
               type="button"
@@ -507,7 +530,7 @@ export const ProgramDetail: React.FC = () => {
             >
               Cancelar
             </Button>
-            <Button type="submit" disabled={isSaving}>
+            <Button type="submit" disabled={!isAdmin || isSaving}>
               {isSaving ? (
                 <span className="flex items-center gap-2">
                   <Loader2 className="w-4 h-4 animate-spin" /> Guardando...

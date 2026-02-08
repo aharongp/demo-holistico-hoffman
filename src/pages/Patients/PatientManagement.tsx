@@ -154,6 +154,10 @@ export const PatientManagement: React.FC = () => {
   }, [filteredPatients]);
 
   const handleOpenModal = (patient?: Patient) => {
+    if (!isAdmin) {
+      setFormError('Solo los administradores pueden gestionar pacientes.');
+      return;
+    }
     setFormError(null);
     if (patient) {
       setEditingPatient(patient);
@@ -183,6 +187,9 @@ export const PatientManagement: React.FC = () => {
   };
 
   const handleOpenAssignModal = (patient: Patient) => {
+    if (!isAdmin) {
+      return;
+    }
     setSelectedPatientForAssign(patient);
     setIsAssignModalOpen(true);
   };
@@ -262,6 +269,10 @@ export const PatientManagement: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isAdmin) {
+      setFormError('Solo los administradores pueden gestionar pacientes.');
+      return;
+    }
     setFormError(null);
 
     const patientData = {
@@ -291,6 +302,9 @@ export const PatientManagement: React.FC = () => {
   };
 
   const handleDelete = async (patientId: string) => {
+    if (!isAdmin) {
+      return;
+    }
     if (confirm('¿Estás seguro de eliminar a este paciente?')) {
       try {
         await deletePatient(patientId);
@@ -387,20 +401,24 @@ export const PatientManagement: React.FC = () => {
           >
             <ListChecks className="w-4 h-4" />
           </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => handleOpenModal(patient)}
-          >
-            <Edit className="w-4 h-4" />
-          </Button>
-          <Button
-            variant="danger"
-            size="sm"
-            onClick={() => handleDelete(patient.id)}
-          >
-            <Trash2 className="w-4 h-4" />
-          </Button>
+          {isAdmin ? (
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleOpenModal(patient)}
+              >
+                <Edit className="w-4 h-4" />
+              </Button>
+              <Button
+                variant="danger"
+                size="sm"
+                onClick={() => handleDelete(patient.id)}
+              >
+                <Trash2 className="w-4 h-4" />
+              </Button>
+            </>
+          ) : null}
         </div>
       ),
     },
@@ -425,12 +443,18 @@ export const PatientManagement: React.FC = () => {
               </p>
             </div>
           </div>
-          <Button
-            onClick={() => handleOpenModal()}
-            className="whitespace-nowrap rounded-full border border-violet-500/30 bg-violet-500 px-6 py-3 text-sm font-semibold text-white shadow-xl shadow-violet-500/25 transition hover:bg-violet-400"
-          >
-            <Plus className="w-4 h-4 mr-2" /> Nuevo paciente
-          </Button>
+          {isAdmin ? (
+            <Button
+              onClick={() => handleOpenModal()}
+              className="whitespace-nowrap rounded-full border border-violet-500/30 bg-violet-500 px-6 py-3 text-sm font-semibold text-white shadow-xl shadow-violet-500/25 transition hover:bg-violet-400"
+            >
+              <Plus className="w-4 h-4 mr-2" /> Nuevo paciente
+            </Button>
+          ) : (
+            <div className="rounded-3xl border border-amber-200/70 bg-amber-50/80 px-4 py-3 text-sm text-amber-700">
+              Solo los administradores pueden registrar o editar pacientes.
+            </div>
+          )}
         </div>
         <div className="relative z-10 grid gap-3 border-t border-white/40 px-6 py-4 text-[0.65rem] uppercase tracking-[0.4em] text-slate-500 sm:grid-cols-3">
           {[

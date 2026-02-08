@@ -6,6 +6,7 @@ import { Button } from '../../components/UI/Button';
 import { Table } from '../../components/UI/Table';
 import { Modal } from '../../components/UI/Modal';
 import { useApp } from '../../context/AppContext';
+import { useAuth } from '../../context/AuthContext';
 import { Instrument, InstrumentTopic, Patient, Question, QuestionOption } from '../../types';
 import { QuestionForm } from './components/QuestionForm';
 
@@ -134,6 +135,8 @@ export const InstrumentDetail: React.FC = () => {
     patients,
     programs,
   } = useApp();
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'administrator';
 
   const [instrument, setInstrument] = useState<Instrument | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -567,18 +570,26 @@ export const InstrumentDetail: React.FC = () => {
 
   const handleOpenCreateForm = useCallback(() => {
     if (!instrument) return;
+    if (!isAdmin) {
+      setActionError('Solo los administradores pueden gestionar preguntas.');
+      return;
+    }
     setFormMode('create');
     setSelectedQuestion(null);
     setActionError(null);
     setIsFormOpen(true);
-  }, [instrument]);
+  }, [instrument, isAdmin]);
 
   const handleOpenEditForm = useCallback((question: Question) => {
+    if (!isAdmin) {
+      setActionError('Solo los administradores pueden gestionar preguntas.');
+      return;
+    }
     setFormMode('edit');
     setSelectedQuestion(question);
     setActionError(null);
     setIsFormOpen(true);
-  }, []);
+  }, [isAdmin]);
 
   const handleCloseForm = useCallback(() => {
     setIsFormOpen(false);
@@ -588,6 +599,10 @@ export const InstrumentDetail: React.FC = () => {
 
   const handleSubmitForm = useCallback(async (values: { text: string; type: Question['type']; order?: number; required: boolean; options?: QuestionOption[]; topicId?: string | null }) => {
     if (!instrument) return;
+    if (!isAdmin) {
+      setActionError('Solo los administradores pueden gestionar preguntas.');
+      return;
+    }
     setIsSaving(true);
     try {
       if (formMode === 'create') {
@@ -618,10 +633,14 @@ export const InstrumentDetail: React.FC = () => {
     } finally {
       setIsSaving(false);
     }
-  }, [instrument, formMode, createQuestion, sortQuestions, selectedQuestion, updateQuestion, handleCloseForm]);
+  }, [instrument, formMode, createQuestion, sortQuestions, selectedQuestion, updateQuestion, handleCloseForm, isAdmin]);
 
   const handleDeleteQuestion = useCallback(async (question: Question) => {
     if (!instrument) return;
+    if (!isAdmin) {
+      setActionError('Solo los administradores pueden gestionar preguntas.');
+      return;
+    }
     const confirmed = window.confirm(`¿Deseas eliminar la pregunta "${question.text}"?`);
     if (!confirmed) {
       return;
@@ -645,7 +664,7 @@ export const InstrumentDetail: React.FC = () => {
     } finally {
       setPendingQuestionId(null);
     }
-  }, [instrument, deleteQuestion]);
+  }, [instrument, deleteQuestion, isAdmin]);
 
   const handleOpenPreview = useCallback(() => {
     setIsPreviewOpen(true);
@@ -711,22 +730,30 @@ export const InstrumentDetail: React.FC = () => {
 
 
   const handleOpenCreateTopic = useCallback(() => {
+    if (!isAdmin) {
+      setTopicFormError('Solo los administradores pueden gestionar tópicos.');
+      return;
+    }
     setTopicFormMode('create');
     setTopicSelection(null);
     setTopicFormName('');
     setTopicFormVisible(true);
     setTopicFormError(null);
     setIsTopicModalOpen(true);
-  }, []);
+  }, [isAdmin]);
 
   const handleOpenEditTopic = useCallback((topic: InstrumentTopic) => {
+    if (!isAdmin) {
+      setTopicFormError('Solo los administradores pueden gestionar tópicos.');
+      return;
+    }
     setTopicFormMode('edit');
     setTopicSelection(topic);
     setTopicFormName(topic.name);
     setTopicFormVisible(topic.isVisible !== false);
     setTopicFormError(null);
     setIsTopicModalOpen(true);
-  }, []);
+  }, [isAdmin]);
 
   const handleCloseTopicModal = useCallback(() => {
     if (isTopicSaving) {
@@ -740,6 +767,10 @@ export const InstrumentDetail: React.FC = () => {
   const handleSubmitTopicForm = useCallback(async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!currentInstrumentId) {
+      return;
+    }
+    if (!isAdmin) {
+      setTopicFormError('Solo los administradores pueden gestionar tópicos.');
       return;
     }
 
@@ -784,12 +815,16 @@ export const InstrumentDetail: React.FC = () => {
     } finally {
       setIsTopicSaving(false);
     }
-  }, [currentInstrumentId, topicFormName, topicFormVisible, topicFormMode, topicSelection, createInstrumentTopic, updateInstrumentTopic]);
+  }, [currentInstrumentId, topicFormName, topicFormVisible, topicFormMode, topicSelection, createInstrumentTopic, updateInstrumentTopic, isAdmin]);
 
   const handleConfirmDeleteTopic = useCallback((topic: InstrumentTopic) => {
+    if (!isAdmin) {
+      setTopicDeletionError('Solo los administradores pueden gestionar tópicos.');
+      return;
+    }
     setTopicDeletionTarget(topic);
     setTopicDeletionError(null);
-  }, []);
+  }, [isAdmin]);
 
   const handleCancelDeleteTopic = useCallback(() => {
     if (isTopicDeleting) {
@@ -801,6 +836,10 @@ export const InstrumentDetail: React.FC = () => {
 
   const handleDeleteTopic = useCallback(async () => {
     if (!currentInstrumentId || !topicDeletionTarget) {
+      return;
+    }
+    if (!isAdmin) {
+      setTopicDeletionError('Solo los administradores pueden gestionar tópicos.');
       return;
     }
 
@@ -826,7 +865,7 @@ export const InstrumentDetail: React.FC = () => {
     } finally {
       setIsTopicDeleting(false);
     }
-  }, [currentInstrumentId, topicDeletionTarget, deleteInstrumentTopic]);
+  }, [currentInstrumentId, topicDeletionTarget, deleteInstrumentTopic, isAdmin]);
 
   const handleAssignSubmit = useCallback(async () => {
     if (!instrument?.instrumentTypeId) {
@@ -860,140 +899,154 @@ export const InstrumentDetail: React.FC = () => {
     }
   }, [assignInstrumentToPatients, instrument, selectedPatientIds]);
 
-  const questionColumns = useMemo(() => [
-    {
-      key: 'order',
-      header: 'Orden',
-      render: (question: Question) => (Number.isFinite(question.order) ? question.order : '—'),
-    },
-    {
-      key: 'text',
-      header: 'Pregunta',
-      render: (question: Question) => (
-        <div className="flex flex-col">
-          <span className="font-medium text-slate-900 leading-snug">{question.text}</span>
-          {(() => {
-            const labels = Array.isArray(question.answers) && question.answers.length
-              ? question.answers.reduce<string[]>((acc, answer) => {
-                  const label = typeof answer.label === 'string' ? answer.label.trim() : '';
-                  if (label.length) {
-                    acc.push(label);
-                  }
-                  return acc;
-                }, [])
-              : (Array.isArray(question.options) ? question.options : []);
-            return labels.length ? (
-              <span className="text-xs text-slate-500 mt-1">
-                Opciones: {labels.join(', ')}
-              </span>
-            ) : null;
-          })()}
-        </div>
-      ),
-    },
-    {
-      key: 'type',
-      header: 'Tipo',
-      render: (question: Question) => formatQuestionType(question.type),
-    },
-    {
-      key: 'required',
-      header: 'Activa',
-      render: (question: Question) => (question.required ? 'Sí' : 'No'),
-    },
-    {
-      key: 'actions',
-      header: '',
-      className: 'text-right',
-      render: (question: Question) => (
-        <div className="flex justify-end gap-2">
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            onClick={(event) => {
-              event.stopPropagation();
-              handleOpenEditForm(question);
-            }}
-            disabled={Boolean(pendingQuestionId) || isSaving}
-          >
-            <Edit3 className="mr-1 h-4 w-4" />
-            <span className="hidden sm:inline">Modificar</span>
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant="danger"
-            onClick={(event) => {
-              event.stopPropagation();
-              void handleDeleteQuestion(question);
-            }}
-            disabled={pendingQuestionId === question.id}
-          >
-            <Trash2 className="mr-1 h-4 w-4" />
-            <span className="hidden sm:inline">Eliminar</span>
-          </Button>
-        </div>
-      ),
-    },
-  ], [formatQuestionType, handleDeleteQuestion, handleOpenEditForm, isSaving, pendingQuestionId]);
-  const topicColumns = useMemo(() => [
-    {
-      key: 'name',
-      header: 'Nombre',
-      render: (topic: InstrumentTopic) => (
-        <div className="space-y-1">
-          <p className="font-medium text-slate-900">{topic.name}</p>
-          <p className="text-xs text-slate-500">{topic.createdBy ?? '—'}</p>
-        </div>
-      ),
-    },
-    {
-      key: 'visibility',
-      header: 'Visible',
-      render: (topic: InstrumentTopic) => formatTopicVisibility(topic),
-    },
-    {
-      key: 'updatedAt',
-      header: 'Actualizado',
-      render: (topic: InstrumentTopic) => formatDateTime(topic.updatedAt ?? topic.createdAt ?? null),
-    },
-    {
-      key: 'actions',
-      header: '',
-      className: 'text-right',
-      render: (topic: InstrumentTopic) => (
-        <div className="flex justify-end gap-2">
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            onClick={(event) => {
-              event.stopPropagation();
-              handleOpenEditTopic(topic);
-            }}
-            disabled={isTopicSaving || isTopicDeleting}
-          >
-            <Edit3 className="mr-1 h-4 w-4" />
-            <span className="hidden sm:inline">Modificar</span>
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant="danger"
-            onClick={(event) => {
-              event.stopPropagation();
-              handleConfirmDeleteTopic(topic);
-            }}
-            disabled={isTopicDeleting}
-          >
-            <Trash2 className="mr-1 h-4 w-4" />
-            <span className="hidden sm:inline">Eliminar</span>
-          </Button>
-        </div>
-      ),
-    },
-  ], [formatTopicVisibility, handleConfirmDeleteTopic, handleOpenEditTopic, isTopicDeleting, isTopicSaving]);
+  const questionColumns = useMemo(() => {
+    const columns = [
+      {
+        key: 'order',
+        header: 'Orden',
+        render: (question: Question) => (Number.isFinite(question.order) ? question.order : '—'),
+      },
+      {
+        key: 'text',
+        header: 'Pregunta',
+        render: (question: Question) => (
+          <div className="flex flex-col">
+            <span className="font-medium text-slate-900 leading-snug">{question.text}</span>
+            {(() => {
+              const labels = Array.isArray(question.answers) && question.answers.length
+                ? question.answers.reduce<string[]>((acc, answer) => {
+                    const label = typeof answer.label === 'string' ? answer.label.trim() : '';
+                    if (label.length) {
+                      acc.push(label);
+                    }
+                    return acc;
+                  }, [])
+                : (Array.isArray(question.options) ? question.options : []);
+              return labels.length ? (
+                <span className="text-xs text-slate-500 mt-1">
+                  Opciones: {labels.join(', ')}
+                </span>
+              ) : null;
+            })()}
+          </div>
+        ),
+      },
+      {
+        key: 'type',
+        header: 'Tipo',
+        render: (question: Question) => formatQuestionType(question.type),
+      },
+      {
+        key: 'required',
+        header: 'Activa',
+        render: (question: Question) => (question.required ? 'Sí' : 'No'),
+      },
+    ];
+
+    if (isAdmin) {
+      columns.push({
+        key: 'actions',
+        header: '',
+        className: 'text-right',
+        render: (question: Question) => (
+          <div className="flex justify-end gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={(event) => {
+                event.stopPropagation();
+                handleOpenEditForm(question);
+              }}
+              disabled={Boolean(pendingQuestionId) || isSaving}
+            >
+              <Edit3 className="mr-1 h-4 w-4" />
+              <span className="hidden sm:inline">Modificar</span>
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="danger"
+              onClick={(event) => {
+                event.stopPropagation();
+                void handleDeleteQuestion(question);
+              }}
+              disabled={pendingQuestionId === question.id}
+            >
+              <Trash2 className="mr-1 h-4 w-4" />
+              <span className="hidden sm:inline">Eliminar</span>
+            </Button>
+          </div>
+        ),
+      });
+    }
+
+    return columns;
+  }, [formatQuestionType, handleDeleteQuestion, handleOpenEditForm, isAdmin, isSaving, pendingQuestionId]);
+  const topicColumns = useMemo(() => {
+    const columns = [
+      {
+        key: 'name',
+        header: 'Nombre',
+        render: (topic: InstrumentTopic) => (
+          <div className="space-y-1">
+            <p className="font-medium text-slate-900">{topic.name}</p>
+            <p className="text-xs text-slate-500">{topic.createdBy ?? '—'}</p>
+          </div>
+        ),
+      },
+      {
+        key: 'visibility',
+        header: 'Visible',
+        render: (topic: InstrumentTopic) => formatTopicVisibility(topic),
+      },
+      {
+        key: 'updatedAt',
+        header: 'Actualizado',
+        render: (topic: InstrumentTopic) => formatDateTime(topic.updatedAt ?? topic.createdAt ?? null),
+      },
+    ];
+
+    if (isAdmin) {
+      columns.push({
+        key: 'actions',
+        header: '',
+        className: 'text-right',
+        render: (topic: InstrumentTopic) => (
+          <div className="flex justify-end gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={(event) => {
+                event.stopPropagation();
+                handleOpenEditTopic(topic);
+              }}
+              disabled={isTopicSaving || isTopicDeleting}
+            >
+              <Edit3 className="mr-1 h-4 w-4" />
+              <span className="hidden sm:inline">Modificar</span>
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="danger"
+              onClick={(event) => {
+                event.stopPropagation();
+                handleConfirmDeleteTopic(topic);
+              }}
+              disabled={isTopicDeleting}
+            >
+              <Trash2 className="mr-1 h-4 w-4" />
+              <span className="hidden sm:inline">Eliminar</span>
+            </Button>
+          </div>
+        ),
+      });
+    }
+
+    return columns;
+  }, [formatDateTime, formatTopicVisibility, handleConfirmDeleteTopic, handleOpenEditTopic, isAdmin, isTopicDeleting, isTopicSaving]);
 
   if (isLoading) {
     return (
@@ -1227,6 +1280,12 @@ export const InstrumentDetail: React.FC = () => {
               </div>
             ) : null}
 
+            {!isAdmin ? (
+              <div className="rounded-2xl border border-amber-200/60 bg-amber-50/80 px-4 py-3 text-sm text-amber-700">
+                Solo los administradores pueden crear, editar o eliminar preguntas. Puedes explorar y previsualizar el cuestionario en modo lectura.
+              </div>
+            ) : null}
+
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div>
                 <h2 className="text-xl font-semibold text-slate-900">Preguntas</h2>
@@ -1244,16 +1303,20 @@ export const InstrumentDetail: React.FC = () => {
                 >
                   Previsualizar preguntas
                 </Button>
-                <Button
-                  type="button"
-                  variant="primary"
-                  onClick={handleOpenCreateForm}
-                  disabled={isSaving || Boolean(pendingQuestionId)}
-                  className="rounded-full bg-gradient-to-r from-[#1F2937] via-[#303A4A] to-[#4B5563] px-5 py-2 text-sm font-semibold text-white shadow-lg shadow-slate-900/30 transition hover:translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  <Plus className="w-4 h-4 mr-2" />
-                  Agregar pregunta
-                </Button>
+                {isAdmin ? (
+                  <Button
+                    type="button"
+                    variant="primary"
+                    onClick={handleOpenCreateForm}
+                    disabled={isSaving || Boolean(pendingQuestionId)}
+                    className="rounded-full bg-gradient-to-r from-[#1F2937] via-[#303A4A] to-[#4B5563] px-5 py-2 text-sm font-semibold text-white shadow-lg shadow-slate-900/30 transition hover:translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Agregar pregunta
+                  </Button>
+                ) : (
+                  <span className="text-xs text-slate-500">Contacta a un administrador para gestionar preguntas.</span>
+                )}
               </div>
             </div>
 
@@ -1281,6 +1344,11 @@ export const InstrumentDetail: React.FC = () => {
       {activeTab === 'topics' ? (
         <Card className="border border-white/50 bg-white/85 shadow-[0_30px_90px_rgba(15,23,42,0.12)] backdrop-blur">
           <div className="p-6 space-y-4">
+            {!isAdmin ? (
+              <div className="rounded-2xl border border-amber-200/60 bg-amber-50/80 px-4 py-3 text-sm text-amber-700">
+                Solo los administradores pueden crear, editar o eliminar tópicos. El listado se muestra en modo lectura.
+              </div>
+            ) : null}
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div className="space-y-1">
                 <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.35em] text-slate-500">
@@ -1294,16 +1362,20 @@ export const InstrumentDetail: React.FC = () => {
                 </p>
               </div>
               <div className="flex gap-2">
-                <Button
-                  type="button"
-                  variant="primary"
-                  onClick={handleOpenCreateTopic}
-                  disabled={isTopicSaving || isTopicModalOpen}
-                  className="flex items-center gap-2 rounded-full bg-gradient-to-r from-[#1F2937] via-[#303A4A] to-[#4B5563] px-5 py-2 text-sm font-semibold text-white shadow-lg shadow-slate-900/30 transition hover:translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  <Plus className="h-4 w-4" />
-                  Agregar tópico
-                </Button>
+                {isAdmin ? (
+                  <Button
+                    type="button"
+                    variant="primary"
+                    onClick={handleOpenCreateTopic}
+                    disabled={isTopicSaving || isTopicModalOpen}
+                    className="flex items-center gap-2 rounded-full bg-gradient-to-r from-[#1F2937] via-[#303A4A] to-[#4B5563] px-5 py-2 text-sm font-semibold text-white shadow-lg shadow-slate-900/30 transition hover:translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Agregar tópico
+                  </Button>
+                ) : (
+                  <span className="text-xs text-slate-500">Solicita a un administrador los cambios en tópicos.</span>
+                )}
               </div>
             </div>
 
@@ -1334,35 +1406,40 @@ export const InstrumentDetail: React.FC = () => {
               {topicFormError}
             </div>
           ) : null}
+          {!isAdmin ? (
+            <div className="rounded-2xl border border-slate-200/70 bg-slate-50/80 px-4 py-3 text-sm text-slate-700">
+              No tienes permisos para modificar tópicos.
+            </div>
+          ) : null}
 
-          <div>
-            <label
-              htmlFor="topic-name"
-              className="mb-2 block text-xs font-semibold uppercase tracking-[0.35em] text-slate-500"
-            >
-              Nombre del tópico
+          <fieldset disabled={!isAdmin || isTopicSaving} className="space-y-4">
+            <div>
+              <label
+                htmlFor="topic-name"
+                className="mb-2 block text-xs font-semibold uppercase tracking-[0.35em] text-slate-500"
+              >
+                Nombre del tópico
+              </label>
+              <input
+                id="topic-name"
+                type="text"
+                value={topicFormName}
+                onChange={(event) => setTopicFormName(event.target.value)}
+                className="w-full rounded-2xl border border-slate-200/70 bg-white/90 px-3 py-2 text-sm text-slate-700 shadow-inner focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200"
+                placeholder="Ej. Salud emocional"
+              />
+            </div>
+
+            <label className="inline-flex items-center gap-2 text-sm text-slate-700">
+              <input
+                type="checkbox"
+                checked={topicFormVisible}
+                onChange={(event) => setTopicFormVisible(event.target.checked)}
+                className="h-4 w-4 rounded border-slate-300 text-slate-700 focus:ring-slate-400"
+              />
+              <span>Mostrar este tópico en el instrumento</span>
             </label>
-            <input
-              id="topic-name"
-              type="text"
-              value={topicFormName}
-              onChange={(event) => setTopicFormName(event.target.value)}
-              className="w-full rounded-2xl border border-slate-200/70 bg-white/90 px-3 py-2 text-sm text-slate-700 shadow-inner focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200"
-              placeholder="Ej. Salud emocional"
-              disabled={isTopicSaving}
-            />
-          </div>
-
-          <label className="inline-flex items-center gap-2 text-sm text-slate-700">
-            <input
-              type="checkbox"
-              checked={topicFormVisible}
-              onChange={(event) => setTopicFormVisible(event.target.checked)}
-              disabled={isTopicSaving}
-              className="h-4 w-4 rounded border-slate-300 text-slate-700 focus:ring-slate-400"
-            />
-            <span>Mostrar este tópico en el instrumento</span>
-          </label>
+          </fieldset>
 
           <div className="flex justify-end gap-2">
             <Button
@@ -1377,7 +1454,7 @@ export const InstrumentDetail: React.FC = () => {
             <Button
               type="submit"
               variant="primary"
-              disabled={isTopicSaving}
+              disabled={!isAdmin || isTopicSaving}
               className="rounded-full px-5 py-2 text-sm"
             >
               {isTopicSaving ? 'Guardando...' : 'Guardar'}
@@ -1419,7 +1496,7 @@ export const InstrumentDetail: React.FC = () => {
               type="button"
               variant="danger"
               onClick={handleDeleteTopic}
-              disabled={isTopicDeleting}
+              disabled={!isAdmin || isTopicDeleting}
               className="rounded-full px-5 py-2 text-sm"
             >
               {isTopicDeleting ? 'Eliminando...' : 'Eliminar'}
@@ -1617,74 +1694,85 @@ export const InstrumentDetail: React.FC = () => {
             </div>
           ) : null}
 
-          <QuestionForm
-            mode={formMode}
-            initialValues={formMode === 'edit' && selectedQuestion ? {
-              text: selectedQuestion.text,
-              type: selectedQuestion.type,
-              order: typeof selectedQuestion.order === 'number' ? selectedQuestion.order : undefined,
-              required: selectedQuestion.required,
-              topicId: selectedQuestion.topicId ?? undefined,
-              options: (() => {
-                const normalizeOption = (option: QuestionOption | string | null | undefined): QuestionOption | null => {
-                  if (!option) {
-                    return null;
-                  }
-
-                  if (typeof option === 'string') {
-                    const trimmed = option.trim();
-                    if (!trimmed) {
+          {!isAdmin ? (
+            <div className="space-y-4 rounded-2xl border border-slate-200/70 bg-slate-50/80 px-4 py-6 text-sm text-slate-700">
+              <p>Solo los administradores pueden gestionar preguntas.</p>
+              <div className="flex justify-end">
+                <Button type="button" variant="outline" onClick={handleCloseForm}>
+                  Cerrar
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <QuestionForm
+              mode={formMode}
+              initialValues={formMode === 'edit' && selectedQuestion ? {
+                text: selectedQuestion.text,
+                type: selectedQuestion.type,
+                order: typeof selectedQuestion.order === 'number' ? selectedQuestion.order : undefined,
+                required: selectedQuestion.required,
+                topicId: selectedQuestion.topicId ?? undefined,
+                options: (() => {
+                  const normalizeOption = (option: QuestionOption | string | null | undefined): QuestionOption | null => {
+                    if (!option) {
                       return null;
                     }
-                    return { label: trimmed, value: trimmed };
-                  }
 
-                  const rawLabel = typeof option.label === 'string' ? option.label.trim() : '';
-                  const rawValue = typeof option.value === 'string' ? option.value.trim() : '';
-                  const resolvedLabel = rawLabel || rawValue;
-                  const resolvedValue = rawValue || rawLabel;
-
-                  if (!resolvedLabel || !resolvedValue) {
-                    return null;
-                  }
-
-                  return {
-                    label: resolvedLabel,
-                    value: resolvedValue,
-                  };
-                };
-
-                if (Array.isArray(selectedQuestion?.answers) && selectedQuestion?.answers.length) {
-                  return selectedQuestion.answers
-                    .map((answer) => {
-                      const rawLabel = typeof answer.label === 'string' ? answer.label.trim() : '';
-                      const rawValue = typeof answer.value === 'string' ? answer.value.trim() : '';
-                      const label = rawLabel || rawValue;
-                      const value = rawValue || rawLabel;
-                      if (!label || !value) {
+                    if (typeof option === 'string') {
+                      const trimmed = option.trim();
+                      if (!trimmed) {
                         return null;
                       }
-                      return { label, value };
-                    })
-                    .filter((option): option is QuestionOption => Boolean(option));
-                }
+                      return { label: trimmed, value: trimmed };
+                    }
 
-                if (Array.isArray(selectedQuestion?.options) && selectedQuestion?.options.length) {
-                  return selectedQuestion.options
-                    .map((option) => normalizeOption(option))
-                    .filter((option): option is QuestionOption => Boolean(option));
-                }
+                    const rawLabel = typeof option.label === 'string' ? option.label.trim() : '';
+                    const rawValue = typeof option.value === 'string' ? option.value.trim() : '';
+                    const resolvedLabel = rawLabel || rawValue;
+                    const resolvedValue = rawValue || rawLabel;
 
-                return [];
-              })(),
-            } : undefined}
-            onSubmit={async (values) => {
-              await handleSubmitForm(values);
-            }}
-            onCancel={handleCloseForm}
-            isSubmitting={isSaving}
-            topics={instrumentTopics}
-          />
+                    if (!resolvedLabel || !resolvedValue) {
+                      return null;
+                    }
+
+                    return {
+                      label: resolvedLabel,
+                      value: resolvedValue,
+                    };
+                  };
+
+                  if (Array.isArray(selectedQuestion?.answers) && selectedQuestion?.answers.length) {
+                    return selectedQuestion.answers
+                      .map((answer) => {
+                        const rawLabel = typeof answer.label === 'string' ? answer.label.trim() : '';
+                        const rawValue = typeof answer.value === 'string' ? answer.value.trim() : '';
+                        const label = rawLabel || rawValue;
+                        const value = rawValue || rawLabel;
+                        if (!label || !value) {
+                          return null;
+                        }
+                        return { label, value };
+                      })
+                      .filter((option): option is QuestionOption => Boolean(option));
+                  }
+
+                  if (Array.isArray(selectedQuestion?.options) && selectedQuestion?.options.length) {
+                    return selectedQuestion.options
+                      .map((option) => normalizeOption(option))
+                      .filter((option): option is QuestionOption => Boolean(option));
+                  }
+
+                  return [];
+                })(),
+              } : undefined}
+              onSubmit={async (values) => {
+                await handleSubmitForm(values);
+              }}
+              onCancel={handleCloseForm}
+              isSubmitting={isSaving}
+              topics={instrumentTopics}
+            />
+          )}
         </div>
       </Modal>
 

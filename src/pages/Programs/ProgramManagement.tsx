@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Edit, Trash2, Search, ArrowRight } from 'lucide-react';
 import { Card } from '../../components/UI/Card';
@@ -6,6 +6,7 @@ import { Button } from '../../components/UI/Button';
 import { Table } from '../../components/UI/Table';
 import { Modal } from '../../components/UI/Modal';
 import { useApp } from '../../context/AppContext';
+import { useAuth } from '../../context/AuthContext';
 import { Program, Ribbon } from '../../types';
 
 type RibbonFormState = {
@@ -53,6 +54,8 @@ export const ProgramManagement: React.FC = () => {
 		updateRibbon,
 		deleteRibbon,
 	} = useApp();
+	const { user } = useAuth();
+	const isAdmin = user?.role === 'administrator';
 
 	const [activeTab, setActiveTab] = useState<'programs' | 'ribbons'>('programs');
 	const [programs, setPrograms] = useState<Program[]>(ctxPrograms);
@@ -188,7 +191,10 @@ export const ProgramManagement: React.FC = () => {
 		return new Date(Math.max(...timestamps)).toLocaleDateString();
 	}, [ribbons]);
 
-	const handleOpenProgramModal = (program?: Program) => {
+	const handleOpenProgramModal = useCallback((program?: Program) => {
+		if (!isAdmin) {
+			return;
+		}
 		if (program) {
 			setEditingProgram(program);
 			setProgramForm({
@@ -205,10 +211,13 @@ export const ProgramManagement: React.FC = () => {
 			});
 		}
 		setIsProgramModalOpen(true);
-	};
+	}, [isAdmin]);
 
 	const handleProgramSubmit = async (event: React.FormEvent) => {
 		event.preventDefault();
+		if (!isAdmin) {
+			return;
+		}
 
 		const payload = {
 			...programForm,
@@ -238,7 +247,10 @@ export const ProgramManagement: React.FC = () => {
 		}
 	};
 
-	const handleProgramDelete = async (programId: string) => {
+	const handleProgramDelete = useCallback(async (programId: string) => {
+		if (!isAdmin) {
+			return;
+		}
 		if (!confirm('¿Seguro que deseas eliminar este programa?')) {
 			return;
 		}
@@ -255,7 +267,7 @@ export const ProgramManagement: React.FC = () => {
 			console.error('No se pudo eliminar el programa', error);
 			alert('No se pudo eliminar el programa.');
 		}
-	};
+	}, [deleteProgram, isAdmin]);
 
 	const resetRibbonForm = () => {
 		setEditingRibbon(null);
@@ -263,6 +275,9 @@ export const ProgramManagement: React.FC = () => {
 	};
 
 	const prepareRibbonForm = (ribbon: Ribbon) => {
+		if (!isAdmin) {
+			return;
+		}
 		setEditingRibbon(ribbon);
 		setRibbonForm({
 			name: ribbon.name ?? '',
@@ -279,6 +294,9 @@ export const ProgramManagement: React.FC = () => {
 
 	const handleRibbonSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
 		event.preventDefault();
+		if (!isAdmin) {
+			return;
+		}
 
 		if (!ribbonForm.name.trim()) {
 			alert('El nombre de la cinta es obligatorio.');
@@ -313,6 +331,9 @@ export const ProgramManagement: React.FC = () => {
 	};
 
 	const handleRibbonDelete = async (ribbonId: number) => {
+		if (!isAdmin) {
+			return;
+		}
 		if (!confirm('¿Seguro que deseas eliminar esta cinta?')) {
 			return;
 		}
@@ -333,62 +354,69 @@ export const ProgramManagement: React.FC = () => {
 		navigate(`/programs/${program.id}`);
 	};
 
-	const columns = [
-		{
-			key: 'name',
-			header: 'Nombre',
-		},
-		{
-			key: 'description',
-			header: 'Descripción',
-			render: (program: Program) => (
-				<span className="truncate max-w-xs">{program.description}</span>
-			),
-		},
-		{
-			key: 'instruments',
-			header: 'Instrumentos',
-			render: (program: Program) => program.instruments.length,
-		},
-		{
-			key: 'createdBy',
-			header: 'Creado por',
-			render: (program: Program) => program.createdBy ?? '—',
-		},
-		{
-			key: 'updatedAt',
-			header: 'Última actualización',
-			render: (program: Program) => program.updatedAt ? program.updatedAt.toLocaleDateString() : '—',
-		},
-		{
-			key: 'actions',
-			header: 'Acciones',
-			render: (program: Program) => (
-				<div className="flex space-x-2">
-					<Button
-						variant="outline"
-						size="sm"
-						onClick={(event) => {
-							event.stopPropagation();
-							handleOpenProgramModal(program);
-						}}
-					>
-						<Edit className="w-4 h-4" />
-					</Button>
-					<Button
-						variant="danger"
-						size="sm"
-						onClick={(event) => {
-							event.stopPropagation();
-							handleProgramDelete(program.id);
-						}}
-					>
-						<Trash2 className="w-4 h-4" />
-					</Button>
-				</div>
-			),
-		},
-	];
+	const columns = useMemo(() => {
+		const base = [
+			{
+				key: 'name',
+				header: 'Nombre',
+			},
+			{
+				key: 'description',
+				header: 'Descripción',
+				render: (program: Program) => (
+					<span className="truncate max-w-xs">{program.description}</span>
+				),
+			},
+			{
+				key: 'instruments',
+				header: 'Instrumentos',
+				render: (program: Program) => program.instruments.length,
+			},
+			{
+				key: 'createdBy',
+				header: 'Creado por',
+				render: (program: Program) => program.createdBy ?? '—',
+			},
+			{
+				key: 'updatedAt',
+				header: 'Última actualización',
+				render: (program: Program) => (program.updatedAt ? program.updatedAt.toLocaleDateString() : '—'),
+			},
+		];
+
+		if (isAdmin) {
+			base.push({
+				key: 'actions',
+				header: 'Acciones',
+				render: (program: Program) => (
+					<div className="flex space-x-2">
+						<Button
+							variant="outline"
+							size="sm"
+							onClick={(event) => {
+								event.stopPropagation();
+								handleOpenProgramModal(program);
+							}}
+						>
+							<Edit className="w-4 h-4" />
+						</Button>
+						<Button
+							variant="danger"
+							size="sm"
+							onClick={(event) => {
+								event.stopPropagation();
+								handleProgramDelete(program.id);
+							}}
+						>
+							<Trash2 className="w-4 h-4" />
+						</Button>
+					</div>
+				),
+			});
+		}
+
+		return base;
+	}, [handleOpenProgramModal, handleProgramDelete, isAdmin]);
 
 	return (
 		<section className="space-y-6 px-4 py-8 sm:px-6">
@@ -433,33 +461,39 @@ export const ProgramManagement: React.FC = () => {
 
 							{activeTab === 'programs' ? (
 								<>
-									<Button
-										onClick={() => handleOpenProgramModal()}
-										className="rounded-full bg-gradient-to-r from-[#06B6D4] via-[#3B82F6] to-[#8B5CF6] px-6 py-2 text-sm font-semibold text-white shadow-[0_20px_55px_rgba(59,130,246,0.35)] hover:opacity-95"
-									>
-										<Plus className="w-4 h-4 mr-2" />
-										Nuevo programa
-									</Button>
+									{isAdmin ? (
+										<Button
+											onClick={() => handleOpenProgramModal()}
+											className="rounded-full bg-gradient-to-r from-[#06B6D4] via-[#3B82F6] to-[#8B5CF6] px-6 py-2 text-sm font-semibold text-white shadow-[0_20px_55px_rgba(59,130,246,0.35)] hover:opacity-95"
+										>
+											<Plus className="w-4 h-4 mr-2" />
+											Nuevo programa
+										</Button>
+									) : null}
+									{isAdmin ? (
+										<Button
+											type="button"
+											variant="outline"
+											onClick={() => navigate('/instruments')}
+											className="rounded-full border border-white/60 bg-white/40 px-4 py-2 text-sm font-semibold text-slate-600 backdrop-blur hover:text-slate-900"
+										>
+											Vincular instrumentos
+											<ArrowRight className="w-4 h-4 ml-2" />
+										</Button>
+									) : null}
+								</>
+							) : (
+								isAdmin ? (
 									<Button
 										type="button"
 										variant="outline"
-										onClick={() => navigate('/instruments')}
+										onClick={() => resetRibbonForm()}
 										className="rounded-full border border-white/60 bg-white/40 px-4 py-2 text-sm font-semibold text-slate-600 backdrop-blur hover:text-slate-900"
 									>
-										Vincular instrumentos
-										<ArrowRight className="w-4 h-4 ml-2" />
+										Crear nueva cinta
+										<Plus className="w-4 h-4 ml-2" />
 									</Button>
-								</>
-							) : (
-								<Button
-									type="button"
-									variant="outline"
-									onClick={() => resetRibbonForm()}
-									className="rounded-full border border-white/60 bg-white/40 px-4 py-2 text-sm font-semibold text-slate-600 backdrop-blur hover:text-slate-900"
-								>
-									Crear nueva cinta
-									<Plus className="w-4 h-4 ml-2" />
-								</Button>
+								) : null
 							)}
 						</div>
 					</div>
@@ -642,13 +676,15 @@ export const ProgramManagement: React.FC = () => {
 											<th className="px-4 py-3 text-left font-semibold">Orden</th>
 											<th className="px-4 py-3 text-left font-semibold">Siguiente</th>
 											<th className="px-4 py-3 text-left font-semibold">Actualización</th>
-											<th className="px-4 py-3 text-left font-semibold">Acciones</th>
+											{isAdmin ? (
+												<th className="px-4 py-3 text-left font-semibold">Acciones</th>
+											) : null}
 										</tr>
 									</thead>
 									<tbody className="divide-y divide-slate-100">
 										{filteredRibbons.length === 0 && (
 											<tr>
-												<td colSpan={6} className="px-4 py-6 text-center text-slate-400">
+												<td colSpan={isAdmin ? 6 : 5} className="px-4 py-6 text-center text-slate-400">
 													No hay cintas registradas que coincidan con tu búsqueda.
 												</td>
 											</tr>
@@ -684,24 +720,26 @@ export const ProgramManagement: React.FC = () => {
 												<td className="px-4 py-3">
 													{ribbon.updatedAt ? new Date(ribbon.updatedAt).toLocaleDateString() : (ribbon.createdAt ? new Date(ribbon.createdAt).toLocaleDateString() : '—')}
 												</td>
-												<td className="px-4 py-3">
-													<div className="flex items-center gap-2">
-														<Button
-															variant="outline"
-															size="sm"
-															onClick={() => prepareRibbonForm(ribbon)}
-														>
-															<Edit className="w-4 h-4" />
-														</Button>
-														<Button
-															variant="danger"
-															size="sm"
-															onClick={() => handleRibbonDelete(ribbon.id)}
-														>
-															<Trash2 className="w-4 h-4" />
-														</Button>
-													</div>
-												</td>
+												{isAdmin ? (
+													<td className="px-4 py-3">
+														<div className="flex items-center gap-2">
+															<Button
+																variant="outline"
+																size="sm"
+																onClick={() => prepareRibbonForm(ribbon)}
+															>
+																<Edit className="w-4 h-4" />
+															</Button>
+															<Button
+																variant="danger"
+																size="sm"
+																onClick={() => handleRibbonDelete(ribbon.id)}
+															>
+																<Trash2 className="w-4 h-4" />
+															</Button>
+														</div>
+													</td>
+												) : null}
 											</tr>
 										))}
 									</tbody>
@@ -710,143 +748,165 @@ export const ProgramManagement: React.FC = () => {
 						</div>
 
 						<form onSubmit={handleRibbonSubmit} className="space-y-4 rounded-3xl border border-white/40 bg-white/80 p-5 shadow-[0_20px_60px_rgba(15,23,42,0.12)] backdrop-blur">
-							<div className="flex items-center justify-between">
-								<h3 className="text-base font-semibold text-slate-900">
-									{editingRibbon ? 'Editar cinta' : 'Crear nueva cinta'}
-								</h3>
-								{editingRibbon ? (
+							{!isAdmin ? (
+								<p className="text-sm text-slate-500">
+									Solo los administradores pueden crear o modificar cintas.
+								</p>
+							) : null}
+							<fieldset disabled={!isAdmin} className="space-y-4">
+								<div className="flex items-center justify-between">
+									<h3 className="text-base font-semibold text-slate-900">
+										{editingRibbon ? 'Editar cinta' : 'Crear nueva cinta'}
+									</h3>
+									{editingRibbon ? (
+										<Button
+											type="button"
+											variant="outline"
+											size="sm"
+											onClick={() => resetRibbonForm()}
+										>
+											Limpiar
+										</Button>
+									) : null}
+								</div>
+
+								<div>
+									<label className="mb-1 block text-sm font-medium text-slate-700">Nombre *</label>
+									<input
+										type="text"
+										required
+										value={ribbonForm.name}
+										onChange={(event) => setRibbonForm(prev => ({ ...prev, name: event.target.value }))}
+										className="w-full rounded-2xl border border-gray/60 bg-white/70 px-3 py-2 text-sm text-slate-900 focus:border-[#67E8F9] focus:outline-none focus:ring-2 focus:ring-[#C7D2FE]"
+										placeholder="Nombre visible de la cinta"
+									/>
+								</div>
+
+								<div>
+									<label className="mb-1 block text-sm font-medium text-slate-700">Descripción</label>
+									<textarea
+										rows={3}
+										value={ribbonForm.description}
+										onChange={(event) => setRibbonForm(prev => ({ ...prev, description: event.target.value }))}
+										className="w-full rounded-2xl border border-gray/60 bg-white/70 px-3 py-2 text-sm text-slate-900 focus:border-[#67E8F9] focus:outline-none focus:ring-2 focus:ring-[#C7D2FE]"
+										placeholder="Detalle opcional de la cinta"
+									/>
+								</div>
+
+								<div className="grid gap-3 sm:grid-cols-2">
+									<div>
+										<label className="mb-1 block text-sm font-medium text-slate-700">Color</label>
+										<input
+											type="text"
+											value={ribbonForm.color}
+											onChange={(event) => setRibbonForm(prev => ({ ...prev, color: event.target.value }))}
+											className="w-full rounded-2xl border border-gray/60 bg-white/70 px-3 py-2 text-sm text-slate-900 focus:border-[#67E8F9] focus:outline-none focus:ring-2 focus:ring-[#C7D2FE]"
+											placeholder="Ej: Azul marino"
+										/>
+									</div>
+									<div>
+										<label className="mb-1 block text-sm font-medium text-slate-700">Color HEX</label>
+										<input
+											type="text"
+											value={ribbonForm.hexColor}
+											onChange={(event) => setRibbonForm(prev => ({ ...prev, hexColor: event.target.value }))}
+											className="w-full rounded-2xl border border-gray/60 bg-white/70 px-3 py-2 text-sm text-slate-900 focus:border-[#67E8F9] focus:outline-none focus:ring-2 focus:ring-[#C7D2FE]"
+											placeholder="#1E3A8A"
+										/>
+									</div>
+								</div>
+
+								<div className="grid gap-3 sm:grid-cols-2">
+									<div>
+										<label className="mb-1 block text-sm font-medium text-slate-700">Fondo</label>
+										<input
+											type="text"
+											value={ribbonForm.bgColor}
+											onChange={(event) => setRibbonForm(prev => ({ ...prev, bgColor: event.target.value }))}
+											className="w-full rounded-2xl border border-gray/60 bg-white/70 px-3 py-2 text-sm text-slate-900 focus:border-[#67E8F9] focus:outline-none focus:ring-2 focus:ring-[#C7D2FE]"
+											placeholder="Color de fondo opcional"
+										/>
+									</div>
+									<div>
+										<label className="mb-1 block text-sm font-medium text-slate-700">Hilo</label>
+										<input
+											type="text"
+											value={ribbonForm.thread}
+											onChange={(event) => setRibbonForm(prev => ({ ...prev, thread: event.target.value }))}
+											className="w-full rounded-2xl border border-gray/60 bg-white/70 px-3 py-2 text-sm text-slate-900 focus:border-[#67E8F9] focus:outline-none focus:ring-2 focus:ring-[#C7D2FE]"
+											placeholder="Material o hilo"
+										/>
+									</div>
+								</div>
+
+								<div className="grid gap-3 sm:grid-cols-2">
+									<div>
+										<label className="mb-1 block text-sm font-medium text-slate-700">Orden</label>
+										<input
+											type="number"
+											value={ribbonForm.order}
+											onChange={(event) => setRibbonForm(prev => ({ ...prev, order: event.target.value }))}
+											className="w-full rounded-2xl border border-gray/60 bg-white/70 px-3 py-2 text-sm text-slate-900 focus:border-[#67E8F9] focus:outline-none focus:ring-2 focus:ring-[#C7D2FE]"
+											placeholder="Prioridad numérica"
+										/>
+									</div>
+									<div>
+										<label className="mb-1 block text-sm font-medium text-slate-700">Siguiente cinta</label>
+										<select
+											value={ribbonForm.nextRibbonId}
+											onChange={(event) => setRibbonForm(prev => ({ ...prev, nextRibbonId: event.target.value }))}
+											className="w-full rounded-2xl border border-gray/60 bg-white/70 px-3 py-2 text-sm text-slate-900 focus:border-[#67E8F9] focus:outline-none focus:ring-2 focus:ring-[#C7D2FE]"
+										>
+											<option value="">—</option>
+											{availableNextRibbonOptions.map(option => (
+												<option key={option.id} value={option.id}>
+													{option.name || `Cinta ${option.id}`}
+												</option>
+											))}
+										</select>
+									</div>
+								</div>
+
+								<div className="flex items-center justify-between rounded-2xl bg-slate-50 px-3 py-2 text-sm text-slate-600">
+									<div className="flex items-center gap-2">
+										<label className="flex items-center gap-2">
+											<input
+												type="checkbox"
+												checked={ribbonForm.isRibbon}
+												onChange={(event) => setRibbonForm(prev => ({ ...prev, isRibbon: event.target.checked }))}
+												className="accent-[#38BDF8]"
+											/>
+											<span>Esta cinta es primaria</span>
+										</label>
+										<button
+											type="button"
+											className="text-xs font-semibold uppercase tracking-wide text-[#0EA5E9] hover:text-[#0369A1]"
+											onClick={() => {
+												setRibbonForm(prev => ({
+													...prev,
+													isRibbon: !prev.isRibbon,
+												}));
+											}}
+										>
+											Alternar
+										</button>
+									</div>
+									<span className="text-xs text-slate-400">Activa el indicador si esta cinta es un nivel dentro del programa.</span>
+								</div>
+
+								<div className="flex justify-end space-x-3 pt-4">
 									<Button
 										type="button"
 										variant="outline"
-										size="sm"
 										onClick={() => resetRibbonForm()}
 									>
-										Limpiar
+										Cancelar
 									</Button>
-								) : null}
-							</div>
-
-							<div>
-								<label className="mb-1 block text-sm font-medium text-slate-700">Nombre *</label>
-								<input
-									type="text"
-									required
-									value={ribbonForm.name}
-									onChange={(event) => setRibbonForm(prev => ({ ...prev, name: event.target.value }))}
-									className="w-full rounded-2xl border border-gray/60 bg-white/70 px-3 py-2 text-sm text-slate-900 focus:border-[#67E8F9] focus:outline-none focus:ring-2 focus:ring-[#C7D2FE]"
-									placeholder="Nombre visible de la cinta"
-								/>
-							</div>
-
-							<div>
-								<label className="mb-1 block text-sm font-medium text-slate-700">Descripción</label>
-								<textarea
-									rows={3}
-									value={ribbonForm.description}
-									onChange={(event) => setRibbonForm(prev => ({ ...prev, description: event.target.value }))}
-									className="w-full rounded-2xl border border-gray/60 bg-white/70 px-3 py-2 text-sm text-slate-900 focus:border-[#67E8F9] focus:outline-none focus:ring-2 focus:ring-[#C7D2FE]"
-									placeholder="Detalle opcional de la cinta"
-								/>
-							</div>
-
-							<div className="grid gap-3 sm:grid-cols-2">
-								<div>
-									<label className="mb-1 block text-sm font-medium text-slate-700">Color</label>
-									<input
-										type="text"
-										value={ribbonForm.color}
-										onChange={(event) => setRibbonForm(prev => ({ ...prev, color: event.target.value }))}
-										className="w-full rounded-2xl border border-gray/60 bg-white/70 px-3 py-2 text-sm text-slate-900 focus:border-[#67E8F9] focus:outline-none focus:ring-2 focus:ring-[#C7D2FE]"
-										placeholder="Ej: Azul marino"
-									/>
+									<Button type="submit">
+										{editingRibbon ? 'Actualizar cinta' : 'Crear cinta'}
+									</Button>
 								</div>
-								<div>
-									<label className="mb-1 block text-sm font-medium text-slate-700">Color HEX</label>
-									<input
-										type="text"
-										value={ribbonForm.hexColor}
-										onChange={(event) => setRibbonForm(prev => ({ ...prev, hexColor: event.target.value }))}
-										className="w-full rounded-2xl border border-gray/60 bg-white/70 px-3 py-2 text-sm text-slate-900 focus:border-[#67E8F9] focus:outline-none focus:ring-2 focus:ring-[#C7D2FE]"
-										placeholder="#1E3A8A"
-									/>
-								</div>
-							</div>
-
-							<div className="grid gap-3 sm:grid-cols-2">
-								<div>
-									<label className="mb-1 block text-sm font-medium text-slate-700">Fondo</label>
-									<input
-										type="text"
-										value={ribbonForm.bgColor}
-										onChange={(event) => setRibbonForm(prev => ({ ...prev, bgColor: event.target.value }))}
-										className="w-full rounded-2xl border border-gray/60 bg-white/70 px-3 py-2 text-sm text-slate-900 focus:border-[#67E8F9] focus:outline-none focus:ring-2 focus:ring-[#C7D2FE]"
-										placeholder="Color de fondo opcional"
-									/>
-								</div>
-								<div>
-									<label className="mb-1 block text-sm font-medium text-slate-700">Hilo</label>
-									<input
-										type="text"
-										value={ribbonForm.thread}
-										onChange={(event) => setRibbonForm(prev => ({ ...prev, thread: event.target.value }))}
-										className="w-full rounded-2xl border border-gray/60 bg-white/70 px-3 py-2 text-sm text-slate-900 focus:border-[#67E8F9] focus:outline-none focus:ring-2 focus:ring-[#C7D2FE]"
-										placeholder="Tipo de hilo"
-									/>
-								</div>
-							</div>
-
-							<div className="grid gap-3 sm:grid-cols-3">
-								<div>
-									<label className="mb-1 block text-sm font-medium text-slate-700">Orden</label>
-									<input
-										type="number"
-										value={ribbonForm.order}
-										onChange={(event) => setRibbonForm(prev => ({ ...prev, order: event.target.value }))}
-										className="w-full rounded-2xl border border-gray/60 bg-white/70 px-3 py-2 text-sm text-slate-900 focus:border-[#67E8F9] focus:outline-none focus:ring-2 focus:ring-[#C7D2FE]"
-										placeholder="Ej: 1"
-									/>
-								</div>
-								<div>
-									<label className="mb-1 block text-sm font-medium text-slate-700">¿Es una cinta?</label>
-									<label className="flex items-center gap-2 rounded-2xl border border-gray/60 bg-white/70 px-3 py-2 text-sm text-slate-900">
-										<input
-											type="checkbox"
-											checked={ribbonForm.isRibbon}
-											onChange={(event) => setRibbonForm(prev => ({ ...prev, isRibbon: event.target.checked }))}
-											className="h-4 w-4 accent-[#38BDF8]"
-										/>
-										<span>Marca si corresponde</span>
-									</label>
-								</div>
-								<div>
-									<label className="mb-1 block text-sm font-medium text-slate-700">Siguiente cinta</label>
-									<select
-										value={ribbonForm.nextRibbonId}
-										onChange={(event) => setRibbonForm(prev => ({ ...prev, nextRibbonId: event.target.value }))}
-										className="w-full rounded-2xl border border-gray/60 bg-white/70 px-3 py-2 text-sm text-slate-900 focus:border-[#67E8F9] focus:outline-none focus:ring-2 focus:ring-[#C7D2FE]"
-									>
-										<option value="">Sin siguiente cinta</option>
-										{availableNextRibbonOptions.map((option) => (
-											<option key={option.id} value={String(option.id)}>
-												{option.name || `Cinta ${option.id}`}
-											</option>
-										))}
-									</select>
-								</div>
-							</div>
-
-							<div className="flex justify-end gap-3 pt-2">
-								<Button
-									type="button"
-									variant="outline"
-									onClick={() => resetRibbonForm()}
-								>
-									Reiniciar formulario
-								</Button>
-								<Button type="submit">
-									{editingRibbon ? 'Actualizar cinta' : 'Crear cinta'}
-								</Button>
-							</div>
+							</fieldset>
 						</form>
 					</div>
 				</div>

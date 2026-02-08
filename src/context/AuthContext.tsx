@@ -11,6 +11,8 @@ interface AuthContextType {
   validateToken: () => Promise<boolean>;
   updateProfile: (data: UpdateProfileInput) => Promise<User | null>;
   changePassword: (data: ChangePasswordInput) => Promise<boolean>;
+  requestPasswordReset: (email: string) => Promise<string | null>;
+  confirmPasswordReset: (input: PasswordResetConfirmationInput) => Promise<boolean>;
   isLoading: boolean;
   getDashboardPath: (role: UserRole) => string;
 }
@@ -38,6 +40,13 @@ interface UpdateProfileInput {
 interface ChangePasswordInput {
   currentPassword: string;
   newPassword: string;
+}
+
+interface PasswordResetConfirmationInput {
+  email: string;
+  code: string;
+  newPassword: string;
+  token: string;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -348,6 +357,84 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     [apiBase, token, clearSession],
   );
 
+  const requestPasswordReset = useCallback(
+    async (email: string): Promise<string | null> => {
+      const trimmedEmail = email.trim();
+      if (!trimmedEmail) {
+        throw new Error('Debes proporcionar un correo electrónico');
+      }
+
+      try {
+        const res = await fetch(`${apiBase}/auth/forgot-password`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ email: trimmedEmail }),
+        });
+
+        if (!res.ok) {
+          const errBody = await res.json().catch(() => null);
+          const message = errBody?.message ?? 'No se pudo enviar el código de verificación';
+          const formatted = Array.isArray(message) ? message.join(', ') : message;
+          throw new Error(formatted);
+        }
+
+        const data = await res.json().catch(() => null);
+        return data?.token ?? null;
+      } catch (error) {
+        console.error('Password reset request failed', error);
+        if (error instanceof Error) {
+          throw error;
+        }
+        throw new Error('No se pudo enviar el código de verificación');
+      }
+    },
+    [apiBase],
+  );
+
+  const confirmPasswordReset = useCallback(
+    async (input: PasswordResetConfirmationInput): Promise<boolean> => {
+      const payload = {
+        email: input.email.trim(),
+        code: input.code.trim(),
+        newPassword: input.newPassword.trim(),
+        token: input.token.trim(),
+      };
+
+      if (!payload.email || !payload.code || !payload.newPassword || !payload.token) {
+        throw new Error('Completa el correo, el código, el token y la nueva contraseña');
+      }
+
+      try {
+        const res = await fetch(`${apiBase}/auth/forgot-password/verify`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(payload),
+        });
+
+        if (!res.ok) {
+          const errBody = await res.json().catch(() => null);
+          const message = errBody?.message ?? 'No se pudo actualizar la contraseña';
+          const formatted = Array.isArray(message) ? message.join(', ') : message;
+          throw new Error(formatted);
+        }
+
+        await res.json().catch(() => null);
+        return true;
+      } catch (error) {
+        console.error('Password reset confirmation failed', error);
+        if (error instanceof Error) {
+          throw error;
+        }
+        throw new Error('No se pudo actualizar la contraseña');
+      }
+    },
+    [apiBase],
+  );
+
   const logout = useCallback(() => {
     clearSession();
   }, [clearSession]);
@@ -483,6 +570,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     validateToken,
     updateProfile,
     changePassword,
+    requestPasswordReset,
+    confirmPasswordReset,
     isLoading,
     getDashboardPath,
   }), [
@@ -495,6 +584,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     validateToken,
     updateProfile,
     changePassword,
+    requestPasswordReset,
+    confirmPasswordReset,
     isLoading,
     getDashboardPath,
   ]);
