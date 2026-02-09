@@ -17,6 +17,7 @@ interface TableProps<T> {
   initialRows?: number;
   loadMoreStep?: number;
   loadMoreLabel?: string;
+  rowClassName?: (item: T, index: number) => string | undefined;
 }
 
 export function Table<T extends Record<string, any>>({ 
@@ -28,6 +29,7 @@ export function Table<T extends Record<string, any>>({
   initialRows = 20,
   loadMoreStep,
   loadMoreLabel = 'Cargar más',
+  rowClassName,
 }: TableProps<T>) {
   const resolvedInitialRows = Math.max(initialRows, 0);
   const resolvedLoadMoreStep = Math.max(loadMoreStep ?? resolvedInitialRows, 1);
@@ -64,7 +66,11 @@ export function Table<T extends Record<string, any>>({
             {visibleData.map((item, rowIndex) => (
               <tr
                 key={rowKey ? rowKey(item, rowIndex) : rowIndex}
-                className={clsx('hover:bg-gray-50', onRowClick && 'cursor-pointer')}
+                className={clsx(
+                  'hover:bg-gray-50 transition-colors duration-150',
+                  onRowClick && 'cursor-pointer',
+                  rowClassName?.(item, rowIndex)
+                )}
                 onClick={onRowClick ? () => onRowClick(item) : undefined}
               >
                 {columns.map((column, colIndex) => (
