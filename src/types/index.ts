@@ -49,9 +49,10 @@ export interface Instrument {
   colorResponse?: 0 | 1;
   createdBy?: string | null;
   updatedAt?: Date | null;
+  topics?: InstrumentTopic[];
 }
 
-  topics?: InstrumentTopic[]; // Optional topics for the instrument
+export interface InstrumentType {
   id: string;
   name: string;
   description?: string | null;
@@ -61,9 +62,6 @@ export interface Instrument {
   criterionId?: string | null;
 }
 
-export interface QuestionAnswer {
-  id: string;
-  label: string;
 export interface InstrumentTopic {
   id: string;
   instrumentId: string | null;
@@ -73,6 +71,10 @@ export interface InstrumentTopic {
   updatedAt?: Date | null;
   isVisible?: boolean | null;
 }
+
+export interface QuestionAnswer {
+  id: string;
+  label: string;
   value?: string | null;
   color?: string | null;
   createdBy?: string | null;
@@ -207,11 +209,22 @@ export interface VitalPhoto {
   path: string;
 }
 
+export interface VitalMeasurements {
+  weight: string | null;
+  neck: string | null;
+  bust: string | null;
+  waist: string | null;
+  hip: string | null;
+  rightArm: string | null;
+  rightThigh: string | null;
+}
+
 export interface NumericVitalRecord extends BaseVitalRecord {
   value: number | null;
   rawValue: string | null;
   unit: string | null;
   photos?: VitalPhoto[];
+  measurements?: VitalMeasurements;
 }
 
 export interface BloodPressureRecord extends BaseVitalRecord {

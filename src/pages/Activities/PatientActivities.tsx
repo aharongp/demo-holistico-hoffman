@@ -805,6 +805,32 @@ export const PatientActivities: React.FC = () => {
 
   const showSkeleton = isLoading && activities.length === 0;
   const formattedLastUpdated = lastUpdated ? formatDate(lastUpdated, 'Pendiente') : null;
+  const resolveInstrumentDisplay = useCallback((activity: Activity) => {
+    const normalizedTopics = activity.topics
+      .map((topic) => topic?.trim() ?? '')
+      .filter((topic) => topic.length > 0);
+    const assignmentResponses = responsesByAssignment[activity.rawAssignment.id] ?? [];
+    const topicTitleFromResponses = assignmentResponses
+      .map((response) => response.theme?.trim() ?? '')
+      .find((theme) => theme.length > 0) ?? null;
+    const primaryTopic = topicTitleFromResponses || normalizedTopics[0] || null;
+    const typeLabel = activity.rawAssignment.instrumentTypeName?.trim() || null;
+    const instrumentDescription = activity.rawAssignment.instrumentTypeDescription?.trim() || null;
+    const fallbackTitle = activity.name?.trim() || instrumentDescription || 'Instrumento asignado';
+    const baseTitle = primaryTopic || fallbackTitle;
+    const isNumericTitle = /^\d+(?:[.,]\d+)?$/.test(baseTitle);
+    const title = isNumericTitle && typeLabel ? `${baseTitle} · ${typeLabel}` : baseTitle;
+    const showTypeLabel = Boolean(typeLabel) && !isNumericTitle;
+
+    return {
+      title,
+      typeLabel,
+      showTypeLabel,
+      instrumentDescription,
+      topics: normalizedTopics,
+    };
+  }, [responsesByAssignment]);
+
   const currentResponses = useMemo(() => {
     if (!activeActivity) {
       return [] as BackendInstrumentResponse[];
@@ -923,89 +949,104 @@ export const PatientActivities: React.FC = () => {
       ) : (
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
           {filteredActivities.map((activity) => (
-            <Card
-              key={activity.id}
-              className="flex h-full flex-col space-y-4 !rounded-[26px] !border-gray/60 !bg-gradient-to-br !from-white/95 !via-rose-50/60 !to-white/95 !shadow-[0_35px_75px_-55px_rgba(136,19,55,0.45)] backdrop-blur-xl"
-            >
-              <div className="flex items-start justify-between">
-                <div className="flex flex-wrap items-center gap-2 text-slate-500">
-                  <span className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/70 bg-white/80 shadow-inner">
-                    {getStatusIcon(activity.status)}
-                  </span>
-                  <span
-                    className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${getCategoryColor(
-                      activity.category,
-                    )}`}
-                  >
-                    {formatCategoryLabel(activity.category)}
-                  </span>
-                </div>
-                <span className="rounded-2xl border border-white/70 bg-white/85 p-2 text-fuchsia-300 shadow-inner">
-                  <FileText className="h-5 w-5" />
-                </span>
-              </div>
+            (() => {
+              const display = resolveInstrumentDisplay(activity);
 
-              <div className="space-y-2">
-                <h3 className="text-xl font-semibold text-slate-900">{activity.name}</h3>
-                {activity.description && <p className="text-sm text-slate-500">{activity.description}</p>}
-              </div>
-
-              {activity.topics.length > 0 && (
-                <div className="flex flex-wrap gap-2">
-                  {activity.topics.map((topic) => (
-                    <span
-                      key={topic}
-                      className="inline-flex items-center rounded-full bg-slate-100/80 px-2.5 py-1 text-xs text-slate-500 shadow-inner shadow-white/60"
-                    >
-                      {topic}
+              return (
+                <Card
+                  key={activity.id}
+                  className="flex h-full flex-col space-y-4 !rounded-[26px] !border-gray/60 !bg-gradient-to-br !from-white/95 !via-rose-50/60 !to-white/95 !shadow-[0_35px_75px_-55px_rgba(136,19,55,0.45)] backdrop-blur-xl"
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex flex-wrap items-center gap-2 text-slate-500">
+                      <span className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/70 bg-white/80 shadow-inner">
+                        {getStatusIcon(activity.status)}
+                      </span>
+                      <span
+                        className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${getCategoryColor(
+                          activity.category,
+                        )}`}
+                      >
+                        {formatCategoryLabel(activity.category)}
+                      </span>
+                    </div>
+                    <span className="rounded-2xl border border-white/70 bg-white/85 p-2 text-fuchsia-300 shadow-inner">
+                      <FileText className="h-5 w-5" />
                     </span>
-                  ))}
-                </div>
-              )}
+                  </div>
 
-              <div className="flex flex-col gap-1 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between">
-                <span className="font-medium text-slate-600">
-                  {formatDate(activity.assignedAt, 'Sin fecha de asignación')}
-                </span>
-                <span className="text-slate-500">
-                  {activity.status === 'completed'
-                    ? `Finalizado ${formatDate(activity.completedAt, 'sin fecha')}`
-                    : formatDueDate(activity.dueDate)}
-                </span>
-              </div>
+                  <div className="space-y-2">
+                    <h3 className="text-xl font-semibold text-slate-900">{display.title}</h3>
+                    {display.showTypeLabel ? (
+                      <p className="text-xs font-medium uppercase tracking-[0.2em] text-slate-400">
+                        Tipo de instrumento: {display.typeLabel}
+                      </p>
+                    ) : null}
+                    {display.instrumentDescription && display.instrumentDescription !== display.title ? (
+                      <p className="text-sm text-slate-500">{display.instrumentDescription}</p>
+                    ) : null}
+                  </div>
 
-              {activity.evaluated && (
-                <div>
-                  <span className="inline-flex items-center rounded-full bg-fuchsia-50/80 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-fuchsia-600">
-                    Evaluado
-                  </span>
-                </div>
-              )}
+                  {display.topics.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {display.topics
+                        .filter((topic) => topic !== display.title)
+                        .map((topic) => (
+                          <span
+                            key={topic}
+                            className="inline-flex items-center rounded-full bg-slate-100/80 px-2.5 py-1 text-xs text-slate-500 shadow-inner shadow-white/60"
+                          >
+                            {topic}
+                          </span>
+                        ))}
+                    </div>
+                  )}
 
-              <div className="mt-auto flex space-x-2">
-                {activity.status === 'completed' ? (
-                  <Button
-                    variant="outline"
-                    className="w-full rounded-2xl !border-fuchsia-100 !bg-white/85 !text-fuchsia-700 shadow-inner shadow-white/60 hover:!bg-white"
-                    size="sm"
-                    onClick={() => handleOpenInstrument(activity, 'readonly')}
-                  >
-                    Ver resultados
-                  </Button>
-                ) : (
-                  <Button
-                    variant="primary"
-                    className="w-full rounded-2xl !border-white/30 !bg-gradient-to-r !from-fuchsia-600 !via-rose-500 !to-indigo-600 !text-white shadow-lg shadow-fuchsia-500/30 transition hover:brightness-105"
-                    size="sm"
-                    disabled={!activity.available}
-                    onClick={() => handleOpenInstrument(activity, 'form')}
-                  >
-                    <Play className="mr-2 h-4 w-4" />
-                    {activity.status === 'in_progress' ? 'Continuar' : 'Iniciar'}
-                  </Button>
-                )}
-              </div>
-            </Card>
+                  <div className="flex flex-col gap-1 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between">
+                    <span className="font-medium text-slate-600">
+                      {formatDate(activity.assignedAt, 'Sin fecha de asignación')}
+                    </span>
+                    <span className="text-slate-500">
+                      {activity.status === 'completed'
+                        ? `Finalizado ${formatDate(activity.completedAt, 'sin fecha')}`
+                        : formatDueDate(activity.dueDate)}
+                    </span>
+                  </div>
+
+                  {activity.evaluated && (
+                    <div>
+                      <span className="inline-flex items-center rounded-full bg-fuchsia-50/80 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-fuchsia-600">
+                        Evaluado
+                      </span>
+                    </div>
+                  )}
+
+                  <div className="mt-auto flex space-x-2">
+                    {activity.status === 'completed' ? (
+                      <Button
+                        variant="outline"
+                        className="w-full rounded-2xl !border-fuchsia-100 !bg-white/85 !text-fuchsia-700 shadow-inner shadow-white/60 hover:!bg-white"
+                        size="sm"
+                        onClick={() => handleOpenInstrument(activity, 'readonly')}
+                      >
+                        Ver resultados
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="primary"
+                        className="w-full rounded-2xl !border-white/30 !bg-gradient-to-r !from-fuchsia-600 !via-rose-500 !to-indigo-600 !text-white shadow-lg shadow-fuchsia-500/30 transition hover:brightness-105"
+                        size="sm"
+                        disabled={!activity.available}
+                        onClick={() => handleOpenInstrument(activity, 'form')}
+                      >
+                        <Play className="mr-2 h-4 w-4" />
+                        {activity.status === 'in_progress' ? 'Continuar' : 'Iniciar'}
+                      </Button>
+                    )}
+                  </div>
+                </Card>
+              );
+            })()
           ))}
         </div>
       )}
@@ -1026,7 +1067,16 @@ export const PatientActivities: React.FC = () => {
         isOpen={isModalOpen}
         onClose={handleCloseModal}
         instrument={activeInstrument}
-        assignmentName={activeActivity?.name ?? 'Instrumento asignado'}
+        assignmentName={
+          activeActivity
+            ? (() => {
+                const display = resolveInstrumentDisplay(activeActivity);
+                return display.showTypeLabel && display.typeLabel
+                  ? `${display.title} · Tipo: ${display.typeLabel}`
+                  : display.title;
+              })()
+            : 'Instrumento asignado'
+        }
         mode={modalMode}
         responses={currentResponses}
         onSubmit={handleSubmitInstrumentResponses}

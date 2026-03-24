@@ -8,6 +8,7 @@ interface ModalProps {
   title: string;
   children: React.ReactNode;
   size?: 'sm' | 'md' | 'lg' | 'xl';
+  closeOnOverlayClick?: boolean;
 }
 
 export const Modal: React.FC<ModalProps> = ({
@@ -15,7 +16,8 @@ export const Modal: React.FC<ModalProps> = ({
   onClose,
   title,
   children,
-  size = 'md'
+  size = 'md',
+  closeOnOverlayClick = true,
 }) => {
   if (!isOpen) return null;
 
@@ -31,7 +33,7 @@ export const Modal: React.FC<ModalProps> = ({
       <div className="flex min-h-screen items-center justify-center px-4 pt-4 pb-20 text-center sm:block sm:p-0">
         <div
           className="fixed inset-0 bg-gradient-to-br from-white/70 via-slate-200/60 to-slate-900/20 backdrop-blur"
-          onClick={onClose}
+          onClick={closeOnOverlayClick ? onClose : undefined}
         />
 
         <div className={clsx(

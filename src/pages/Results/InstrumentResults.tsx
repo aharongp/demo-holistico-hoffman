@@ -787,6 +787,24 @@ export const InstrumentResults: React.FC<InstrumentResultsProps> = ({
   ]);
 
   const hasNoData = !hasMeaningfulData && !isLoading && !error;
+  const healthDiagnosticsPages = useMemo(() => {
+    if (!healthDiagnostics.length) {
+      return [] as Array<{ key: string; title: string; items: HealthDiagnosticResult[] }>;
+    }
+
+    const pageCount = Math.min(3, healthDiagnostics.length);
+    const chunks: HealthDiagnosticResult[][] = Array.from({ length: pageCount }, () => []);
+
+    healthDiagnostics.forEach((item, index) => {
+      chunks[index % pageCount].push(item);
+    });
+
+    return chunks.map((items, index) => ({
+      key: `diagnostics-${index + 1}`,
+      title: pageCount > 1 ? `Diagnóstico de salud (${index + 1}/${pageCount})` : 'Diagnóstico de salud',
+      items,
+    }));
+  }, [healthDiagnostics]);
 
   const handleExportPdf = useCallback(async () => {
     const contentElement = resultsRef.current;
@@ -816,36 +834,140 @@ export const InstrumentResults: React.FC<InstrumentResultsProps> = ({
       contentElement.style.overflowY = 'visible';
 
       await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-
-      const canvas = await html2canvas(contentElement, {
-        scale: 2,
-        useCORS: true,
-        backgroundColor: '#ffffff',
-        scrollY: -window.scrollY,
-        windowWidth: contentElement.scrollWidth,
-        windowHeight: contentElement.scrollHeight,
-      });
-
-      const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pdf = new jsPDF('l', 'mm', 'a4');
       const margin = 15;
-      const imgProps = pdf.getImageProperties(imgData);
+      const headerHeight = 12;
       const pdfWidth = pdf.internal.pageSize.getWidth() - margin * 2;
-      const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
       const pageHeight = pdf.internal.pageSize.getHeight();
-      const usablePageHeight = pageHeight - margin * 2;
+      const usablePageHeight = pageHeight - margin * 2 - headerHeight;
 
-      let heightLeft = pdfHeight;
-      let position = margin;
+      const resolvedPatientName = (() => {
+        const rawTitle = (titleOverride ?? '').trim();
+        if (rawTitle.length > 0) {
+          const match = rawTitle.match(/^resultados\s+clinicos\s+de\s+(.+)$/i)
+            ?? rawTitle.match(/^resultados\s+clínicos\s+de\s+(.+)$/i);
+          if (match?.[1]) {
+            return match[1].trim();
+          }
+          return rawTitle;
+        }
 
-      pdf.addImage(imgData, 'PNG', margin, position, pdfWidth, pdfHeight);
-      heightLeft -= usablePageHeight;
+        const authUser = user as { firstName?: string; lastName?: string; name?: string } | null;
+        const fullName = `${authUser?.firstName ?? ''} ${authUser?.lastName ?? ''}`.trim();
+        if (fullName.length > 0) {
+          return fullName;
+        }
 
-      while (heightLeft > 0) {
-        position = margin - (pdfHeight - heightLeft);
-        pdf.addPage();
-        pdf.addImage(imgData, 'PNG', margin, position, pdfWidth, pdfHeight);
-        heightLeft -= usablePageHeight;
+        const fallbackName = typeof authUser?.name === 'string' ? authUser.name.trim() : '';
+        return fallbackName.length > 0 ? fallbackName : 'Paciente';
+      })();
+
+      const pageTitle = `Resultados clínicos de ${resolvedPatientName}`;
+
+      const drawPageHeader = () => {
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(14);
+        pdf.setTextColor(15, 23, 42);
+        pdf.text(pageTitle, margin, margin + 5);
+        pdf.setDrawColor(203, 213, 225);
+        pdf.setLineWidth(0.4);
+        pdf.line(margin, margin + 8, pdf.internal.pageSize.getWidth() - margin, margin + 8);
+      };
+
+      const addCanvasToCurrentPage = (canvas: HTMLCanvasElement) => {
+        drawPageHeader();
+        const imgData = canvas.toDataURL('image/png');
+        const imgProps = pdf.getImageProperties(imgData);
+        const fittedHeight = (imgProps.height * pdfWidth) / imgProps.width;
+        const fittedWidth = fittedHeight > usablePageHeight
+          ? (imgProps.width * usablePageHeight) / imgProps.height
+          : pdfWidth;
+        const finalHeight = fittedHeight > usablePageHeight ? usablePageHeight : fittedHeight;
+        const x = (pdf.internal.pageSize.getWidth() - fittedWidth) / 2;
+        const y = margin + headerHeight + (usablePageHeight - finalHeight) / 2;
+        pdf.addImage(imgData, 'PNG', x, y, fittedWidth, finalHeight);
+      };
+
+      const pageOrder = [
+        'attitudinal',
+        'firmnessAdaptability',
+        ...healthDiagnosticsPages.map((page) => page.key),
+        'wheelLife',
+        'wheelHealth',
+        'regiflex',
+      ] as const;
+
+      const pageElements = pageOrder
+        .map((pageKey) =>
+          contentElement.querySelector<HTMLElement>(`[data-pdf-page="${pageKey}"]`)
+        )
+        .filter((element): element is HTMLElement => Boolean(element));
+
+      const captureScale = window.devicePixelRatio > 1 ? 2 : 3;
+
+      const capturePageElement = async (element: HTMLElement): Promise<HTMLCanvasElement> => {
+        const previousStyles = {
+          width: element.style.width,
+          maxWidth: element.style.maxWidth,
+          minWidth: element.style.minWidth,
+          marginLeft: element.style.marginLeft,
+          marginRight: element.style.marginRight,
+          position: element.style.position,
+          zIndex: element.style.zIndex,
+        };
+
+        element.style.width = '1180px';
+        element.style.maxWidth = '1180px';
+        element.style.minWidth = '1180px';
+        element.style.marginLeft = 'auto';
+        element.style.marginRight = 'auto';
+        element.style.position = 'relative';
+        element.style.zIndex = '1';
+
+        await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+        await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+
+        const canvas = await html2canvas(element, {
+          scale: captureScale,
+          useCORS: true,
+          backgroundColor: '#ffffff',
+          scrollY: -window.scrollY,
+          windowWidth: Math.max(element.scrollWidth, 1280),
+          windowHeight: Math.max(element.scrollHeight, 720),
+        });
+
+        element.style.width = previousStyles.width;
+        element.style.maxWidth = previousStyles.maxWidth;
+        element.style.minWidth = previousStyles.minWidth;
+        element.style.marginLeft = previousStyles.marginLeft;
+        element.style.marginRight = previousStyles.marginRight;
+        element.style.position = previousStyles.position;
+        element.style.zIndex = previousStyles.zIndex;
+
+        return canvas;
+      };
+
+      if (pageElements.length > 0) {
+        for (let index = 0; index < pageElements.length; index += 1) {
+          const canvas = await capturePageElement(pageElements[index]);
+
+          if (index > 0) {
+            pdf.addPage();
+          }
+
+          addCanvasToCurrentPage(canvas);
+        }
+      } else {
+        const canvas = await html2canvas(contentElement, {
+          scale: 2,
+          useCORS: true,
+          backgroundColor: '#ffffff',
+          scrollY: -window.scrollY,
+          windowWidth: contentElement.scrollWidth,
+          windowHeight: contentElement.scrollHeight,
+        });
+
+        addCanvasToCurrentPage(canvas);
       }
 
       const ISO_DATE_LENGTH = 10;
@@ -863,7 +985,7 @@ export const InstrumentResults: React.FC<InstrumentResultsProps> = ({
       contentElement.style.overflowY = previousStyles.overflowY;
       setIsExporting(false);
     }
-  }, [resultsRef]);
+  }, [healthDiagnosticsPages, resultsRef, titleOverride, user]);
 
   const handleRefresh = () => {
     void fetchAggregatedResults();
@@ -971,97 +1093,102 @@ export const InstrumentResults: React.FC<InstrumentResultsProps> = ({
         </Card>
       ) : null}
 
-      {attitudinalSummary ? (
-        <Card className="rounded-[28px] border border-white/40 bg-white/80 shadow-[0_30px_70px_-55px_rgba(244,114,182,0.35)] backdrop-blur" padding="lg">
-          <div className="space-y-6">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-baseline sm:justify-between">
-              <div>
-                <span className="text-xs font-semibold uppercase tracking-[0.35em] text-rose-400">Competencia actitudinal</span>
-                <h2 className="text-2xl font-semibold text-slate-900">Resumen general</h2>
-              </div>
-              <div
-                className={`flex items-center gap-3 rounded-2xl px-4 py-2 text-sm font-semibold ${buildBadgeClass(
-                  attitudinalSummary.ponderation.colorTexto ?? attitudinalSummary.colorClass,
-                )}`}
-              >
-                Estado: {attitudinalSummary.ponderation.holistica ?? 'Sin clasificación'}
-              </div>
-            </div>
-            <div className="grid gap-4 sm:grid-cols-3">
-              <div className="rounded-3xl border border-white/60 bg-white/80 p-6 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]">
-                <p className="text-xs font-semibold uppercase tracking-[0.35em] text-slate-500">Promedio general</p>
-                <p
-                  className={`text-4xl font-semibold ${mapToneClass(
-                    attitudinalSummary.colorClass ?? attitudinalSummary.ponderation.colorTexto,
-                  )}`}
-                >
-                  {attitudinalSummary.average.toFixed(2)}
-                </p>
-              </div>
-              <div className="rounded-3xl border border-white/60 bg-white/80 p-6 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]">
-                <p className="text-xs font-semibold uppercase tracking-[0.35em] text-slate-500">Ponderación</p>
-                <p className="text-3xl font-semibold text-slate-900">{attitudinalSummary.percentage.toFixed(1)}%</p>
-              </div>
-              <div className="rounded-3xl border border-white/60 bg-white/80 p-6 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]">
-                <p className="text-xs font-semibold uppercase tracking-[0.35em] text-slate-500">Enfoque académico</p>
-                <p className="text-xl font-semibold text-slate-900">{attitudinalSummary.ponderation.academica ?? 'Sin dato'}</p>
-              </div>
-            </div>
-          </div>
-        </Card>
-      ) : null}
-
-      {attitudinalStrengths.length ? (
-        <div className="space-y-6">
-          <h2 className="text-xl font-semibold text-slate-900">Fortalezas actitudinales</h2>
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-            {attitudinalStrengths.map((strength: AttitudinalStrengthResult, index) => {
-              const accent = attitudinalAccents[index % attitudinalAccents.length];
-              const toneClass = mapToneClass(strength.colorClass);
-              const badgeClass = buildBadgeClass(strength.ponderation.colorTexto);
-              return (
-                <Card
-                  key={`${strength.topicId ?? 'strength'}-${index}`}
-                  className="relative overflow-hidden rounded-[28px] border border-white/35 bg-white/75 shadow-[0_34px_85px_-60px_rgba(244,114,182,0.4)] backdrop-blur"
-                  padding="lg"
-                >
-                  <div aria-hidden="true" className={`absolute inset-0 bg-gradient-to-br ${accent} opacity-60`} />
-                  <div className="relative space-y-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.35em] text-slate-500">Competencia</p>
-                        <h3 className="text-lg font-semibold text-slate-900">{strength.topic ?? 'Competencia actitudinal'}</h3>
-                      </div>
-                      <span className="rounded-full border border-white/50 bg-white/70 px-3 py-1 text-xs font-semibold uppercase tracking-[0.35em] text-slate-500">
-                        {strength.questionCount} preguntas
-                      </span>
-                    </div>
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      <div className="rounded-2xl border border-white/60 bg-white/70 p-5">
-                        <p className="text-xs font-semibold uppercase tracking-[0.35em] text-slate-500">Promedio</p>
-                        <p className={`text-3xl font-semibold ${toneClass}`}>{strength.average.toFixed(2)}</p>
-                      </div>
-                      <div className="rounded-2xl border border-white/60 bg-white/70 p-5">
-                        <p className="text-xs font-semibold uppercase tracking-[0.35em] text-slate-500">Ponderación</p>
-                        <p className="text-3xl font-semibold text-slate-900">{strength.percentage.toFixed(1)}%</p>
-                      </div>
-                    </div>
-                    <div className="rounded-2xl border border-white/60 bg-white/70 p-4 text-sm text-slate-600">
-                      <span className={`mb-2 inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.35em] ${badgeClass}`}>
-                        {strength.ponderation.holistica ?? 'Sin clasificación'}
-                      </span>
-                      <p className="text-slate-600">Enfoque académico: {strength.ponderation.academica ?? 'Sin dato'}.</p>
-                    </div>
+      {attitudinalSummary || attitudinalStrengths.length ? (
+        <div data-pdf-page="attitudinal" className="space-y-6">
+          {attitudinalSummary ? (
+            <Card className="rounded-[28px] border border-white/40 bg-white/80 shadow-[0_30px_70px_-55px_rgba(244,114,182,0.35)] backdrop-blur" padding="lg">
+              <div className="space-y-6">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-baseline sm:justify-between">
+                  <div>
+                    <span className="text-xs font-semibold uppercase tracking-[0.35em] text-rose-400">Competencia actitudinal</span>
+                    <h2 className="text-2xl font-semibold text-slate-900">Resumen general</h2>
                   </div>
-                </Card>
-              );
-            })}
-          </div>
+                  <div
+                    className={`flex items-center gap-3 rounded-2xl px-4 py-2 text-sm font-semibold ${buildBadgeClass(
+                      attitudinalSummary.ponderation.colorTexto ?? attitudinalSummary.colorClass,
+                    )}`}
+                  >
+                    Estado: {attitudinalSummary.ponderation.holistica ?? 'Sin clasificación'}
+                  </div>
+                </div>
+                <div className="grid gap-4 sm:grid-cols-3">
+                  <div className="rounded-3xl border border-white/60 bg-white/80 p-6 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]">
+                    <p className="text-xs font-semibold uppercase tracking-[0.35em] text-slate-500">Promedio general</p>
+                    <p
+                      className={`text-4xl font-semibold ${mapToneClass(
+                        attitudinalSummary.colorClass ?? attitudinalSummary.ponderation.colorTexto,
+                      )}`}
+                    >
+                      {attitudinalSummary.average.toFixed(2)}
+                    </p>
+                  </div>
+                  <div className="rounded-3xl border border-white/60 bg-white/80 p-6 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]">
+                    <p className="text-xs font-semibold uppercase tracking-[0.35em] text-slate-500">Ponderación</p>
+                    <p className="text-3xl font-semibold text-slate-900">{attitudinalSummary.percentage.toFixed(1)}%</p>
+                  </div>
+                  <div className="rounded-3xl border border-white/60 bg-white/80 p-6 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]">
+                    <p className="text-xs font-semibold uppercase tracking-[0.35em] text-slate-500">Enfoque académico</p>
+                    <p className="text-xl font-semibold text-slate-900">{attitudinalSummary.ponderation.academica ?? 'Sin dato'}</p>
+                  </div>
+                </div>
+              </div>
+            </Card>
+          ) : null}
+
+          {attitudinalStrengths.length ? (
+            <div className="space-y-6">
+              <h2 className="text-xl font-semibold text-slate-900">Fortalezas actitudinales</h2>
+              <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+                {attitudinalStrengths.map((strength: AttitudinalStrengthResult, index) => {
+                  const accent = attitudinalAccents[index % attitudinalAccents.length];
+                  const toneClass = mapToneClass(strength.colorClass);
+                  const badgeClass = buildBadgeClass(strength.ponderation.colorTexto);
+                  return (
+                    <Card
+                      key={`${strength.topicId ?? 'strength'}-${index}`}
+                      className="relative overflow-hidden rounded-[28px] border border-white/35 bg-white/75 shadow-[0_34px_85px_-60px_rgba(244,114,182,0.4)] backdrop-blur"
+                      padding="lg"
+                    >
+                      <div aria-hidden="true" className={`absolute inset-0 bg-gradient-to-br ${accent} opacity-60`} />
+                      <div className="relative space-y-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-[11px] font-semibold uppercase tracking-[0.35em] text-slate-500">Competencia</p>
+                            <h3 className="text-lg font-semibold text-slate-900">{strength.topic ?? 'Competencia actitudinal'}</h3>
+                          </div>
+                          <span className="rounded-full border border-white/50 bg-white/70 px-3 py-1 text-xs font-semibold uppercase tracking-[0.35em] text-slate-500">
+                            {strength.questionCount} preguntas
+                          </span>
+                        </div>
+                        <div className="grid gap-4 sm:grid-cols-2">
+                          <div className="rounded-2xl border border-white/60 bg-white/70 p-5">
+                            <p className="text-xs font-semibold uppercase tracking-[0.35em] text-slate-500">Promedio</p>
+                            <p className={`text-3xl font-semibold ${toneClass}`}>{strength.average.toFixed(2)}</p>
+                          </div>
+                          <div className="rounded-2xl border border-white/60 bg-white/70 p-5">
+                            <p className="text-xs font-semibold uppercase tracking-[0.35em] text-slate-500">Ponderación</p>
+                            <p className="text-3xl font-semibold text-slate-900">{strength.percentage.toFixed(1)}%</p>
+                          </div>
+                        </div>
+                        <div className="rounded-2xl border border-white/60 bg-white/70 p-4 text-sm text-slate-600">
+                          <span className={`mb-2 inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.35em] ${badgeClass}`}>
+                            {strength.ponderation.holistica ?? 'Sin clasificación'}
+                          </span>
+                          <p className="text-slate-600">Enfoque académico: {strength.ponderation.academica ?? 'Sin dato'}.</p>
+                        </div>
+                      </div>
+                    </Card>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
         </div>
       ) : null}
 
       {firmnessAdaptability ? (
         <Card
+          data-pdf-page="firmnessAdaptability"
           className="relative overflow-hidden rounded-[28px] border border-white/35 bg-white/80 shadow-[0_34px_85px_-60px_rgba(79,70,229,0.3)] backdrop-blur"
           padding="lg"
         >
@@ -1183,14 +1310,16 @@ export const InstrumentResults: React.FC<InstrumentResultsProps> = ({
         </div>
       ) : null}
 
-      {healthDiagnostics.length ? (
-        <div className="space-y-6">
+      {healthDiagnosticsPages.length ? healthDiagnosticsPages.map((page, pageIndex) => (
+        <div key={page.key} data-pdf-page={page.key} className="space-y-6">
           <div className="space-y-3">
-            <h2 className="text-xl font-semibold text-slate-900">Diagnóstico de salud</h2>
-            {renderSectionDateSelect('diagnostics', 'Corte de diagnósticos', 'Explora mediciones previas en esta sección.')}
+            <h2 className="text-xl font-semibold text-slate-900">{page.title}</h2>
+            {pageIndex === 0
+              ? renderSectionDateSelect('diagnostics', 'Corte de diagnósticos', 'Explora mediciones previas en esta sección.')
+              : null}
           </div>
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-            {healthDiagnostics.map((item: HealthDiagnosticResult, index) => {
+            {page.items.map((item: HealthDiagnosticResult, index) => {
               const badgeClass = buildBadgeClass(item.colorTexto);
               const toneClass = mapToneClass(item.colorTexto);
               const statusLabel = diagnosticStatusFromColor(item.colorTexto);
@@ -1201,7 +1330,7 @@ export const InstrumentResults: React.FC<InstrumentResultsProps> = ({
               });
               return (
                 <Card
-                  key={`${item.id ?? 'diagnostic'}-${index}`}
+                  key={`${item.id ?? 'diagnostic'}-${pageIndex}-${index}`}
                   className="relative overflow-hidden rounded-[28px] border border-white/35 bg-white/75 shadow-[0_34px_85px_-60px_rgba(59,130,246,0.35)] backdrop-blur"
                   padding="lg"
                 >
@@ -1255,7 +1384,7 @@ export const InstrumentResults: React.FC<InstrumentResultsProps> = ({
             })}
           </div>
         </div>
-      ) : null}
+      )) : null}
 
       {hasWellnessData ? (
         <div className="space-y-6">
@@ -1265,6 +1394,7 @@ export const InstrumentResults: React.FC<InstrumentResultsProps> = ({
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
             {wheelOfLife.length ? (
               <Card
+                data-pdf-page="wheelLife"
                 className="relative overflow-hidden rounded-[28px] border border-white/35 bg-white/75 shadow-[0_34px_85px_-60px_rgba(251,146,60,0.35)] backdrop-blur"
                 padding="lg"
               >
@@ -1359,6 +1489,7 @@ export const InstrumentResults: React.FC<InstrumentResultsProps> = ({
 
             {wheelOfHealth.length ? (
               <Card
+                data-pdf-page="wheelHealth"
                 className="relative overflow-hidden rounded-[28px] border border-white/35 bg-white/75 shadow-[0_34px_85px_-60px_rgba(16,185,129,0.35)] backdrop-blur"
                 padding="lg"
               >
@@ -1453,6 +1584,7 @@ export const InstrumentResults: React.FC<InstrumentResultsProps> = ({
 
             {regiflex ? (
               <Card
+                data-pdf-page="regiflex"
                 className="relative overflow-hidden rounded-[28px] border border-white/35 bg-white/75 shadow-[0_34px_85px_-60px_rgba(79,70,229,0.35)] backdrop-blur"
                 padding="lg"
               >

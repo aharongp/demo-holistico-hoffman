@@ -5,9 +5,9 @@ import { Card } from '../../components/UI/Card';
 import { Button } from '../../components/UI/Button';
 import { Table } from '../../components/UI/Table';
 import { Modal } from '../../components/UI/Modal';
-import { useApp } from '../../context/AppContext';
+import { useApp, InstrumentType } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
-import { Instrument, Subject, Criterion, InstrumentType } from '../../types';
+import { Instrument, Subject, Criterion } from '../../types';
 
 type ResultDeliveryOption = 'sistema' | 'programado' | null;
 
@@ -51,13 +51,20 @@ const TAB_ITEMS: Array<{ id: 'all' | 'themes' | 'criteria'; label: string; helpe
   { id: 'criteria', label: 'Criterios', helper: 'Reglas de evaluación' },
 ];
 
+const RESTRICTED_INSTRUMENT_TYPE_NAME = 'cuestionarios de la vieja medicina del futuro';
+
+const normalizeInstrumentTypeName = (value: string) => value.trim().toLowerCase();
+
 export const InstrumentManagement: React.FC = () => {
   const {
     instruments,
+    patients,
+    programs,
     addInstrument,
     updateInstrument,
     deleteInstrument,
     instrumentTypes,
+    assignInstrumentsBulk,
     createInstrumentType,
     updateInstrumentType,
     deleteInstrumentType,
@@ -75,6 +82,7 @@ export const InstrumentManagement: React.FC = () => {
   const [instrumentError, setInstrumentError] = useState<string | null>(null);
   const [instrumentSaving, setInstrumentSaving] = useState(false);
   const [isTypeModalOpen, setIsTypeModalOpen] = useState(false);
+  const [isBulkAssignModalOpen, setIsBulkAssignModalOpen] = useState(false);
   const [editingInstrumentType, setEditingInstrumentType] = useState<InstrumentType | null>(null);
   const [typeFormData, setTypeFormData] = useState<{ name: string; description: string; criterionId: string }>(() => ({
     name: '',
@@ -128,13 +136,56 @@ export const InstrumentManagement: React.FC = () => {
     description: '',
   }));
   const [criterionSaving, setCriterionSaving] = useState(false);
+  const [bulkAssignLoading, setBulkAssignLoading] = useState(false);
+  const [bulkAssignError, setBulkAssignError] = useState<string | null>(null);
+  const [bulkAssignResult, setBulkAssignResult] = useState<{
+    requestedPairs: number;
+    createdCount: number;
+    failedCount: number;
+    results: Array<{
+      patientId: number | null;
+      instrumentTypeId: number | null;
+      status: 'created' | 'failed';
+      assignmentId?: number;
+      error?: string;
+    }>;
+  } | null>(null);
+  const [bulkSelectedPatientIds, setBulkSelectedPatientIds] = useState<string[]>([]);
+  const [bulkSelectedInstrumentIds, setBulkSelectedInstrumentIds] = useState<string[]>([]);
+  const [bulkPatientSearch, setBulkPatientSearch] = useState('');
+  const [bulkPatientProgram, setBulkPatientProgram] = useState<'all' | 'no-program' | string>('all');
+  const [bulkPatientStatus, setBulkPatientStatus] = useState<'all' | 'active' | 'inactive'>('all');
+  const [bulkPatientAssignment, setBulkPatientAssignment] = useState<'all' | 'assigned' | 'unassigned'>('all');
+  const [bulkPatientGender, setBulkPatientGender] = useState<'all' | 'male' | 'female' | 'other'>('all');
+  const [bulkThemeSearch, setBulkThemeSearch] = useState('');
+  const [bulkInstrumentTypeFilter, setBulkInstrumentTypeFilter] = useState<'all' | string>('all');
 
-  const filteredInstruments = instruments.filter(instrument =>
-    instrument.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    instrument.description.toLowerCase().includes(searchTerm.toLowerCase())
+  const restrictedInstrumentTypeIds = useMemo(() => {
+    const ids = new Set<string>();
+    instrumentTypes.forEach((type) => {
+      if (normalizeInstrumentTypeName(type.name) === RESTRICTED_INSTRUMENT_TYPE_NAME) {
+        ids.add(type.id);
+      }
+    });
+    return ids;
+  }, [instrumentTypes]);
+
+  const visibleInstrumentTypes = useMemo(() => {
+    if (isAdmin) return instrumentTypes;
+    return instrumentTypes.filter((type) => !restrictedInstrumentTypeIds.has(type.id));
+  }, [instrumentTypes, isAdmin, restrictedInstrumentTypeIds]);
+
+  const visibleInstruments = useMemo(() => {
+    if (isAdmin) return instruments;
+    return instruments.filter((instrument) => !restrictedInstrumentTypeIds.has(instrument.instrumentTypeId ?? ''));
+  }, [instruments, isAdmin, restrictedInstrumentTypeIds]);
+
+  const filteredInstruments = visibleInstruments.filter((instrument) =>
+    instrument.name.toLowerCase().includes(searchTerm.toLowerCase())
+    || instrument.description.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const filteredTypes = instrumentTypes.filter((type) =>
+  const filteredTypes = visibleInstrumentTypes.filter((type) =>
     type.name.toLowerCase().includes(typeSearch.toLowerCase()),
   );
 
@@ -194,6 +245,181 @@ export const InstrumentManagement: React.FC = () => {
     });
     return entries;
   }, [criteria]);
+
+  const instrumentTypeNameById = useMemo(() => {
+    const lookup = new Map<string, string>();
+    visibleInstrumentTypes.forEach((item) => {
+      lookup.set(item.id, item.name);
+    });
+    return lookup;
+  }, [visibleInstrumentTypes]);
+
+  const programOptions = useMemo(() => {
+    const sortedPrograms = [...programs]
+      .map((program) => ({ value: program.id, label: program.name }))
+      .sort((a, b) => a.label.localeCompare(b.label, 'es'));
+
+    return [
+      { value: 'all', label: 'Todos los programas' },
+      { value: 'no-program', label: 'Sin programa asignado' },
+      ...sortedPrograms,
+    ];
+  }, [programs]);
+
+  const patientNameById = useMemo(() => {
+    const lookup = new Map<string, string>();
+    patients.forEach((patient) => {
+      lookup.set(patient.id, `${patient.firstName} ${patient.lastName}`.trim());
+    });
+    return lookup;
+  }, [patients]);
+
+  const bulkFilteredPatients = useMemo(() => {
+    const normalizedTerm = bulkPatientSearch.trim().toLowerCase();
+
+    return patients.filter((patient) => {
+      const fullName = `${patient.firstName} ${patient.lastName}`.toLowerCase();
+      const matchesTerm = !normalizedTerm
+        || fullName.includes(normalizedTerm)
+        || patient.firstName.toLowerCase().includes(normalizedTerm)
+        || patient.lastName.toLowerCase().includes(normalizedTerm)
+        || patient.email.toLowerCase().includes(normalizedTerm)
+        || (patient.cedula?.toLowerCase().includes(normalizedTerm) ?? false);
+
+      if (!matchesTerm) {
+        return false;
+      }
+
+      const matchesProgram = bulkPatientProgram === 'all'
+        ? true
+        : bulkPatientProgram === 'no-program'
+          ? !patient.programId
+          : patient.programId === bulkPatientProgram;
+
+      if (!matchesProgram) {
+        return false;
+      }
+
+      const matchesStatus = bulkPatientStatus === 'all'
+        ? true
+        : bulkPatientStatus === 'active'
+          ? patient.isActive
+          : !patient.isActive;
+
+      if (!matchesStatus) {
+        return false;
+      }
+
+      const matchesAssignment = bulkPatientAssignment === 'all'
+        ? true
+        : bulkPatientAssignment === 'assigned'
+          ? Boolean(patient.programId)
+          : !patient.programId;
+
+      if (!matchesAssignment) {
+        return false;
+      }
+
+      const matchesGender = bulkPatientGender === 'all' ? true : patient.gender === bulkPatientGender;
+
+      return matchesGender;
+    });
+  }, [patients, bulkPatientSearch, bulkPatientProgram, bulkPatientStatus, bulkPatientAssignment, bulkPatientGender]);
+
+  const getInstrumentThemeName = useCallback((instrument: Instrument): string => {
+    const themeFromSubject = instrument.subjectId ? subjectNameById.get(instrument.subjectId) : null;
+    const fallbackTheme = instrument.subjectName ?? instrument.name ?? '';
+    return (themeFromSubject ?? fallbackTheme ?? '').toString().trim();
+  }, [subjectNameById]);
+
+  const bulkFilteredInstruments = useMemo(() => {
+    const normalizedTheme = bulkThemeSearch.trim().toLowerCase();
+    const normalizedType = bulkInstrumentTypeFilter === 'all' ? '' : bulkInstrumentTypeFilter.trim().toLowerCase();
+
+    return visibleInstruments.filter((instrument) => {
+      const instrumentTypeId = instrument.instrumentTypeId ?? '';
+      const instrumentTypeName = instrumentTypeNameById.get(instrumentTypeId) ?? '';
+      const matchesType = !normalizedType || instrumentTypeName.toLowerCase().includes(normalizedType);
+      if (!matchesType) {
+        return false;
+      }
+
+      const themeName = getInstrumentThemeName(instrument).toLowerCase();
+      const matchesTheme = !normalizedTheme || themeName.includes(normalizedTheme);
+      return matchesTheme;
+    });
+  }, [visibleInstruments, instrumentTypeNameById, getInstrumentThemeName, bulkThemeSearch, bulkInstrumentTypeFilter]);
+
+  const selectedInstrumentTypeIdsForBulk = useMemo(() => {
+    return bulkSelectedInstrumentIds
+      .map((instrumentId) => visibleInstruments.find((item) => item.id === instrumentId)?.instrumentTypeId ?? '')
+      .filter((instrumentTypeId) => instrumentTypeId.length > 0);
+  }, [bulkSelectedInstrumentIds, visibleInstruments]);
+
+  const clearBulkAssignState = useCallback(() => {
+    setBulkAssignLoading(false);
+    setBulkAssignError(null);
+    setBulkAssignResult(null);
+    setBulkSelectedPatientIds([]);
+    setBulkSelectedInstrumentIds([]);
+    setBulkPatientSearch('');
+    setBulkPatientProgram('all');
+    setBulkPatientStatus('all');
+    setBulkPatientAssignment('all');
+    setBulkPatientGender('all');
+    setBulkThemeSearch('');
+    setBulkInstrumentTypeFilter('all');
+  }, []);
+
+  const toggleBulkPatient = useCallback((patientId: string) => {
+    setBulkSelectedPatientIds((prev) => (
+      prev.includes(patientId)
+        ? prev.filter((id) => id !== patientId)
+        : [...prev, patientId]
+    ));
+  }, []);
+
+  const toggleBulkInstrument = useCallback((instrumentId: string) => {
+    setBulkSelectedInstrumentIds((prev) => (
+      prev.includes(instrumentId)
+        ? prev.filter((id) => id !== instrumentId)
+        : [...prev, instrumentId]
+    ));
+  }, []);
+
+  const handleBulkAssignSubmit = useCallback(async () => {
+    if (!isAdmin) {
+      setBulkAssignError('Solo los administradores pueden asignar instrumentos por lote.');
+      return;
+    }
+
+    if (!bulkSelectedPatientIds.length) {
+      setBulkAssignError('Selecciona al menos un paciente.');
+      return;
+    }
+
+    if (!bulkSelectedInstrumentIds.length) {
+      setBulkAssignError('Selecciona al menos un instrumento.');
+      return;
+    }
+
+    setBulkAssignError(null);
+    setBulkAssignLoading(true);
+    setBulkAssignResult(null);
+
+    try {
+      const result = await assignInstrumentsBulk({
+        patientIds: bulkSelectedPatientIds,
+        instrumentTypeIds: selectedInstrumentTypeIdsForBulk,
+      });
+
+      setBulkAssignResult(result);
+    } catch (error: any) {
+      setBulkAssignError(error?.message ?? 'No se pudo completar la asignación por lote.');
+    } finally {
+      setBulkAssignLoading(false);
+    }
+  }, [assignInstrumentsBulk, bulkSelectedInstrumentIds, bulkSelectedPatientIds, isAdmin, selectedInstrumentTypeIdsForBulk]);
 
   useEffect(() => {
     let cancelled = false;
@@ -928,8 +1154,47 @@ export const InstrumentManagement: React.FC = () => {
   const [selectedTypeInstruments, setSelectedTypeInstruments] = useState<Instrument[] | null>(null);
   const [loadingTypeInstruments, setLoadingTypeInstruments] = useState(false);
 
+  useEffect(() => {
+    if (isAdmin) return;
+
+    if (activeInstrumentType && restrictedInstrumentTypeIds.has(activeInstrumentType.id)) {
+      setActiveInstrumentType(null);
+      setSelectedTypeInstruments(null);
+      setFormData((prev) => ({ ...prev, instrumentTypeId: '' }));
+    }
+
+    if (
+      bulkInstrumentTypeFilter !== 'all'
+      && normalizeInstrumentTypeName(bulkInstrumentTypeFilter) === RESTRICTED_INSTRUMENT_TYPE_NAME
+    ) {
+      setBulkInstrumentTypeFilter('all');
+    }
+
+    setBulkSelectedInstrumentIds((prev) => {
+      const visibleIds = new Set(visibleInstruments.map((instrument) => instrument.id));
+      return prev.filter((id) => visibleIds.has(id));
+    });
+  }, [
+    isAdmin,
+    activeInstrumentType,
+    restrictedInstrumentTypeIds,
+    bulkInstrumentTypeFilter,
+    visibleInstruments,
+  ]);
+
   // decide which instruments to show in the table: selectedTypeInstruments overrides filteredInstruments
-  const instrumentsToShow = selectedTypeInstruments ?? filteredInstruments;
+  const instrumentsToShow = useMemo(() => {
+    const source = selectedTypeInstruments ?? filteredInstruments;
+    const roleFilteredSource = isAdmin
+      ? source
+      : source.filter((instrument) => !restrictedInstrumentTypeIds.has(instrument.instrumentTypeId ?? ''));
+
+    return [...roleFilteredSource].sort((a, b) => {
+      const left = (a.subjectName ?? a.name ?? '').toString().trim();
+      const right = (b.subjectName ?? b.name ?? '').toString().trim();
+      return left.localeCompare(right, 'es', { sensitivity: 'base' });
+    });
+  }, [selectedTypeInstruments, filteredInstruments, isAdmin, restrictedInstrumentTypeIds]);
 
   return (
     <>
@@ -959,7 +1224,7 @@ export const InstrumentManagement: React.FC = () => {
             <div className="grid w-full gap-3 sm:grid-cols-3 lg:max-w-xl">
               {[{
                 label: 'Tipos registrados',
-                value: instrumentTypes.length,
+                value: visibleInstrumentTypes.length,
                 accent: 'from-[#1F2937] via-[#334155] to-[#475569]',
               },
               {
@@ -981,6 +1246,27 @@ export const InstrumentManagement: React.FC = () => {
                   <span className={`mt-2 inline-flex items-center rounded-full bg-gradient-to-r ${stat.accent} px-3 py-0.5 text-[0.6rem] font-semibold uppercase tracking-[0.35em] text-white`}>Activo</span>
                 </div>
               ))}
+            </div>
+          </div>
+          <div className="relative z-10 border-t border-white/60 px-6 pb-6 pt-5 sm:px-8">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-sm text-slate-600">
+                Asigna uno o varios instrumentos a múltiples pacientes en un solo paso.
+              </p>
+              {isAdmin ? (
+                <Button
+                  onClick={() => {
+                    clearBulkAssignState();
+                    setIsBulkAssignModalOpen(true);
+                  }}
+                  className="rounded-full bg-gradient-to-r from-[#1F2937] via-[#303A4A] to-[#4B5563] px-5 py-2 text-sm font-semibold text-white shadow-lg shadow-slate-900/30 transition hover:translate-y-0.5"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Asignación por lote
+                </Button>
+              ) : (
+                <span className="text-xs text-slate-500">Solo administradores pueden usar asignación por lote.</span>
+              )}
             </div>
           </div>
         </div>
@@ -1304,6 +1590,305 @@ export const InstrumentManagement: React.FC = () => {
       </section>
 
       <Modal
+        isOpen={isBulkAssignModalOpen}
+        onClose={() => {
+          setIsBulkAssignModalOpen(false);
+          clearBulkAssignState();
+        }}
+        title="Asignación por lote"
+        size="xl"
+      >
+        <div className="space-y-6">
+          {!isAdmin && (
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+              No tienes permisos para asignar instrumentos por lote.
+            </div>
+          )}
+
+          <div className="grid gap-6 lg:grid-cols-2">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-600">Pacientes</h3>
+                <span className="text-xs text-slate-500">
+                  Seleccionados: {bulkSelectedPatientIds.length}
+                </span>
+              </div>
+
+              <div className="grid gap-2 sm:grid-cols-2">
+                <div className="sm:col-span-2 relative">
+                  <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    value={bulkPatientSearch}
+                    onChange={(event) => setBulkPatientSearch(event.target.value)}
+                    placeholder="Buscar por nombre, correo o cédula"
+                    className="w-full rounded-2xl border border-slate-300 bg-white pl-9 pr-3 py-2 text-sm text-slate-900 focus:border-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-200"
+                  />
+                </div>
+
+                <select
+                  value={bulkPatientProgram}
+                  onChange={(event) => setBulkPatientProgram(event.target.value)}
+                  className="w-full rounded-2xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-200"
+                >
+                  {programOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+
+                <select
+                  value={bulkPatientStatus}
+                  onChange={(event) => setBulkPatientStatus(event.target.value as 'all' | 'active' | 'inactive')}
+                  className="w-full rounded-2xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-200"
+                >
+                  <option value="all">Todos los estados</option>
+                  <option value="active">Activos</option>
+                  <option value="inactive">Inactivos</option>
+                </select>
+
+                <select
+                  value={bulkPatientAssignment}
+                  onChange={(event) => setBulkPatientAssignment(event.target.value as 'all' | 'assigned' | 'unassigned')}
+                  className="w-full rounded-2xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-200"
+                >
+                  <option value="all">Todos (asignación)</option>
+                  <option value="assigned">Con programa</option>
+                  <option value="unassigned">Sin programa</option>
+                </select>
+
+                <select
+                  value={bulkPatientGender}
+                  onChange={(event) => setBulkPatientGender(event.target.value as 'all' | 'male' | 'female' | 'other')}
+                  className="w-full rounded-2xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-200"
+                >
+                  <option value="all">Todos los géneros</option>
+                  <option value="female">Femenino</option>
+                  <option value="male">Masculino</option>
+                  <option value="other">Otro</option>
+                </select>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-slate-500">Coincidencias: {bulkFilteredPatients.length}</span>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setBulkSelectedPatientIds(Array.from(new Set([...bulkSelectedPatientIds, ...bulkFilteredPatients.map((item) => item.id)])))}
+                  >
+                    Seleccionar filtro
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setBulkSelectedPatientIds((prev) => prev.filter((id) => !bulkFilteredPatients.some((item) => item.id === id)))}
+                  >
+                    Limpiar filtro
+                  </Button>
+                </div>
+              </div>
+
+              <div className="max-h-64 overflow-auto rounded-2xl border border-slate-200 bg-white">
+                {bulkFilteredPatients.length === 0 ? (
+                  <div className="px-4 py-6 text-sm text-slate-500">No hay pacientes que coincidan con los filtros.</div>
+                ) : (
+                  <ul className="divide-y divide-slate-100">
+                    {bulkFilteredPatients.map((patient) => {
+                      const checked = bulkSelectedPatientIds.includes(patient.id);
+                      return (
+                        <li key={patient.id} className="px-4 py-3">
+                          <label className="flex cursor-pointer items-start gap-3">
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() => toggleBulkPatient(patient.id)}
+                              className="mt-1 h-4 w-4 rounded border-slate-300 text-slate-700 focus:ring-slate-400"
+                            />
+                            <span className="space-y-0.5">
+                              <span className="block text-sm font-medium text-slate-900">
+                                {patient.firstName} {patient.lastName}
+                              </span>
+                              <span className="block text-xs text-slate-500">
+                                {patient.email} · {patient.cedula ? `Cédula ${patient.cedula}` : 'Sin cédula'}
+                              </span>
+                            </span>
+                          </label>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-600">Instrumentos</h3>
+                <span className="text-xs text-slate-500">
+                  Seleccionados: {bulkSelectedInstrumentIds.length}
+                </span>
+              </div>
+
+              <div className="grid gap-2 sm:grid-cols-2">
+                <div className="relative sm:col-span-2">
+                  <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    value={bulkThemeSearch}
+                    onChange={(event) => setBulkThemeSearch(event.target.value)}
+                    placeholder="Buscar por nombre de tema"
+                    className="w-full rounded-2xl border border-slate-300 bg-white pl-9 pr-3 py-2 text-sm text-slate-900 focus:border-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-200"
+                  />
+                </div>
+                <select
+                  value={bulkInstrumentTypeFilter}
+                  onChange={(event) => setBulkInstrumentTypeFilter(event.target.value)}
+                  className="w-full rounded-2xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-200 sm:col-span-2"
+                >
+                  <option value="all">Todos los tipos</option>
+                  {visibleInstrumentTypes.map((type) => (
+                    <option key={type.id} value={type.name}>
+                      {type.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-slate-500">Coincidencias: {bulkFilteredInstruments.length}</span>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setBulkSelectedInstrumentIds(Array.from(new Set([...bulkSelectedInstrumentIds, ...bulkFilteredInstruments.map((item) => item.id)])))}
+                  >
+                    Seleccionar filtro
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setBulkSelectedInstrumentIds((prev) => prev.filter((id) => !bulkFilteredInstruments.some((item) => item.id === id)))}
+                  >
+                    Limpiar filtro
+                  </Button>
+                </div>
+              </div>
+
+              <div className="max-h-64 overflow-auto rounded-2xl border border-slate-200 bg-white">
+                {bulkFilteredInstruments.length === 0 ? (
+                  <div className="px-4 py-6 text-sm text-slate-500">No hay instrumentos que coincidan con los filtros.</div>
+                ) : (
+                  <ul className="divide-y divide-slate-100">
+                    {bulkFilteredInstruments.map((instrument) => {
+                      const checked = bulkSelectedInstrumentIds.includes(instrument.id);
+                      const themeName = getInstrumentThemeName(instrument) || `Instrumento ${instrument.id}`;
+                      const typeName = instrument.instrumentTypeId
+                        ? (instrumentTypeNameById.get(instrument.instrumentTypeId) ?? `Tipo ${instrument.instrumentTypeId}`)
+                        : 'Sin tipo';
+                      return (
+                        <li key={instrument.id} className="px-4 py-3">
+                          <label className="flex cursor-pointer items-start gap-3">
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() => toggleBulkInstrument(instrument.id)}
+                              className="mt-1 h-4 w-4 rounded border-slate-300 text-slate-700 focus:ring-slate-400"
+                            />
+                            <span className="space-y-1">
+                              <span className="block text-sm font-medium text-slate-900">
+                                {themeName}
+                              </span>
+                              <span className="block text-xs text-slate-500">
+                                {typeName}
+                              </span>
+                            </span>
+                          </label>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+            Se crearán hasta {bulkSelectedPatientIds.length * bulkSelectedInstrumentIds.length} asignaciones
+            ({bulkSelectedPatientIds.length} paciente(s) × {bulkSelectedInstrumentIds.length} instrumento(s)).
+          </div>
+
+          {bulkAssignError && (
+            <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              {bulkAssignError}
+            </div>
+          )}
+
+          {bulkAssignResult && (
+            <div className="space-y-3 rounded-2xl border border-slate-200 bg-white px-4 py-4">
+              <div className="grid gap-2 sm:grid-cols-3">
+                <div className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                  Solicitadas: <strong>{bulkAssignResult.requestedPairs}</strong>
+                </div>
+                <div className="rounded-xl border border-green-100 bg-green-50 px-3 py-2 text-sm text-green-700">
+                  Creadas: <strong>{bulkAssignResult.createdCount}</strong>
+                </div>
+                <div className="rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-sm text-red-700">
+                  Fallidas: <strong>{bulkAssignResult.failedCount}</strong>
+                </div>
+              </div>
+
+              {bulkAssignResult.results.some((item) => item.status === 'failed') && (
+                <div className="max-h-40 overflow-auto rounded-xl border border-red-100 bg-red-50/50 p-3 text-xs text-red-700">
+                  {bulkAssignResult.results
+                    .filter((item) => item.status === 'failed')
+                    .map((item, index) => {
+                      const patientId = item.patientId !== null ? String(item.patientId) : '';
+                      const instrumentTypeId = item.instrumentTypeId !== null ? String(item.instrumentTypeId) : '';
+                      const patientLabel = patientNameById.get(patientId) ?? `Paciente ${patientId || 'N/A'}`;
+                      const instrumentLabel = instrumentTypeNameById.get(instrumentTypeId) ?? `Instrumento ${instrumentTypeId || 'N/A'}`;
+                      return (
+                        <p key={`${index}-${patientId}-${instrumentTypeId}`}>
+                          {patientLabel} · {instrumentLabel}: {item.error ?? 'Error desconocido'}
+                        </p>
+                      );
+                    })}
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="flex justify-end gap-3 pt-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setIsBulkAssignModalOpen(false);
+                clearBulkAssignState();
+              }}
+              disabled={bulkAssignLoading}
+            >
+              Cerrar
+            </Button>
+            {!bulkAssignResult && (
+              <Button
+                type="button"
+                onClick={handleBulkAssignSubmit}
+                disabled={!isAdmin || bulkAssignLoading}
+              >
+                {bulkAssignLoading ? 'Asignando...' : 'Asignar en lote'}
+              </Button>
+            )}
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
         isOpen={isModalOpen}
         onClose={closeInstrumentModal}
         title={editingInstrument ? 'Editar instrumento' : 'Agregar instrumento'}
@@ -1613,7 +2198,7 @@ export const InstrumentManagement: React.FC = () => {
                 className="w-full rounded-2xl border border-gray/60 bg-white/70 px-3 py-2 text-sm text-slate-900 focus:border-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-300"
               >
                 <option value="">Selecciona un tipo (opcional)</option>
-                {instrumentTypes.map((type) => (
+                {visibleInstrumentTypes.map((type) => (
                   <option key={type.id} value={type.name}>
                     {type.name || `Tipo ${type.id}`}
                   </option>

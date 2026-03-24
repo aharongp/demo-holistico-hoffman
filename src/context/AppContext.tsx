@@ -1,6 +1,16 @@
 import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback, useMemo, useRef } from 'react';
-import { Patient, Instrument, Assignment, Program, ProgramActivity, ProgramDetails, EvolutionEntry, DashboardStats, GenderDistributionSlice, PatientsByProgramSlice, InstrumentType, InstrumentTopic, Question, QuestionAnswer, QuestionOption, Ribbon, PatientPunctualityRecord, CreatePatientPunctualityInput, UpdatePatientPunctualityInput } from '../types';
+import { Patient, Instrument, Assignment, Program, ProgramActivity, ProgramDetails, EvolutionEntry, DashboardStats, GenderDistributionSlice, PatientsByProgramSlice, InstrumentTopic, Question, QuestionAnswer, QuestionOption, Ribbon, PatientPunctualityRecord, CreatePatientPunctualityInput, UpdatePatientPunctualityInput } from '../types';
 import { useAuth } from './AuthContext';
+
+export type InstrumentType = {
+  id: string;
+  name: string;
+  description?: string | null;
+  criterionId?: string | null;
+  createdBy?: string | null;
+  createdAt?: Date | null;
+  updatedAt?: Date | null;
+};
 
 type ProgramInput = {
   name: string;
@@ -19,6 +29,28 @@ type ProgramActivityInput = {
 };
 
 type ProgramActivityUpdateInput = Partial<ProgramActivityInput>;
+
+type BulkAssignInstrumentsInput = {
+  patientIds: string[];
+  instrumentTypeIds: string[];
+  assignedAt?: string | null;
+  validUntil?: string | null;
+};
+
+type BulkAssignInstrumentsResultItem = {
+  patientId: number | null;
+  instrumentTypeId: number | null;
+  status: 'created' | 'failed';
+  assignmentId?: number;
+  error?: string;
+};
+
+type BulkAssignInstrumentsResult = {
+  requestedPairs: number;
+  createdCount: number;
+  failedCount: number;
+  results: BulkAssignInstrumentsResultItem[];
+};
 
 type InstrumentTypeInput = {
   name: string;
@@ -1016,6 +1048,7 @@ interface AppContextType {
   updateQuestion: (instrumentId: string, questionId: string, input: QuestionInput) => Promise<Question>;
   deleteQuestion: (instrumentId: string, questionId: string) => Promise<boolean>;
   assignInstrumentToPatients: (instrumentTypeId: string, patientIds: string[]) => Promise<void>;
+  assignInstrumentsBulk: (input: BulkAssignInstrumentsInput) => Promise<BulkAssignInstrumentsResult>;
   getInstrumentTopics: (instrumentId: string) => Promise<InstrumentTopic[]>;
   createInstrumentTopic: (instrumentId: string, input: InstrumentTopicInput) => Promise<InstrumentTopic>;
   updateInstrumentTopic: (instrumentId: string, topicId: string, input: InstrumentTopicInput) => Promise<InstrumentTopic>;
@@ -2744,6 +2777,73 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   }, [apiBase]);
 
+  const assignInstrumentsBulk = useCallback(async (input: BulkAssignInstrumentsInput): Promise<BulkAssignInstrumentsResult> => {
+    const uniquePatientIds = Array.from(
+      new Set(
+        (input.patientIds ?? [])
+          .map((value) => (value ?? '').toString().trim())
+          .filter((value) => value.length > 0),
+      ),
+    );
+
+    const normalizedInstrumentTypeIds = (input.instrumentTypeIds ?? [])
+      .map((value) => (value ?? '').toString().trim())
+      .filter((value) => value.length > 0);
+
+    if (!uniquePatientIds.length) {
+      throw new Error('Selecciona al menos un paciente.');
+    }
+
+    if (!normalizedInstrumentTypeIds.length) {
+      throw new Error('Selecciona al menos un tipo de instrumento.');
+    }
+
+    const payload: Record<string, unknown> = {
+      patientIds: uniquePatientIds,
+      instrumentTypeIds: normalizedInstrumentTypeIds,
+    };
+
+    if (typeof input.assignedAt === 'string' && input.assignedAt.trim().length) {
+      payload.assignedAt = input.assignedAt.trim();
+    }
+
+    if (typeof input.validUntil === 'string' && input.validUntil.trim().length) {
+      payload.validUntil = input.validUntil.trim();
+    }
+
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+
+    const response = await fetch(`${apiBase}/patient-instruments/bulk`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const text = await response.text().catch(() => null);
+      throw new Error(text || `No se pudo completar la asignación por lote (status ${response.status}).`);
+    }
+
+    const result = await response.json().catch(() => null) as BulkAssignInstrumentsResult | null;
+
+    if (!result || typeof result !== 'object') {
+      throw new Error('El backend devolvió una respuesta inválida para la asignación por lote.');
+    }
+
+    return {
+      requestedPairs: Number(result.requestedPairs ?? 0),
+      createdCount: Number(result.createdCount ?? 0),
+      failedCount: Number(result.failedCount ?? 0),
+      results: Array.isArray(result.results) ? result.results : [],
+    };
+  }, [apiBase, token]);
+
   const getInstrumentTopics = useCallback(async (instrumentId: string): Promise<InstrumentTopic[]> => {
     const numericInstrumentId = Number(instrumentId);
     const resolvedInstrumentId = Number.isNaN(numericInstrumentId)
@@ -3521,6 +3621,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     updateQuestion,
     deleteQuestion,
     assignInstrumentToPatients,
+    assignInstrumentsBulk,
     getInstrumentTopics,
     createInstrumentTopic,
     updateInstrumentTopic,
