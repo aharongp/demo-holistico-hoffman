@@ -7,6 +7,7 @@ import { Table } from '../../components/UI/Table';
 import { Modal } from '../../components/UI/Modal';
 import { useApp, InstrumentType } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
+// import { usePermissions } from '../../hooks/usePermissions';
 import { Instrument, Subject, Criterion } from '../../types';
 
 type ResultDeliveryOption = 'sistema' | 'programado' | null;
@@ -71,6 +72,17 @@ export const InstrumentManagement: React.FC = () => {
   } = useApp();
   const { user: currentUser } = useAuth();
   const isAdmin = currentUser?.role === 'administrator';
+  // const { user: currentUser, token } = useAuth();
+  // const {
+  //   canViewInstruments,
+  //   canCreateInstruments,
+  //   canUpdateInstruments,
+  //   canDeleteInstruments,
+  //   canAssignInstruments,
+  // } = usePermissions();
+  // const hasInstrumentManagementActions =
+  //   canCreateInstruments || canUpdateInstruments || canDeleteInstruments || canAssignInstruments;
+  // const isAdmin = currentUser?.role === 'administrator' || hasInstrumentManagementActions;
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'all' | 'themes' | 'criteria'>('all');
   const [searchTerm] = useState('');
@@ -388,10 +400,12 @@ export const InstrumentManagement: React.FC = () => {
   }, []);
 
   const handleBulkAssignSubmit = useCallback(async () => {
-    if (!isAdmin) {
-      setBulkAssignError('Solo los administradores pueden asignar instrumentos por lote.');
-      return;
-    }
+    //     if (!isAdmin) {
+    //   setBulkAssignError('Solo los administradores pueden asignar instrumentos por lote.');
+    // if (!(currentUser?.role === 'administrator' || canAssignInstruments)) {
+    //   setBulkAssignError('No tienes permisos para asignar instrumentos por lote.');
+    //   return;
+    // }
 
     if (!bulkSelectedPatientIds.length) {
       setBulkAssignError('Selecciona al menos un paciente.');
@@ -419,7 +433,17 @@ export const InstrumentManagement: React.FC = () => {
     } finally {
       setBulkAssignLoading(false);
     }
-  }, [assignInstrumentsBulk, bulkSelectedInstrumentIds, bulkSelectedPatientIds, isAdmin, selectedInstrumentTypeIdsForBulk]);
+    }, [assignInstrumentsBulk, bulkSelectedInstrumentIds, bulkSelectedPatientIds, selectedInstrumentTypeIdsForBulk]);
+
+    // }, [assignInstrumentsBulk, bulkSelectedInstrumentIds, bulkSelectedPatientIds, isAdmin, selectedInstrumentTypeIdsForBulk]);
+  // }, [
+  //   assignInstrumentsBulk,
+  //   bulkSelectedInstrumentIds,
+  //   bulkSelectedPatientIds,
+  //   canAssignInstruments,
+  //   currentUser?.role,
+  //   selectedInstrumentTypeIdsForBulk,
+  // ]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1154,6 +1178,16 @@ export const InstrumentManagement: React.FC = () => {
   const [selectedTypeInstruments, setSelectedTypeInstruments] = useState<Instrument[] | null>(null);
   const [loadingTypeInstruments, setLoadingTypeInstruments] = useState(false);
 
+  // if (!canViewInstruments) {
+  //   return (
+  //     <section className="space-y-6 px-4 py-8 sm:px-8">
+  //       <Card className="border border-red-200 bg-red-50" padding="lg">
+  //         <p className="text-sm text-red-700">No tienes permisos para ver instrumentos.</p>
+  //       </Card>
+  //     </section>
+  //   );
+  // }
+
   useEffect(() => {
     if (isAdmin) return;
 
@@ -1253,7 +1287,7 @@ export const InstrumentManagement: React.FC = () => {
               <p className="text-sm text-slate-600">
                 Asigna uno o varios instrumentos a múltiples pacientes en un solo paso.
               </p>
-              {isAdmin ? (
+              {/* {isAdmin ? ( */}
                 <Button
                   onClick={() => {
                     clearBulkAssignState();
@@ -1264,9 +1298,9 @@ export const InstrumentManagement: React.FC = () => {
                   <Plus className="w-4 h-4 mr-2" />
                   Asignación por lote
                 </Button>
-              ) : (
+              {/* ) : (
                 <span className="text-xs text-slate-500">Solo administradores pueden usar asignación por lote.</span>
-              )}
+              )} */}
             </div>
           </div>
         </div>
@@ -1362,6 +1396,12 @@ export const InstrumentManagement: React.FC = () => {
                         }));
                         setLoadingTypeInstruments(true);
                         try {
+                          // const headers: Record<string, string> = {};
+                          // if (token) {
+                          //   headers.Authorization = `Bearer ${token}`;
+                          // }
+
+                          // const res = await fetch(`${(import.meta as any).env?.VITE_API_BASE ?? 'http://localhost:3000'}/instruments/by-type/${type.id}`, { headers });
                           const res = await fetch(`${(import.meta as any).env?.VITE_API_BASE ?? 'http://localhost:3000'}/instruments/by-type/${type.id}`);
                           const data = await res.json();
                           // map backend instrument -> frontend Instrument minimal mapping
@@ -1599,11 +1639,11 @@ export const InstrumentManagement: React.FC = () => {
         size="xl"
       >
         <div className="space-y-6">
-          {!isAdmin && (
+          {/* {!isAdmin && (
             <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
               No tienes permisos para asignar instrumentos por lote.
             </div>
-          )}
+          )} */}
 
           <div className="grid gap-6 lg:grid-cols-2">
             <div className="space-y-3">
@@ -1879,7 +1919,10 @@ export const InstrumentManagement: React.FC = () => {
               <Button
                 type="button"
                 onClick={handleBulkAssignSubmit}
-                disabled={!isAdmin || bulkAssignLoading}
+                disabled={ bulkAssignLoading}
+
+                // disabled={!isAdmin || bulkAssignLoading}
+                // disabled={!(currentUser?.role === 'administrator' || canAssignInstruments) || bulkAssignLoading}
               >
                 {bulkAssignLoading ? 'Asignando...' : 'Asignar en lote'}
               </Button>

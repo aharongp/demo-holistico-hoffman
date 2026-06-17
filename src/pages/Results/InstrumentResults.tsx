@@ -149,12 +149,12 @@ const parseNumericId = (value: unknown): number | null => {
   return Number.isFinite(numeric) ? numeric : null;
 };
 
-const wheelValueToPercent = (value: number): number => {
+const wheelValueToPercent = (value: number, maxValue = 10): number => {
   if (!Number.isFinite(value)) {
     return 0;
   }
 
-  const percent = (value / 10) * 100;
+  const percent = (value / maxValue) * 100;
   return Math.min(Math.max(percent, 0), 100);
 };
 
@@ -209,7 +209,7 @@ const WheelAxisTick: React.FC<{ x?: number; y?: number; payload?: { value: strin
   );
 };
 
-const renderWheelTooltip = ({ active, payload }: TooltipProps<number, string>) => {
+const buildWheelTooltip = (maxValue: number) => ({ active, payload }: TooltipProps<number, string>) => {
   if (!active || !payload || !payload.length) {
     return null;
   }
@@ -221,10 +221,88 @@ const renderWheelTooltip = ({ active, payload }: TooltipProps<number, string>) =
   return (
     <div className="rounded-xl border border-slate-200 bg-white/95 px-3 py-2 text-xs shadow-xl">
       <p className="font-semibold text-slate-700">{topic}</p>
-      <p className="text-slate-500">{value.toFixed(2)} / 10</p>
+      <p className="text-slate-500">{value.toFixed(2)} / {maxValue}</p>
     </div>
   );
 };
+
+const HEALTH_WHEEL_MAX = 5;
+const HEALTH_WHEEL_TICKS = [1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5];
+const HEALTH_WHEEL_TOPICS = [
+  'RESPIRACIÓN CONSCIENTE, EJERCICIOS RESPIRATORIOS y MEDITACIÓN',
+  'EJERCICIO AERÓBICO (funcionales, aeróbicos, bailoterapia, trote, montañismo, bicicleta) /DEPORTES (football, tenis, )',
+  'EJERCICIO PSICOFÍSICO (estiramientos, yoga, taichí, Pilates)',
+  'HORAS Y CALIDAD DE SUEÑO',
+  'EVACUACIONES',
+  'DIETA ALIMENTACIÓN',
+  'HIDRATACIÓN',
+  'MI VIDA SEXUAL',
+  'ALIVIO DEL ESTRÉS (hobbies, arteterapia, terapias diversas, masajes, biodanza,  contacto con la naturaleza)',
+  'SUSTANCIAS LEGALES O TOLERADAS (ALCOHOL, TABACO, VAPE, REFRESCOS, DULCES, MARIGUANA) ILEGALES (COCAINA, PSICOTRÓPICOS, DE SÍNTESIS, OPIACIOS, OTRAS)',
+  'CONDICIONES DE SALUD O FACTORES DE RIESGO (tensión alta, colesterol alto, hiperglicemia, ácido úrico elevado, artritis, gastritis, colitis, asma, migraña, obesidad, entre otras)',
+  'MEDICACIÓN',
+];
+
+
+
+const HEALTH_WHEEL_TOPIC_ALIASES = [
+  {
+    label: HEALTH_WHEEL_TOPICS[0],
+    aliases: ['respiracion', 'respiración', 'ejercicios respiratorios', 'meditacion', 'meditación', 'RESPIRACION', 'MEDITACION'],
+  },
+  {
+    label: HEALTH_WHEEL_TOPICS[1],
+    aliases: ['ejercicio', 'deporte', 'ejercicio y deporte', 'aerobico', 'aeróbico', 'EJERCICIOS PSICOFISICOS'],
+  },
+  {
+    label: HEALTH_WHEEL_TOPICS[2],
+    aliases: ['psicofisico', 'psicofísico', 'estiramientos', 'yoga', 'taichi', 'tai chi', 'pilates', 'EJERCICIOS AEROBICOS'],
+  },
+  {
+    label: HEALTH_WHEEL_TOPICS[3],
+    aliases: ['sueno', 'sueño', 'descanso', 'SUEÑO'],
+  },
+  {
+    label: HEALTH_WHEEL_TOPICS[4],
+    aliases: ['evacuacion', 'evacuaciones', 'purificacion', 'purificación', 'EVACUACIONES Y PURIFICACIÓN'],
+  },
+  {
+    label: HEALTH_WHEEL_TOPICS[5],
+    aliases: ['dieta', 'alimentacion', 'alimentación', 'DIETA Y ALIMENTACIÓN'],
+  },
+  {
+    label: HEALTH_WHEEL_TOPICS[6],
+    aliases: ['hidratacion', 'hidratación', 'agua', 'HIDRATACIÓN'],
+  },
+  {
+    label: HEALTH_WHEEL_TOPICS[7],
+    aliases: ['vida sexual', 'sexualidad', 'sexual', 'VIDA SEXUAL' ],
+  },
+  {
+    label: HEALTH_WHEEL_TOPICS[8],
+    aliases: ['estres', 'estrés', 'tension', 'tensión', 'actividades', 'ACTIVIDADES HOBBIES'],
+  },
+  {
+    label: HEALTH_WHEEL_TOPICS[9],
+    aliases: ['adicciones', 'sustancias', 'alcohol', 'tabaco', 'drogas', 'ADICCIONES'],
+  },
+  {
+    label: HEALTH_WHEEL_TOPICS[10],
+    aliases: ['factores de riesgo', 'factores de riesgos', 'condicion', 'condiciones', 'riesgo', 'FACTORES DE RIESGO'],
+  },
+  {
+    label: HEALTH_WHEEL_TOPICS[11],
+    aliases: ['medicacion', 'medicación', 'MEDICACIÓN'],
+  },
+];
+
+const normalizeWheelTopic = (value: string): string =>
+  value
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
 
 const readStoredUserId = (): number | null => {
   if (typeof window === 'undefined') {
@@ -682,7 +760,7 @@ export const InstrumentResults: React.FC<InstrumentResultsProps> = ({
     [wheelOfLife]
   );
   const lifeRadarTooltip = useCallback(
-    (props: TooltipProps<number, string>) => renderWheelTooltip(props),
+    (props: TooltipProps<number, string>) => buildWheelTooltip(10)(props),
     []
   );
   const aggregatedRegiflexEntries = useMemo<RegiflexAggregatedEntry[]>(() => {
@@ -740,25 +818,33 @@ export const InstrumentResults: React.FC<InstrumentResultsProps> = ({
     },
     [regiflexTotal]
   );
-  const sortedWheelOfHealth = useMemo(
-    () => [...wheelOfHealth].sort((a, b) => b.average - a.average),
-    [wheelOfHealth]
-  );
-  const healthRadarData = useMemo(
+  const healthWheelEntries = useMemo(
     () =>
-      wheelOfHealth.map((item, index) => {
-        const average = Number.isFinite(item.average) ? Number(item.average) : 0;
-        const topicLabel = item.topic?.trim().length ? item.topic.trim() : `Dimensión ${index + 1}`;
+      HEALTH_WHEEL_TOPIC_ALIASES.map(({ label, aliases }) => {
+        const normalizedAliases = aliases.map(normalizeWheelTopic);
+        const matches = wheelOfHealth.filter((item) => {
+          if (!item.topic) {
+            return false;
+          }
+          const normalizedTopic = normalizeWheelTopic(item.topic);
+          return normalizedAliases.some((alias) => normalizedTopic.includes(alias));
+        });
+        const total = matches.reduce((sum, item) => {
+          const value = Number.isFinite(item.average) ? Number(item.average) : 0;
+          return sum + value;
+        }, 0);
+        const average = matches.length ? Number((total / matches.length).toFixed(2)) : 0;
         return {
-          topic: item.topic ?? null,
-          topicLabel,
+          topic: label,
+          topicLabel: label,
           average,
         };
       }),
     [wheelOfHealth]
   );
+  const healthRadarData = healthWheelEntries;
   const healthRadarTooltip = useCallback(
-    (props: TooltipProps<number, string>) => renderWheelTooltip(props),
+    (props: TooltipProps<number, string>) => buildWheelTooltip(HEALTH_WHEEL_MAX)(props),
     []
   );
 
@@ -1134,6 +1220,286 @@ export const InstrumentResults: React.FC<InstrumentResultsProps> = ({
               </div>
             </Card>
           ) : null}
+                {hasWellnessData ? (
+        <div className="space-y-6">
+            <div className="space-y-3">
+              <h2 className="text-xl font-semibold text-slate-900">Bienestar integral</h2>
+            </div>
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
+            {wheelOfLife.length ? (
+              <Card
+                data-pdf-page="wheelLife"
+                className="relative overflow-hidden rounded-[28px] border border-white/35 bg-white/75 shadow-[0_34px_85px_-60px_rgba(251,146,60,0.35)] backdrop-blur"
+                padding="lg"
+              >
+                <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-br from-[#FDE68A]/70 via-white to-[#FB7185]/60 opacity-60" />
+                <div className="relative space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.35em] text-slate-500">Rueda</p>
+                      <h3 className="text-lg font-semibold text-slate-900">Dimensiones de vida</h3>
+                    </div>
+                    <span className="rounded-full border border-white/50 bg-white/70 px-3 py-1 text-xs font-semibold uppercase tracking-[0.35em] text-slate-500">
+                      {wheelOfLife.length} tópicos
+                    </span>
+                  </div>
+                  {renderSectionDateSelect('wellnessLife', 'Corte rueda de vida', 'Selecciona la fecha de referencia para esta rueda.')}
+                  <p className="text-sm text-slate-600">Promedios generales por dimensión con escala 0-10.</p>
+                  <div className="rounded-2xl border border-white/60 bg-white/70 p-4">
+                    <div className="space-y-6">
+                      <div className="h-72">
+                        {lifeRadarData.length ? (
+                          <ResponsiveContainer width="100%" height="100%">
+                            <RadarChart
+                              data={lifeRadarData}
+                              outerRadius="75%"
+                              startAngle={90}
+                              endAngle={-270}
+                            >
+                              <defs>
+                                <linearGradient id={lifeRadarGradientId} x1="50%" y1="0%" x2="50%" y2="100%">
+                                  <stop offset="0%" stopColor="#fb7185" stopOpacity={0.85} />
+                                  <stop offset="100%" stopColor="#f97316" stopOpacity={0.45} />
+                                </linearGradient>
+                              </defs>
+                              <PolarGrid gridType="polygon" stroke="#e2e8f0" radialLines={false} />
+                              <PolarAngleAxis dataKey="topicLabel" tick={<WheelAxisTick />} />
+                              <PolarRadiusAxis
+                                angle={90}
+                                domain={[0, 10]}
+                                tickCount={6}
+                                axisLine={false}
+                                tickLine={false}
+                                tick={{ fill: '#94a3b8', fontSize: 11 }}
+                              />
+                              <Radar
+                                name="Promedio"
+                                dataKey="average"
+                                stroke="#fb7185"
+                                strokeWidth={2}
+                                fill={`url(#${lifeRadarGradientId})`}
+                                fillOpacity={0.8}
+                              />
+                              <RadarTooltip content={lifeRadarTooltip} cursor={{ stroke: '#94a3b8', strokeDasharray: '4 4' }} />
+                            </RadarChart>
+                          </ResponsiveContainer>
+                        ) : (
+                          <div className="flex h-full items-center justify-center rounded-xl border border-dashed border-slate-200 bg-white/60 p-6 text-sm text-slate-500">
+                            No hay datos suficientes para graficar.
+                          </div>
+                        )}
+                      </div>
+                      <div className="space-y-3">
+                        {sortedWheelOfLife.length ? (
+                          <ul className="space-y-3">
+                            {sortedWheelOfLife.map((item: WheelResult, index) => {
+                              const width = wheelValueToPercent(item.average, 10);
+                              const label = item.topicLabel?.trim().length ? item.topicLabel.trim() : `Dimensión ${index + 1}`;
+                              return (
+                                <li key={`${label}-${index}`} className="space-y-2">
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-sm font-medium text-slate-700">{label}</span>
+                                    <span className="text-lg font-semibold text-slate-900">{item.average.toFixed(2)}</span>
+                                  </div>
+                                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+                                    <div
+                                      className="h-full rounded-full bg-gradient-to-r from-[#FB7185]/70 to-[#F97316]/80"
+                                      style={{ width: `${width}%` }}
+                                    />
+                                  </div>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        ) : (
+                          <p className="text-sm text-slate-500">Sin registros suficientes para la tabla.</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </Card>
+            ) : null}
+
+            {wheelOfHealth.length ? (
+              <Card
+                data-pdf-page="wheelHealth"
+                className="relative overflow-hidden rounded-[28px] border border-white/35 bg-[#9fb2e8] shadow-[0_34px_85px_-60px_rgba(30,64,175,0.35)]"
+                padding="lg"
+              >
+                <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-br from-[#9fb2e8]/80 via-[#93a9e4]/70 to-[#8ea4df]/60 opacity-90" />
+                <div className="relative space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.35em] text-slate-900">Rueda de la salud</p>
+                      <h3 className="text-lg font-semibold text-slate-900">RUEDA DE LA SALUD</h3>
+                    </div>
+                    <span className="rounded-full border border-white/50 bg-white/70 px-3 py-1 text-xs font-semibold uppercase tracking-[0.35em] text-slate-500">
+                      {HEALTH_WHEEL_TOPICS.length} tópicos
+                    </span>
+                  </div>
+                  {renderSectionDateSelect('wellnessHealth', 'Corte rueda de salud', 'Selecciona la fecha de referencia para esta rueda.')}
+                  <p className="text-sm text-slate-900">Escala 1-5 · 12 ítems en total.</p>
+                  <div className="rounded-2xl border border-white/60 bg-[#9fb2e8]/70 p-4">
+                    <div className="space-y-6">
+                      <div className="h-72">
+                        {healthRadarData.length ? (
+                          <ResponsiveContainer width="100%" height="100%">
+                            <RadarChart
+                              data={healthRadarData}
+                              outerRadius="75%"
+                              startAngle={90}
+                              endAngle={-270}
+                            >
+                              <defs>
+                                <linearGradient id={healthRadarGradientId} x1="50%" y1="0%" x2="50%" y2="100%">
+                                  <stop offset="0%" stopColor="#f97316" stopOpacity={0.9} />
+                                  <stop offset="100%" stopColor="#fb923c" stopOpacity={0.4} />
+                                </linearGradient>
+                              </defs>
+                              <PolarGrid gridType="polygon" stroke="#94a3b8" radialLines={false} />
+                              <PolarAngleAxis dataKey="topicLabel" tick={<WheelAxisTick />} />
+                              <PolarRadiusAxis
+                                angle={90}
+                                domain={[0, HEALTH_WHEEL_MAX]}
+                                ticks={HEALTH_WHEEL_TICKS}
+                                axisLine={false}
+                                tickLine={false}
+                                tick={{ fill: '#111827', fontSize: 11 }}
+                              />
+                              <Radar
+                                name="Promedio"
+                                dataKey="average"
+                                stroke="#f97316"
+                                strokeWidth={2}
+                                fill={`url(#${healthRadarGradientId})`}
+                                fillOpacity={0.35}
+                              />
+                              <RadarTooltip content={healthRadarTooltip} cursor={{ stroke: '#f97316', strokeDasharray: '4 4' }} />
+                            </RadarChart>
+                          </ResponsiveContainer>
+                        ) : (
+                          <div className="flex h-full items-center justify-center rounded-xl border border-dashed border-slate-200 bg-white/60 p-6 text-sm text-slate-500">
+                            No hay datos suficientes para graficar.
+                          </div>
+                        )}
+                      </div>
+                      <div className="space-y-3">
+                        {healthWheelEntries.length ? (
+                          <ul className="space-y-3">
+                            {healthWheelEntries.map((item, index) => {
+                              const width = wheelValueToPercent(item.average, HEALTH_WHEEL_MAX);
+                              const label = item.topic?.trim().length ? item.topic.trim() : `Dimensión ${index + 1}`;
+                              return (
+                                <li key={`${label}-${index}`} className="space-y-2">
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-sm font-medium text-slate-700">{label}</span>
+                                    <span className="text-lg font-semibold text-slate-900">{item.average.toFixed(2)}</span>
+                                  </div>
+                                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+                                    <div
+                                      className="h-full rounded-full bg-gradient-to-r from-[#34D399]/70 to-[#10B981]/80"
+                                      style={{ width: `${width}%` }}
+                                    />
+                                  </div>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        ) : (
+                          <p className="text-sm text-slate-500">Sin registros suficientes para la tabla.</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </Card>
+            ) : null}
+
+            {regiflex ? (
+              <Card
+                data-pdf-page="regiflex"
+                className="relative overflow-hidden rounded-[28px] border border-white/35 bg-white/75 shadow-[0_34px_85px_-60px_rgba(79,70,229,0.35)] backdrop-blur"
+                padding="lg"
+              >
+                <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-br from-[#C7D2FE]/70 via-white to-[#818CF8]/60 opacity-60" />
+                <div className="relative space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.35em] text-slate-500">Regiflex</p>
+                      <h3 className="text-lg font-semibold text-slate-900">Flexibilidad corporal</h3>
+                    </div>
+                    <span className="rounded-full border border-white/50 bg-white/70 px-3 py-1 text-xs font-semibold uppercase tracking-[0.35em] text-slate-500">
+                      {regiflex.predominant ?? 'Sin dato'}
+                    </span>
+                  </div>
+                  {renderSectionDateSelect('wellnessRegiflex', 'Corte Regiflex', 'Selecciona la fecha de referencia para este análisis.')}
+                  <p className="text-sm text-slate-600">Comparativo entre flexibilidad y rigidez según respuestas recientes.</p>
+                  <div className="rounded-2xl border border-white/60 bg-white/70 p-4">
+                    <div className="space-y-6">
+                      <div className="h-72">
+                        {regiflexPieData.length ? (
+                          <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                              <Pie
+                                data={regiflexPieData}
+                                dataKey="value"
+                                nameKey="topicLabel"
+                                innerRadius="45%"
+                                outerRadius="75%"
+                                paddingAngle={4}
+                                stroke="#ffffff"
+                                strokeWidth={1.5}
+                              >
+                                {regiflexPieData.map((_, index) => (
+                                  <Cell key={`regiflex-slice-${index}`} fill={REGIFLEX_COLORS[index % REGIFLEX_COLORS.length]} />
+                                ))}
+                              </Pie>
+                              <PieTooltip content={regiflexPieTooltip} cursor={{ stroke: '#6366f1', strokeDasharray: '4 4' }} />
+                            </PieChart>
+                          </ResponsiveContainer>
+                        ) : (
+                          <div className="flex h-full items-center justify-center rounded-xl border border-dashed border-slate-200 bg-white/60 p-6 text-sm text-slate-500">
+                            No hay datos suficientes para graficar.
+                          </div>
+                        )}
+                      </div>
+                      <div className="space-y-3">
+                        {sortedRegiflexEntries.length ? (
+                          <ul className="space-y-3">
+                            {sortedRegiflexEntries.map((entry, index) => {
+                              const denominator = regiflexTotal > 0 ? regiflexTotal : 1;
+                              const width = Math.min(Math.max((entry.value / denominator) * 100, 0), 100);
+                              const label = entry.topicLabel?.trim().length ? entry.topicLabel.trim() : `Tendencia ${index + 1}`;
+                              return (
+                                <li key={`${label}-${index}`} className="space-y-2">
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-sm font-medium text-slate-700">{label}</span>
+                                    <span className="text-lg font-semibold text-slate-900">{entry.value.toFixed(2)}</span>
+                                  </div>
+                                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+                                    <div
+                                      className="h-full rounded-full bg-gradient-to-r from-[#818CF8]/70 to-[#6366F1]/80"
+                                      style={{ width: `${width}%` }}
+                                    />
+                                  </div>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        ) : (
+                          <p className="text-sm text-slate-500">Sin registros suficientes para la tabla.</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </Card>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+
 
           {attitudinalStrengths.length ? (
             <div className="space-y-6">
@@ -1386,285 +1752,7 @@ export const InstrumentResults: React.FC<InstrumentResultsProps> = ({
         </div>
       )) : null}
 
-      {hasWellnessData ? (
-        <div className="space-y-6">
-            <div className="space-y-3">
-              <h2 className="text-xl font-semibold text-slate-900">Bienestar integral</h2>
-            </div>
-          <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
-            {wheelOfLife.length ? (
-              <Card
-                data-pdf-page="wheelLife"
-                className="relative overflow-hidden rounded-[28px] border border-white/35 bg-white/75 shadow-[0_34px_85px_-60px_rgba(251,146,60,0.35)] backdrop-blur"
-                padding="lg"
-              >
-                <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-br from-[#FDE68A]/70 via-white to-[#FB7185]/60 opacity-60" />
-                <div className="relative space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.35em] text-slate-500">Rueda</p>
-                      <h3 className="text-lg font-semibold text-slate-900">Dimensiones de vida</h3>
-                    </div>
-                    <span className="rounded-full border border-white/50 bg-white/70 px-3 py-1 text-xs font-semibold uppercase tracking-[0.35em] text-slate-500">
-                      {wheelOfLife.length} tópicos
-                    </span>
-                  </div>
-                  {renderSectionDateSelect('wellnessLife', 'Corte rueda de vida', 'Selecciona la fecha de referencia para esta rueda.')}
-                  <p className="text-sm text-slate-600">Promedios generales por dimensión con escala 0-10.</p>
-                  <div className="rounded-2xl border border-white/60 bg-white/70 p-4">
-                    <div className="space-y-6">
-                      <div className="h-72">
-                        {lifeRadarData.length ? (
-                          <ResponsiveContainer width="100%" height="100%">
-                            <RadarChart
-                              data={lifeRadarData}
-                              outerRadius="75%"
-                              startAngle={90}
-                              endAngle={-270}
-                            >
-                              <defs>
-                                <linearGradient id={lifeRadarGradientId} x1="50%" y1="0%" x2="50%" y2="100%">
-                                  <stop offset="0%" stopColor="#fb7185" stopOpacity={0.85} />
-                                  <stop offset="100%" stopColor="#f97316" stopOpacity={0.45} />
-                                </linearGradient>
-                              </defs>
-                              <PolarGrid gridType="polygon" stroke="#e2e8f0" radialLines={false} />
-                              <PolarAngleAxis dataKey="topicLabel" tick={<WheelAxisTick />} />
-                              <PolarRadiusAxis
-                                angle={90}
-                                domain={[0, 10]}
-                                tickCount={6}
-                                axisLine={false}
-                                tickLine={false}
-                                tick={{ fill: '#94a3b8', fontSize: 11 }}
-                              />
-                              <Radar
-                                name="Promedio"
-                                dataKey="average"
-                                stroke="#fb7185"
-                                strokeWidth={2}
-                                fill={`url(#${lifeRadarGradientId})`}
-                                fillOpacity={0.8}
-                              />
-                              <RadarTooltip content={lifeRadarTooltip} cursor={{ stroke: '#94a3b8', strokeDasharray: '4 4' }} />
-                            </RadarChart>
-                          </ResponsiveContainer>
-                        ) : (
-                          <div className="flex h-full items-center justify-center rounded-xl border border-dashed border-slate-200 bg-white/60 p-6 text-sm text-slate-500">
-                            No hay datos suficientes para graficar.
-                          </div>
-                        )}
-                      </div>
-                      <div className="space-y-3">
-                        {sortedWheelOfLife.length ? (
-                          <ul className="space-y-3">
-                            {sortedWheelOfLife.map((item: WheelResult, index) => {
-                              const width = wheelValueToPercent(item.average);
-                              const label = item.topic?.trim().length ? item.topic.trim() : `Dimensión ${index + 1}`;
-                              return (
-                                <li key={`${label}-${index}`} className="space-y-2">
-                                  <div className="flex items-center justify-between">
-                                    <span className="text-sm font-medium text-slate-700">{label}</span>
-                                    <span className="text-lg font-semibold text-slate-900">{item.average.toFixed(2)}</span>
-                                  </div>
-                                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
-                                    <div
-                                      className="h-full rounded-full bg-gradient-to-r from-[#FB7185]/70 to-[#F97316]/80"
-                                      style={{ width: `${width}%` }}
-                                    />
-                                  </div>
-                                </li>
-                              );
-                            })}
-                          </ul>
-                        ) : (
-                          <p className="text-sm text-slate-500">Sin registros suficientes para la tabla.</p>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </Card>
-            ) : null}
 
-            {wheelOfHealth.length ? (
-              <Card
-                data-pdf-page="wheelHealth"
-                className="relative overflow-hidden rounded-[28px] border border-white/35 bg-white/75 shadow-[0_34px_85px_-60px_rgba(16,185,129,0.35)] backdrop-blur"
-                padding="lg"
-              >
-                <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-br from-[#BBF7D0]/70 via-white to-[#34D399]/60 opacity-60" />
-                <div className="relative space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.35em] text-slate-500">Rueda</p>
-                      <h3 className="text-lg font-semibold text-slate-900">Dimensiones de salud</h3>
-                    </div>
-                    <span className="rounded-full border border-white/50 bg-white/70 px-3 py-1 text-xs font-semibold uppercase tracking-[0.35em] text-slate-500">
-                      {wheelOfHealth.length} tópicos
-                    </span>
-                  </div>
-                  {renderSectionDateSelect('wellnessHealth', 'Corte rueda de salud', 'Selecciona la fecha de referencia para esta rueda.')}
-                  <p className="text-sm text-slate-600">Referencias promediadas por dimensión de bienestar físico.</p>
-                  <div className="rounded-2xl border border-white/60 bg-white/70 p-4">
-                    <div className="space-y-6">
-                      <div className="h-72">
-                        {healthRadarData.length ? (
-                          <ResponsiveContainer width="100%" height="100%">
-                            <RadarChart
-                              data={healthRadarData}
-                              outerRadius="75%"
-                              startAngle={90}
-                              endAngle={-270}
-                            >
-                              <defs>
-                                <linearGradient id={healthRadarGradientId} x1="50%" y1="0%" x2="50%" y2="100%">
-                                  <stop offset="0%" stopColor="#34d399" stopOpacity={0.85} />
-                                  <stop offset="100%" stopColor="#10b981" stopOpacity={0.45} />
-                                </linearGradient>
-                              </defs>
-                              <PolarGrid gridType="polygon" stroke="#d1fae5" radialLines={false} />
-                              <PolarAngleAxis dataKey="topicLabel" tick={<WheelAxisTick />} />
-                              <PolarRadiusAxis
-                                angle={90}
-                                domain={[0, 10]}
-                                tickCount={6}
-                                axisLine={false}
-                                tickLine={false}
-                                tick={{ fill: '#6ee7b7', fontSize: 11 }}
-                              />
-                              <Radar
-                                name="Promedio"
-                                dataKey="average"
-                                stroke="#10b981"
-                                strokeWidth={2}
-                                fill={`url(#${healthRadarGradientId})`}
-                                fillOpacity={0.8}
-                              />
-                              <RadarTooltip content={healthRadarTooltip} cursor={{ stroke: '#34d399', strokeDasharray: '4 4' }} />
-                            </RadarChart>
-                          </ResponsiveContainer>
-                        ) : (
-                          <div className="flex h-full items-center justify-center rounded-xl border border-dashed border-slate-200 bg-white/60 p-6 text-sm text-slate-500">
-                            No hay datos suficientes para graficar.
-                          </div>
-                        )}
-                      </div>
-                      <div className="space-y-3">
-                        {sortedWheelOfHealth.length ? (
-                          <ul className="space-y-3">
-                            {sortedWheelOfHealth.map((item, index) => {
-                              const width = wheelValueToPercent(item.average);
-                              const label = item.topic?.trim().length ? item.topic.trim() : `Dimensión ${index + 1}`;
-                              return (
-                                <li key={`${label}-${index}`} className="space-y-2">
-                                  <div className="flex items-center justify-between">
-                                    <span className="text-sm font-medium text-slate-700">{label}</span>
-                                    <span className="text-lg font-semibold text-slate-900">{item.average.toFixed(2)}</span>
-                                  </div>
-                                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
-                                    <div
-                                      className="h-full rounded-full bg-gradient-to-r from-[#34D399]/70 to-[#10B981]/80"
-                                      style={{ width: `${width}%` }}
-                                    />
-                                  </div>
-                                </li>
-                              );
-                            })}
-                          </ul>
-                        ) : (
-                          <p className="text-sm text-slate-500">Sin registros suficientes para la tabla.</p>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </Card>
-            ) : null}
-
-            {regiflex ? (
-              <Card
-                data-pdf-page="regiflex"
-                className="relative overflow-hidden rounded-[28px] border border-white/35 bg-white/75 shadow-[0_34px_85px_-60px_rgba(79,70,229,0.35)] backdrop-blur"
-                padding="lg"
-              >
-                <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-br from-[#C7D2FE]/70 via-white to-[#818CF8]/60 opacity-60" />
-                <div className="relative space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.35em] text-slate-500">Regiflex</p>
-                      <h3 className="text-lg font-semibold text-slate-900">Flexibilidad corporal</h3>
-                    </div>
-                    <span className="rounded-full border border-white/50 bg-white/70 px-3 py-1 text-xs font-semibold uppercase tracking-[0.35em] text-slate-500">
-                      {regiflex.predominant ?? 'Sin dato'}
-                    </span>
-                  </div>
-                  {renderSectionDateSelect('wellnessRegiflex', 'Corte Regiflex', 'Selecciona la fecha de referencia para este análisis.')}
-                  <p className="text-sm text-slate-600">Comparativo entre flexibilidad y rigidez según respuestas recientes.</p>
-                  <div className="rounded-2xl border border-white/60 bg-white/70 p-4">
-                    <div className="space-y-6">
-                      <div className="h-72">
-                        {regiflexPieData.length ? (
-                          <ResponsiveContainer width="100%" height="100%">
-                            <PieChart>
-                              <Pie
-                                data={regiflexPieData}
-                                dataKey="value"
-                                nameKey="topicLabel"
-                                innerRadius="45%"
-                                outerRadius="75%"
-                                paddingAngle={4}
-                                stroke="#ffffff"
-                                strokeWidth={1.5}
-                              >
-                                {regiflexPieData.map((_, index) => (
-                                  <Cell key={`regiflex-slice-${index}`} fill={REGIFLEX_COLORS[index % REGIFLEX_COLORS.length]} />
-                                ))}
-                              </Pie>
-                              <PieTooltip content={regiflexPieTooltip} cursor={{ stroke: '#6366f1', strokeDasharray: '4 4' }} />
-                            </PieChart>
-                          </ResponsiveContainer>
-                        ) : (
-                          <div className="flex h-full items-center justify-center rounded-xl border border-dashed border-slate-200 bg-white/60 p-6 text-sm text-slate-500">
-                            No hay datos suficientes para graficar.
-                          </div>
-                        )}
-                      </div>
-                      <div className="space-y-3">
-                        {sortedRegiflexEntries.length ? (
-                          <ul className="space-y-3">
-                            {sortedRegiflexEntries.map((entry, index) => {
-                              const denominator = regiflexTotal > 0 ? regiflexTotal : 1;
-                              const width = Math.min(Math.max((entry.value / denominator) * 100, 0), 100);
-                              const label = entry.topicLabel?.trim().length ? entry.topicLabel.trim() : `Tendencia ${index + 1}`;
-                              return (
-                                <li key={`${label}-${index}`} className="space-y-2">
-                                  <div className="flex items-center justify-between">
-                                    <span className="text-sm font-medium text-slate-700">{label}</span>
-                                    <span className="text-lg font-semibold text-slate-900">{entry.value.toFixed(2)}</span>
-                                  </div>
-                                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
-                                    <div
-                                      className="h-full rounded-full bg-gradient-to-r from-[#818CF8]/70 to-[#6366F1]/80"
-                                      style={{ width: `${width}%` }}
-                                    />
-                                  </div>
-                                </li>
-                              );
-                            })}
-                          </ul>
-                        ) : (
-                          <p className="text-sm text-slate-500">Sin registros suficientes para la tabla.</p>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </Card>
-            ) : null}
-          </div>
-        </div>
-      ) : null}
 
       {dailyReview.length ? (
         <Card className="rounded-[28px] border border-white/40 bg-white/80 shadow-[0_30px_70px_-55px_rgba(79,70,229,0.35)] backdrop-blur" padding="lg">

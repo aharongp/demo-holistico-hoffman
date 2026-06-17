@@ -7,6 +7,7 @@ import { Table } from '../../components/UI/Table';
 import { Modal } from '../../components/UI/Modal';
 import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
+// import { usePermissions } from '../../hooks/usePermissions';
 import { Program, Ribbon } from '../../types';
 
 type RibbonFormState = {
@@ -56,6 +57,14 @@ export const ProgramManagement: React.FC = () => {
 	} = useApp();
 	const { user } = useAuth();
 	const isAdmin = user?.role === 'administrator';
+	// const { token } = useAuth();
+	// const {
+	// 	isAdmin,
+	// 	canViewPrograms,
+	// 	canCreatePrograms,
+	// 	canUpdatePrograms,
+	// 	canDeletePrograms,
+	// } = usePermissions();
 
 	const [activeTab, setActiveTab] = useState<'programs' | 'ribbons'>('programs');
 	const [programs, setPrograms] = useState<Program[]>(ctxPrograms);
@@ -82,6 +91,12 @@ export const ProgramManagement: React.FC = () => {
 	useEffect(() => {
 		const loadPrograms = async () => {
 			try {
+				// const headers: Record<string, string> = {};
+				// if (token) {
+				// 	headers.Authorization = `Bearer ${token}`;
+				// }
+
+				// const res = await fetch(`${apiBase}/programs`, { headers });
 				const res = await fetch(`${apiBase}/programs`);
 				if (!res.ok) {
 					throw new Error(`Failed to fetch programs (${res.status})`);
@@ -110,7 +125,8 @@ export const ProgramManagement: React.FC = () => {
 		};
 
 		void loadPrograms();
-	}, [apiBase, ctxPrograms]);
+			}, [apiBase, ctxPrograms]);
+	// }, [apiBase, ctxPrograms, token]);
 
 	useEffect(() => {
 		if (activeTab !== 'ribbons') {
@@ -193,6 +209,11 @@ export const ProgramManagement: React.FC = () => {
 
 	const handleOpenProgramModal = useCallback((program?: Program) => {
 		if (!isAdmin) {
+		// if (!program && !canCreatePrograms) {
+		// 	return;
+		// }
+
+		// if (program && !canUpdatePrograms) {
 			return;
 		}
 		if (program) {
@@ -211,11 +232,17 @@ export const ProgramManagement: React.FC = () => {
 			});
 		}
 		setIsProgramModalOpen(true);
-	}, [isAdmin]);
+		}, [isAdmin]);
+	// }, [canCreatePrograms, canUpdatePrograms]);
 
 	const handleProgramSubmit = async (event: React.FormEvent) => {
 		event.preventDefault();
 		if (!isAdmin) {
+		// if (!editingProgram && !canCreatePrograms) {
+		// 	return;
+		// }
+
+		// if (editingProgram && !canUpdatePrograms) {
 			return;
 		}
 
@@ -249,6 +276,7 @@ export const ProgramManagement: React.FC = () => {
 
 	const handleProgramDelete = useCallback(async (programId: string) => {
 		if (!isAdmin) {
+		// if (!canDeletePrograms) {
 			return;
 		}
 		if (!confirm('¿Seguro que deseas eliminar este programa?')) {
@@ -267,7 +295,8 @@ export const ProgramManagement: React.FC = () => {
 			console.error('No se pudo eliminar el programa', error);
 			alert('No se pudo eliminar el programa.');
 		}
-	}, [deleteProgram, isAdmin]);
+			}, [deleteProgram, isAdmin]);
+	// }, [canDeletePrograms, deleteProgram]);
 
 	const resetRibbonForm = () => {
 		setEditingRibbon(null);
@@ -384,7 +413,8 @@ export const ProgramManagement: React.FC = () => {
 			},
 		];
 
-		if (isAdmin) {
+if (isAdmin) {
+		// if (canUpdatePrograms || canDeletePrograms) {
 			base.push({
 				key: 'actions',
 				header: 'Acciones',
@@ -416,7 +446,18 @@ export const ProgramManagement: React.FC = () => {
 		}
 
 		return base;
-	}, [handleOpenProgramModal, handleProgramDelete, isAdmin]);
+			}, [handleOpenProgramModal, handleProgramDelete, isAdmin]);
+	// }, [canDeletePrograms, canUpdatePrograms, handleOpenProgramModal, handleProgramDelete]);
+
+	// if (!canViewPrograms) {
+	// 	return (
+	// 		<section className="space-y-6 px-4 py-8 sm:px-8">
+	// 			<Card className="border border-red-200 bg-red-50" padding="lg">
+	// 				<p className="text-sm text-red-700">No tienes permisos para ver programas.</p>
+	// 			</Card>
+	// 		</section>
+	// 	);
+	// }
 
 	return (
 		<section className="space-y-6 px-4 py-8 sm:px-6">
@@ -461,6 +502,7 @@ export const ProgramManagement: React.FC = () => {
 
 							{activeTab === 'programs' ? (
 								<>
+									{/* {canCreatePrograms ? ( */}
 									{isAdmin ? (
 										<Button
 											onClick={() => handleOpenProgramModal()}
@@ -470,6 +512,7 @@ export const ProgramManagement: React.FC = () => {
 											Nuevo programa
 										</Button>
 									) : null}
+									{/* {canUpdatePrograms ? ( */}
 									{isAdmin ? (
 										<Button
 											type="button"
@@ -639,7 +682,7 @@ export const ProgramManagement: React.FC = () => {
 									Cancelar
 								</Button>
 								<Button type="submit">
-									{editingProgram ? 'Actualizar programa' : 'Crear programa'}
+										{editingProgram ? 'Actualizar programa' : 'Crear programa'}
 								</Button>
 							</div>
 						</form>

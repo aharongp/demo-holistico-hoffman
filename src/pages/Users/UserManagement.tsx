@@ -5,6 +5,7 @@ import { Card } from '../../components/UI/Card';
 import { Button } from '../../components/UI/Button';
 import { Table } from '../../components/UI/Table';
 import { Modal } from '../../components/UI/Modal';
+// import { usePermissions } from '../../hooks/usePermissions';
 import { User, UserRole } from '../../types';
 
 
@@ -34,6 +35,8 @@ export const UserManagement: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { user: currentUser } = useAuth();
+  // const { user: currentUser, token } = useAuth();
+  // const { canViewUsers, canCreateUsers, canUpdateUsers, canDeleteUsers } = usePermissions();
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
@@ -57,6 +60,16 @@ export const UserManagement: React.FC = () => {
   });
 
   const handleOpenModal = (user?: User) => {
+    // if (!user && !canCreateUsers) {
+    //   setError('No tienes permisos para crear usuarios.');
+    //   return;
+    // }
+
+    // if (user && !canUpdateUsers) {
+    //   setError('No tienes permisos para editar usuarios.');
+    //   return;
+    // }
+
     if (user) {
       setEditingUser(user);
       setFormData({
@@ -83,8 +96,20 @@ export const UserManagement: React.FC = () => {
     // eslint-disable-next-line no-console
     console.log('UserManagement: API base =', apiBase);
     const fetchUsers = async () => {
+      // if (!canViewUsers) {
+      //   setUsers([]);
+      //   setLoading(false);
+      //   return;
+      // }
+
       setLoading(true);
       try {
+        // const headers: Record<string, string> = {};
+        // if (token) {
+        //   headers.Authorization = `Bearer ${token}`;
+        // }
+
+        // const res = await fetch(`${apiBase}/users`, { headers });
         const res = await fetch(`${apiBase}/users`);
         if (!res.ok) throw new Error(`Estado ${res.status}`);
         const data = await res.json();
@@ -97,7 +122,8 @@ export const UserManagement: React.FC = () => {
       }
     };
     fetchUsers();
-  }, [apiBase]);
+    }, [apiBase]);
+  // }, [apiBase, canViewUsers, token]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -106,6 +132,11 @@ export const UserManagement: React.FC = () => {
     if (isSaving) return;
 
     if (editingUser) {
+      // if (!canUpdateUsers) {
+      //   setError('No tienes permisos para editar usuarios.');
+      //   return;
+      // }
+
       // Update user locally for now; backend integration pending dedicated endpoint support
       setUsers((prev: User[]) => prev.map((u: User) =>
         u.id === editingUser.id
@@ -118,9 +149,22 @@ export const UserManagement: React.FC = () => {
 
     setIsSaving(true);
     try {
+      // if (!canCreateUsers) {
+      //   throw new Error('No tienes permisos para crear usuarios.');
+      // }
+
+      // const headers: Record<string, string> = {
+      //   'Content-Type': 'application/json',
+      // };
+
+      // if (token) {
+      //   headers.Authorization = `Bearer ${token}`;
+      // }
+
       const response = await fetch(`${apiBase}/users`, {
         method: 'POST',
-        headers: {
+        // headers,
+                headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
@@ -150,14 +194,25 @@ export const UserManagement: React.FC = () => {
   };
 
   const handleDelete = async (userId: string) => {
+    // if (!canDeleteUsers) {
+    //   setError('No tienes permisos para eliminar usuarios.');
+    //   return;
+    // }
+
     const shouldDelete = confirm('¿Seguro que deseas eliminar este usuario?');
     if (!shouldDelete) return;
 
     setError(null);
 
     try {
+      // const headers: Record<string, string> = {};
+      // if (token) {
+      //   headers.Authorization = `Bearer ${token}`;
+      // }
+
       const response = await fetch(`${apiBase}/users/${userId}`, {
         method: 'DELETE',
+        // headers,
       });
 
       if (!response.ok) {
@@ -219,24 +274,38 @@ export const UserManagement: React.FC = () => {
       header: 'Acciones',
       render: (user: User) => (
         <div className="flex space-x-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => handleOpenModal(user)}
-          >
-            <Edit className="w-4 h-4" />
-          </Button>
-          <Button
-            variant="danger"
-            size="sm"
-            onClick={() => handleDelete(user.id)}
-          >
-            <Trash2 className="w-4 h-4" />
-          </Button>
+          {/* {canUpdateUsers && ( */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleOpenModal(user)}
+            >
+              <Edit className="w-4 h-4" />
+            </Button>
+          {/* )}
+          {canDeleteUsers && ( */}
+            <Button
+              variant="danger"
+              size="sm"
+              onClick={() => handleDelete(user.id)}
+            >
+              <Trash2 className="w-4 h-4" />
+            </Button>
+          {/* )} */}
         </div>
       ),
     },
   ];
+
+  // if (!canViewUsers) {
+  //   return (
+  //     <section className="space-y-6 px-4 py-8 sm:px-8">
+  //       <Card className="border border-red-200 bg-red-50" padding="lg">
+  //         <p className="text-sm text-red-700">No tienes permisos para ver usuarios.</p>
+  //       </Card>
+  //     </section>
+  //   );
+  // }
 
   return (
     <section className="space-y-9 from-slate-900/5 via-white to-emerald-50/50 px-4 py-8 sm:px-8">
@@ -257,12 +326,14 @@ export const UserManagement: React.FC = () => {
               </p>
             </div>
           </div>
-          <Button
-            onClick={() => handleOpenModal()}
-            className="whitespace-nowrap rounded-full border border-emerald-500/30 bg-emerald-500 px-6 py-3 text-sm font-semibold text-white shadow-xl shadow-emerald-500/20 transition hover:bg-emerald-400"
-          >
-            <Plus className="w-4 h-4 mr-2" /> Nuevo usuario
-          </Button>
+          {/* {canCreateUsers && ( */}
+            <Button
+              onClick={() => handleOpenModal()}
+              className="whitespace-nowrap rounded-full border border-emerald-500/30 bg-emerald-500 px-6 py-3 text-sm font-semibold text-white shadow-xl shadow-emerald-500/20 transition hover:bg-emerald-400"
+            >
+              <Plus className="w-4 h-4 mr-2" /> Nuevo usuario
+            </Button>
+          {/* )} */}
         </div>
         <div className="relative z-10 grid gap-3 border-t border-white/40 px-6 py-4 text-[0.65rem] uppercase tracking-[0.4em] text-slate-500 sm:grid-cols-3">
           {[
@@ -417,6 +488,14 @@ export const UserManagement: React.FC = () => {
               Cancelar
             </Button>
             <Button type="submit" disabled={isSaving}>
+            {/* <Button
+              type="submit"
+              disabled={
+                isSaving
+                || (!editingUser && !canCreateUsers)
+                || (Boolean(editingUser) && !canUpdateUsers)
+              }
+            > */}
               {isSaving ? 'Guardando...' : editingUser ? 'Actualizar usuario' : 'Crear usuario'}
             </Button>
           </div>

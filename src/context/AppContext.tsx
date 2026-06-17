@@ -1223,8 +1223,25 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     return user.username?.trim() || null;
   }, [user]);
 
+  // const getAuthHeaders = useCallback((withJson = false): Record<string, string> => {
+  //   const headers: Record<string, string> = {};
+
+  //   if (withJson) {
+  //     headers['Content-Type'] = 'application/json';
+  //   }
+
+  //   if (token) {
+  //     headers.Authorization = `Bearer ${token}`;
+  //   }
+
+  //   return headers;
+  // }, [token]);
+
   const fetchInstrumentTypesFromApi = useCallback(async (): Promise<InstrumentType[]> => {
-    const res = await fetch(`${apiBase}/instruments/types`);
+        const res = await fetch(`${apiBase}/instruments/types`);
+    // const res = await fetch(`${apiBase}/instruments/types`, {
+    //   headers: getAuthHeaders(),
+    // });
     if (!res.ok) {
       const text = await res.text().catch(() => null);
       throw new Error(text || `Failed to fetch instrument types: ${res.status}`);
@@ -1238,7 +1255,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       : [];
 
     return sortInstrumentTypes(mapped);
-  }, [apiBase]);
+      }, [apiBase]);
+  // }, [apiBase, getAuthHeaders]);
 
   const refreshInstrumentTypes = useCallback(async () => {
     try {
@@ -1286,9 +1304,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
       const res = await fetch(`${apiBase}/instruments/types`, {
         method: 'POST',
-        headers: {
+                headers: {
           'Content-Type': 'application/json',
         },
+        // headers: getAuthHeaders(true),
         body: JSON.stringify(payload),
       });
 
@@ -1312,7 +1331,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
       return mapped;
     },
-    [apiBase, currentUserDisplayName],
+        [apiBase, currentUserDisplayName],
+    // [apiBase, currentUserDisplayName, getAuthHeaders],
   );
 
   const updateInstrumentType = useCallback(
@@ -1360,9 +1380,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
       const res = await fetch(`${apiBase}/instruments/types/${numericId}`, {
         method: 'PATCH',
-        headers: {
+                headers: {
           'Content-Type': 'application/json',
         },
+        // headers: getAuthHeaders(true),
         body: JSON.stringify(payload),
       });
 
@@ -1385,7 +1406,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
       return mapped;
     },
-    [apiBase, instrumentTypes],
+        [apiBase, instrumentTypes],
+    // [apiBase, getAuthHeaders, instrumentTypes],
   );
 
   const deleteInstrumentType = useCallback(
@@ -1398,6 +1420,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
       const res = await fetch(`${apiBase}/instruments/types/${numericId}`, {
         method: 'DELETE',
+        // headers: getAuthHeaders(),
       });
 
       if (!res.ok) {
@@ -1411,7 +1434,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       setInstrumentTypes((prev) => prev.filter((type) => type.id !== String(numericId)));
       return true;
     },
-    [apiBase],
+        [apiBase],
+    // [apiBase, getAuthHeaders],
   );
 
   const normalizePatientRibbonId = (value: unknown): number | null => {
@@ -1496,6 +1520,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     (async () => {
       try {
         const res = await fetch(`${apiBase}/programs`);
+        // const res = await fetch(`${apiBase}/programs`, {
+        //   headers: getAuthHeaders(),
+        // });
         if (!res.ok) throw new Error(`Failed to fetch programs: ${res.status}`);
         const data = await res.json();
         if (!mounted) return;
@@ -1510,6 +1537,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     })();
     return () => { mounted = false; };
   }, [apiBase, currentUserDisplayName]);
+  // }, [apiBase, currentUserDisplayName, getAuthHeaders]);
 
   useEffect(() => {
     let mounted = true;
@@ -1546,6 +1574,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     (async () => {
       try {
         const res = await fetch(`${apiBase}/instruments`);
+        // const res = await fetch(`${apiBase}/instruments`, {
+        //   headers: getAuthHeaders(),
+        // });
         if (!res.ok) throw new Error(`Failed to fetch instruments: ${res.status}`);
         const data = await res.json();
         if (!mounted) return;
@@ -1887,6 +1918,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       const response = await fetch(`${apiBase}/instruments`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        // headers: getAuthHeaders(true),
         body: JSON.stringify(payload),
       });
 
@@ -1925,7 +1957,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       console.error('Error al crear el instrumento', error);
       throw error instanceof Error ? error : new Error('Error desconocido al crear el instrumento');
     }
-  }, [apiBase, currentUserDisplayName]);
+      }, [apiBase, currentUserDisplayName]);
+  // }, [apiBase, currentUserDisplayName, getAuthHeaders]);
 
   const updateInstrument = useCallback(async (id: string, instrumentData: Partial<Instrument>): Promise<Instrument | null> => {
     const numericId = Number(id);
@@ -1989,6 +2022,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       const response = await fetch(`${apiBase}/instruments/${numericId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
+        // headers: getAuthHeaders(true),
         body: JSON.stringify(payload),
       });
 
@@ -2056,6 +2090,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       throw error instanceof Error ? error : new Error('Error desconocido al actualizar el instrumento');
     }
   }, [apiBase, instruments]);
+  // }, [apiBase, getAuthHeaders, instruments]);
 
   const deleteInstrument = useCallback(async (id: string): Promise<boolean> => {
     const numericId = Number(id);
@@ -2067,6 +2102,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     try {
       const response = await fetch(`${apiBase}/instruments/${numericId}`, {
         method: 'DELETE',
+        // headers: getAuthHeaders(),
       });
 
       if (!response.ok) {
@@ -2082,6 +2118,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       throw error instanceof Error ? error : new Error('Error desconocido al eliminar el instrumento');
     }
   }, [apiBase]);
+  // }, [apiBase, getAuthHeaders]);
 
   const getInstrumentDetails = useCallback(async (id: string): Promise<Instrument | null> => {
     const numericId = Number(id);
@@ -2093,11 +2130,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     try {
       const instrumentRequest = fetch(`${apiBase}/instruments/${numericId}`);
+      // const instrumentRequest = fetch(`${apiBase}/instruments/${numericId}`, {
+      //   headers: getAuthHeaders(),
+      // });
       const questionsRequest = fetch(`${apiBase}/questions`).catch((error) => {
         console.error('Failed to fetch questions list', error);
         return null;
       });
       const topicsRequest = fetch(`${apiBase}/instruments/${numericId}/topics`).catch((error) => {
+      // const topicsRequest = fetch(`${apiBase}/instruments/${numericId}/topics`, {
+      //   headers: getAuthHeaders(),
+      // }).catch((error) => {
         console.error('Failed to fetch instrument topics list', error);
         return null;
       });
@@ -2223,10 +2266,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             }
 
             const labels = answers.map((answer) => answer.label).filter((label) => label.length > 0);
+            // const normalizedOptions: QuestionOption[] = labels.map((label) => ({
+            //   label,
+            //   value: label,
+            // }));
             return {
               ...question,
               answers,
               options: labels.length ? labels : question.options,
+              // options: normalizedOptions.length ? normalizedOptions : question.options,
             };
           });
         } catch (answersError) {
@@ -2260,7 +2308,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       console.error(`Failed to load instrument ${id}`, error);
       return fallback;
     }
-  }, [apiBase]);
+      }, [apiBase]);
+  // }, [apiBase, getAuthHeaders]);
 
   const createQuestion = useCallback(async (instrumentId: string, input: QuestionInput): Promise<Question> => {
     const targetInstrument = instrumentsRef.current.find((instrument) => instrument.id === String(instrumentId)) ?? null;
@@ -3182,6 +3231,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         headers: {
           'Content-Type': 'application/json',
         },
+        // headers: getAuthHeaders(true),
         body: JSON.stringify(payload),
       });
 
@@ -3211,6 +3261,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       throw error instanceof Error ? error : new Error('Unknown error creating program');
     }
   }, [apiBase, currentUserDisplayName]);
+  // }, [apiBase, currentUserDisplayName, getAuthHeaders]);
 
   const updateProgram = useCallback(async (id: string, programData: Partial<ProgramInput>): Promise<Program | null> => {
     const numericId = Number(id);
@@ -3241,6 +3292,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         headers: {
           'Content-Type': 'application/json',
         },
+        // headers: getAuthHeaders(true),
         body: JSON.stringify(payload),
       });
 
@@ -3278,6 +3330,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       throw error instanceof Error ? error : new Error('Unknown error updating program');
     }
   }, [apiBase, currentUserDisplayName]);
+  // }, [apiBase, currentUserDisplayName, getAuthHeaders]);
 
   const deleteProgram = useCallback(async (id: string): Promise<boolean> => {
     const numericId = Number(id);
@@ -3288,6 +3341,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     try {
       const res = await fetch(`${apiBase}/programs/${numericId}`, {
         method: 'DELETE',
+        // headers: getAuthHeaders(),
       });
 
       if (!res.ok) {
@@ -3307,6 +3361,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       throw error instanceof Error ? error : new Error('Unknown error deleting program');
     }
   }, [apiBase]);
+  // }, [apiBase, getAuthHeaders]);
 
   const getProgramDetails = useCallback(async (id: string): Promise<ProgramDetails | null> => {
     const numericId = Number(id);
@@ -3324,6 +3379,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     try {
       const res = await fetch(`${apiBase}/programs/${numericId}`);
+      // const res = await fetch(`${apiBase}/programs/${numericId}`, {
+      //   headers: getAuthHeaders(),
+      // });
       if (res.status === 404) {
         return null;
       }
@@ -3338,6 +3396,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       return null;
     }
   }, [apiBase, currentUserDisplayName, programs]);
+  // }, [apiBase, currentUserDisplayName, getAuthHeaders, programs]);
 
   const addProgramActivity = useCallback(async (programId: string, activity: ProgramActivityInput): Promise<ProgramActivity> => {
     const normalizedName = activity.name?.trim?.() ?? activity.name;
@@ -3379,6 +3438,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         headers: {
           'Content-Type': 'application/json',
         },
+        // headers: getAuthHeaders(true),
         body: JSON.stringify(payload),
       });
 
@@ -3394,6 +3454,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       throw error instanceof Error ? error : new Error('Unknown error creating activity');
     }
   }, [apiBase, currentUserDisplayName]);
+  // }, [apiBase, currentUserDisplayName, getAuthHeaders]);
 
   const updateProgramActivity = useCallback(async (
     programId: string,
@@ -3454,6 +3515,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         headers: {
           'Content-Type': 'application/json',
         },
+        // headers: getAuthHeaders(true),
         body: JSON.stringify(payload),
       });
 
@@ -3469,6 +3531,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       throw error instanceof Error ? error : new Error('Unknown error updating activity');
     }
   }, [apiBase, currentUserDisplayName]);
+  // }, [apiBase, currentUserDisplayName, getAuthHeaders]);
 
   const deleteProgramActivity = useCallback(async (programId: string, activityId: string): Promise<boolean> => {
     const numericProgramId = Number(programId);
@@ -3481,6 +3544,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     try {
       const res = await fetch(`${apiBase}/programs/${numericProgramId}/activities/${numericActivityId}`, {
         method: 'DELETE',
+        // headers: getAuthHeaders(),
       });
 
       if (!res.ok) {
@@ -3495,6 +3559,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       throw error instanceof Error ? error : new Error('Unknown error deleting activity');
     }
   }, [apiBase]);
+  // }, [apiBase, getAuthHeaders]);
 
   const getPatientPunctuality = useCallback(async (patientId: string): Promise<PatientPunctualityRecord[]> => {
     const numericId = Number(patientId);

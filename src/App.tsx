@@ -28,6 +28,7 @@ import { MedicalHistory } from './pages/MedicalHistory/MedicalHistory';
 import { ConsultationDetail } from './pages/MedicalHistory/ConsultationDetail';
 import { UserProfile } from './pages/Profile/UserProfile';
 import { InstrumentResults } from './pages/Results/InstrumentResults';
+// import { PermissionsManagement } from './pages/Permissions/PermissionsManagement';
 
 const DashboardRouter: React.FC = () => {
   const { user, getDashboardPath } = useAuth();
@@ -67,6 +68,7 @@ const AppContent: React.FC = () => {
       <Route path="/dashboard/doctor" element={<Layout><TherapistDashboard /></Layout>} />
       <Route path="/dashboard/patient" element={<Layout><PatientDashboard /></Layout>} />
       <Route path="/users" element={<Layout><UserManagement /></Layout>} />
+      {/* <Route path="/permissions" element={<Layout><PermissionsManagement /></Layout>} /> */}
       <Route path="/patients" element={<Layout><PatientManagement /></Layout>} />
       <Route path="/punctuality" element={<Layout><PatientPunctuality /></Layout>} />
       <Route path="/patients/:patientId" element={<Layout><PatientDetail /></Layout>} />

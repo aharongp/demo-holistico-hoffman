@@ -22,6 +22,13 @@ export const PatientManagement: React.FC = () => {
   const { patients, addPatient, updatePatient, assignProgramToPatient, deletePatient, programs } = useApp();
   const { token } = useAuth();
   const { isAdmin } = usePermissions();
+  // const {
+  //   canViewPatients,
+  //   canCreatePatients,
+  //   canUpdatePatients,
+  //   canDeletePatients,
+  //   canAssignPatients,
+  // } = usePermissions();
   const apiBase = (import.meta as any).env?.VITE_API_BASE ?? 'http://localhost:3000';
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
@@ -156,6 +163,12 @@ export const PatientManagement: React.FC = () => {
   const handleOpenModal = (patient?: Patient) => {
     if (!isAdmin) {
       setFormError('Solo los administradores pueden gestionar pacientes.');
+    // if (!patient && !canCreatePatients) {
+    //   setFormError('No tienes permisos para crear pacientes.');
+    //   return;
+    // }
+    // if (patient && !canUpdatePatients) {
+    //   setFormError('No tienes permisos para editar pacientes.');
       return;
     }
     setFormError(null);
@@ -188,6 +201,7 @@ export const PatientManagement: React.FC = () => {
 
   const handleOpenAssignModal = (patient: Patient) => {
     if (!isAdmin) {
+    // if (!canAssignPatients) {
       return;
     }
     setSelectedPatientForAssign(patient);
@@ -271,6 +285,12 @@ export const PatientManagement: React.FC = () => {
     e.preventDefault();
     if (!isAdmin) {
       setFormError('Solo los administradores pueden gestionar pacientes.');
+    // if (!editingPatient && !canCreatePatients) {
+    //   setFormError('No tienes permisos para crear pacientes.');
+    //   return;
+    // }
+    // if (editingPatient && !canUpdatePatients) {
+    //   setFormError('No tienes permisos para editar pacientes.');
       return;
     }
     setFormError(null);
@@ -303,6 +323,7 @@ export const PatientManagement: React.FC = () => {
 
   const handleDelete = async (patientId: string) => {
     if (!isAdmin) {
+    // if (!canDeletePatients) {
       return;
     }
     if (confirm('¿Estás seguro de eliminar a este paciente?')) {
@@ -367,6 +388,7 @@ export const PatientManagement: React.FC = () => {
       className: 'whitespace-normal',
       render: (patient: Patient) => (
         <div className="flex flex-wrap gap-2">
+          {/* {canAssignPatients && ( */}
           {isAdmin && (
             <Button
               variant="outline"
@@ -401,28 +423,43 @@ export const PatientManagement: React.FC = () => {
           >
             <ListChecks className="w-4 h-4" />
           </Button>
+          {/* {(canUpdatePatients || canDeletePatients) ? ( */}
           {isAdmin ? (
             <>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handleOpenModal(patient)}
-              >
-                <Edit className="w-4 h-4" />
-              </Button>
-              <Button
-                variant="danger"
-                size="sm"
-                onClick={() => handleDelete(patient.id)}
-              >
-                <Trash2 className="w-4 h-4" />
-              </Button>
+              {/* {canUpdatePatients && ( */}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleOpenModal(patient)}
+                >
+                  <Edit className="w-4 h-4" />
+                </Button>
+              {/* )}
+              {canDeletePatients && ( */}
+                <Button
+                  variant="danger"
+                  size="sm"
+                  onClick={() => handleDelete(patient.id)}
+                >
+                  <Trash2 className="w-4 h-4" />
+                </Button>
+              {/* )} */}
             </>
           ) : null}
         </div>
       ),
     },
   ];
+
+  // if (!canViewPatients) {
+  //   return (
+  //     <section className="space-y-6 px-4 py-8 sm:px-8">
+  //       <Card className="border border-red-200 bg-red-50" padding="lg">
+  //         <p className="text-sm text-red-700">No tienes permisos para ver pacientes.</p>
+  //       </Card>
+  //     </section>
+  //   );
+  // }
 
   return (
     <section className="space-y-9 from-slate-50 via-white to-violet-50/25 px-4 py-8 sm:px-8">
@@ -443,6 +480,7 @@ export const PatientManagement: React.FC = () => {
               </p>
             </div>
           </div>
+          {/* {(canCreatePatients || canUpdatePatients) ? ( */}
           {isAdmin ? (
             <Button
               onClick={() => handleOpenModal()}
@@ -453,6 +491,7 @@ export const PatientManagement: React.FC = () => {
           ) : (
             <div className="rounded-3xl border border-amber-200/70 bg-amber-50/80 px-4 py-3 text-sm text-amber-700">
               Solo los administradores pueden registrar o editar pacientes.
+              {/* No tienes permisos para registrar o editar pacientes. */}
             </div>
           )}
         </div>

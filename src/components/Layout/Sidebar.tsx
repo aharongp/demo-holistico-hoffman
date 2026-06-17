@@ -12,6 +12,7 @@ import {
   Activity,
   BarChart3,
   X,
+  Shield,
   Settings,
   Bell,
   User,
@@ -20,6 +21,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { UserRole } from '../../types';
+// import { usePermissions } from '../../hooks/usePermissions';
 
 interface SidebarProps {
   onClose?: () => void;
@@ -30,6 +32,7 @@ interface NavItem {
   icon: React.ComponentType<{ className?: string }>;
   label: string;
   roles: UserRole[];
+  // permission?: string;
 }
 
 const navigation: NavItem[] = [
@@ -44,6 +47,13 @@ const navigation: NavItem[] = [
     icon: Users,
     label: 'Usuarios',
     roles: ['administrator'],
+  //   permission: 'users.view',
+  // },
+  // {
+  //   to: '/permissions',
+  //   icon: Shield,
+  //   label: 'Permisos',
+  //   roles: ['administrator'],
   },
   {
     to: '/patients',
@@ -177,13 +187,26 @@ const SECTION_THEMES: Record<string, {
 
 export const Sidebar: React.FC<SidebarProps> = ({ onClose }) => {
   const { user, logout } = useAuth();
+  // const { hasPermission } = usePermissions();
   const [showUserMenu, setShowUserMenu] = useState(false);
 
   if (!user) return null;
 
-  const filteredNavigation = navigation.filter(item => 
+    const filteredNavigation = navigation.filter(item => 
     item.roles.includes(user.role)
   );
+  // const filteredNavigation = navigation.filter((item) => {
+  //   const roleAllowed = item.roles.includes(user.role);
+  //   if (roleAllowed) {
+  //     return true;
+  //   }
+
+  //   if (item.permission) {
+  //     return hasPermission(item.permission as any);
+  //   }
+
+  //   return false;
+  // });
 
   const sidebarBackgroundClass = 'bg-gradient-to-b from-[#f5f5f4] via-white to-[#e5e7eb]';
 

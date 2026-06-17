@@ -9,6 +9,8 @@ export interface User {
   createdAt: Date;
   lastLogin?: Date;
   isActive: boolean;
+  // permissions?: string[];
+  // hasCustomPermissions?: boolean;
 }
 
 export type UserRole = 'administrator' | 'trainer' | 'therapist' | 'doctor' | 'coach' | 'patient' | 'student';

@@ -70,6 +70,11 @@ const normalizeRole = (role: string | null | undefined): UserRole => {
 };
 
 const hydrateUser = (payload: any): User => {
+  // const rawPermissions = Array.isArray(payload?.permissions)
+  //   ? payload.permissions
+  //       .map((item: unknown) => (item ?? '').toString().trim())
+  //       .filter((item: string) => item.length > 0)
+  //   : [];
   return {
     id: payload?.id?.toString?.() ?? '',
     username: payload?.username ?? '',
@@ -81,6 +86,8 @@ const hydrateUser = (payload: any): User => {
     createdAt: payload?.createdAt ? new Date(payload.createdAt) : new Date(),
     lastLogin: payload?.lastLogin ? new Date(payload.lastLogin) : undefined,
     isActive: typeof payload?.isActive === 'boolean' ? payload.isActive : Boolean(payload?.isActive ?? true),
+    // permissions: rawPermissions,
+    // hasCustomPermissions: Boolean(payload?.hasCustomPermissions ?? false),
   };
 };
 
