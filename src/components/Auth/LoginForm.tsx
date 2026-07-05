@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { Button } from '../UI/Button';
 import { Card } from '../UI/Card';
@@ -299,9 +299,9 @@ export const LoginForm: React.FC = () => {
                 <div className="text-center text-sm text-slate-500">
                   ¿Aún no tienes cuenta?
                   {' '}
-                  <a href="/signup" className="font-semibold text-sky-600 hover:text-sky-500">
+                  <Link to="/signup" className="font-semibold text-sky-600 hover:text-sky-500">
                     Crear acceso
-                  </a>
+                  </Link>
                 </div>
               </form>
             </Card>

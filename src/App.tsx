@@ -54,6 +54,7 @@ const AppContent: React.FC = () => {
   if (!user) {
     return (
       <Routes>
+        <Route path="/singup" element={<Navigate to="/signup" replace />} />
         <Route path="/signup" element={<SignupForm />} />
         <Route path="/login" element={<LoginForm />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
