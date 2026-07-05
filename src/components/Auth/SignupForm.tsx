@@ -32,7 +32,16 @@ export const SignupForm: React.FC = () => {
       return;
     }
 
-    const success = await register({ email, password, firstName, lastName, role });
+    const success = await register({
+      email,
+      password,
+      firstName,
+      lastName,
+      role,
+      nationalId,
+      birthDate,
+      gender,
+    });
     if (!success) {
       setError('Registration failed');
       return;
