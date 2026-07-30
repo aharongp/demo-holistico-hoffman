@@ -121,7 +121,7 @@ const computeBodyMassPhotoUrl = (
   return build(`assets/images/${normalized}`);
 };
 
-type EditableVitalType = 'weight' | 'pulse' | 'glycemia' | 'blood_pressure' | 'heart_rate';
+type EditableVitalType = 'weight' | 'pulse' | 'glycemia' | 'blood_pressure' | 'heart_rate' | 'body_mass';
 
 type VitalSectionKey = 'weight' | 'pulse' | 'glycemia' | 'blood_pressure' | 'bmi' | 'heart_rate';
 
@@ -131,6 +131,7 @@ const VITAL_ENDPOINTS: Record<EditableVitalType, string> = {
   glycemia: 'glycemia',
   blood_pressure: 'blood-pressure',
   heart_rate: 'heart-rate',
+  body_mass: 'body-mass',
 };
 
 const VITAL_LABELS: Record<EditableVitalType, string> = {
@@ -139,6 +140,7 @@ const VITAL_LABELS: Record<EditableVitalType, string> = {
   glycemia: 'Glicemia',
   blood_pressure: 'Presion arterial',
   heart_rate: 'Frecuencia cardiaca',
+  body_mass: 'Masa corporal',
 };
 
 const GENDER_LABELS: Record<Patient['gender'], string> = {
@@ -2827,8 +2829,14 @@ export const EvolutionTracking: React.FC = () => {
 
   const registerVital = useCallback(
     async (path: string, payload: Record<string, unknown> | FormData) => {
-      if (resolvedUserId === null) {
-        throw new Error('No se pudo determinar el usuario asociado al registro.');
+      const targetUrl = selectedPatientNumericId
+        ? `${apiBase}/vitals/patient/${selectedPatientNumericId}/${path}`
+        : resolvedUserId !== null
+        ? `${apiBase}/vitals/user/${resolvedUserId}/${path}`
+        : null;
+
+      if (!targetUrl) {
+        throw new Error('No se pudo determinar el paciente o usuario asociado al registro.');
       }
 
       if (!token) {
@@ -2844,7 +2852,7 @@ export const EvolutionTracking: React.FC = () => {
         headers['Content-Type'] = 'application/json';
       }
 
-      const response = await fetch(`${apiBase}/vitals/user/${resolvedUserId}/${path}`, {
+      const response = await fetch(targetUrl, {
         method: 'POST',
         headers,
         body: isFormData ? payload : JSON.stringify(payload),
@@ -2870,13 +2878,19 @@ export const EvolutionTracking: React.FC = () => {
         return null;
       }
     },
-    [apiBase, resolvedUserId, token]
+    [apiBase, resolvedUserId, selectedPatientNumericId, token]
   );
 
   const updateVital = useCallback(
     async (path: string, recordId: number, payload: Record<string, unknown>) => {
-      if (resolvedUserId === null) {
-        throw new Error('No se pudo determinar el usuario asociado al registro.');
+      const targetUrl = selectedPatientNumericId
+        ? `${apiBase}/vitals/patient/${selectedPatientNumericId}/${path}/${recordId}`
+        : resolvedUserId !== null
+        ? `${apiBase}/vitals/user/${resolvedUserId}/${path}/${recordId}`
+        : null;
+
+      if (!targetUrl) {
+        throw new Error('No se pudo determinar el paciente o usuario asociado al registro.');
       }
 
       if (!token) {
@@ -2887,17 +2901,14 @@ export const EvolutionTracking: React.FC = () => {
         Object.entries(payload).filter(([, value]) => value !== undefined)
       );
 
-      const response = await fetch(
-        `${apiBase}/vitals/user/${resolvedUserId}/${path}/${recordId}`,
-        {
-          method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify(sanitizedPayload),
-        }
-      );
+      const response = await fetch(targetUrl, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(sanitizedPayload),
+      });
 
       if (!response.ok) {
         let message = `Error ${response.status} al actualizar ${path}.`;
@@ -2919,28 +2930,31 @@ export const EvolutionTracking: React.FC = () => {
         return null;
       }
     },
-    [apiBase, resolvedUserId, token]
+    [apiBase, resolvedUserId, selectedPatientNumericId, token]
   );
 
   const deleteVital = useCallback(
     async (path: string, recordId: number) => {
-      if (resolvedUserId === null) {
-        throw new Error('No se pudo determinar el usuario asociado al registro.');
+      const targetUrl = selectedPatientNumericId
+        ? `${apiBase}/vitals/patient/${selectedPatientNumericId}/${path}/${recordId}`
+        : resolvedUserId !== null
+        ? `${apiBase}/vitals/user/${resolvedUserId}/${path}/${recordId}`
+        : null;
+
+      if (!targetUrl) {
+        throw new Error('No se pudo determinar el paciente o usuario asociado al registro.');
       }
 
       if (!token) {
         throw new Error('Sesion no valida. Inicia sesion nuevamente.');
       }
 
-      const response = await fetch(
-        `${apiBase}/vitals/user/${resolvedUserId}/${path}/${recordId}`,
-        {
-          method: 'DELETE',
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+      const response = await fetch(targetUrl, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
 
       if (!response.ok) {
         let message = `Error ${response.status} al eliminar ${path}.`;
@@ -2956,7 +2970,7 @@ export const EvolutionTracking: React.FC = () => {
         throw new Error(message);
       }
     },
-    [apiBase, resolvedUserId, token]
+    [apiBase, resolvedUserId, selectedPatientNumericId, token]
   );
 
   const handleOpenEdit = useCallback(
@@ -2968,6 +2982,7 @@ export const EvolutionTracking: React.FC = () => {
         case 'weight':
         case 'pulse':
         case 'glycemia':
+        case 'body_mass':
           setEditState({ type, record: record as NumericVitalRecord });
           break;
         case 'blood_pressure':
@@ -2992,6 +3007,7 @@ export const EvolutionTracking: React.FC = () => {
         case 'weight':
         case 'pulse':
         case 'glycemia':
+        case 'body_mass':
           setDeleteState({ type, record: record as NumericVitalRecord });
           break;
         case 'blood_pressure':
@@ -3098,6 +3114,24 @@ export const EvolutionTracking: React.FC = () => {
             payload.entrenamiento = editForm.sessionType.trim().length
               ? editForm.sessionType.trim()
               : null;
+            break;
+          }
+          case 'body_mass': {
+            const weight = normalizeField('weight');
+            const neck = normalizeField('neck');
+            const bust = normalizeField('bust');
+            const waist = normalizeField('waist');
+            const hip = normalizeField('hip');
+            const rightArm = normalizeField('rightArm');
+            const rightThigh = normalizeField('rightThigh');
+
+            if (weight !== undefined) payload.peso = weight;
+            if (neck !== undefined) payload.cuello = neck;
+            if (bust !== undefined) payload.busto = bust;
+            if (waist !== undefined) payload.cintura = waist;
+            if (hip !== undefined) payload.cadera = hip;
+            if (rightArm !== undefined) payload.brazoDerecho = rightArm;
+            if (rightThigh !== undefined) payload.musloDerecho = rightThigh;
             break;
           }
           default:
@@ -3211,6 +3245,18 @@ export const EvolutionTracking: React.FC = () => {
           numericValues[field.metricKey] =
             metricValue === null || metricValue === undefined ? '' : String(metricValue);
         });
+        break;
+      }
+      case 'body_mass': {
+        const record = editState.record as NumericVitalRecord;
+        const measurements = record.measurements;
+        numericValues.weight = measurements?.weight !== null && measurements?.weight !== undefined ? String(measurements.weight) : (record.value !== null && record.value !== undefined ? String(record.value) : '');
+        numericValues.neck = measurements?.neck !== null && measurements?.neck !== undefined ? String(measurements.neck) : '';
+        numericValues.bust = measurements?.bust !== null && measurements?.bust !== undefined ? String(measurements.bust) : '';
+        numericValues.waist = measurements?.waist !== null && measurements?.waist !== undefined ? String(measurements.waist) : '';
+        numericValues.hip = measurements?.hip !== null && measurements?.hip !== undefined ? String(measurements.hip) : '';
+        numericValues.rightArm = measurements?.rightArm !== null && measurements?.rightArm !== undefined ? String(measurements.rightArm) : '';
+        numericValues.rightThigh = measurements?.rightThigh !== null && measurements?.rightThigh !== undefined ? String(measurements.rightThigh) : '';
         break;
       }
       default:
@@ -3772,92 +3818,140 @@ export const EvolutionTracking: React.FC = () => {
   );
 
   const bmiColumns = useMemo(
-    () => [
-      { key: 'label', header: 'Fecha' },
-      {
-        key: 'bmi',
-        header: 'BMI',
-        render: (row: BmiRow) => formatDecimal(row.bmi, 1),
-      },
-      { key: 'category', header: 'Clasificacion' },
-      {
-        key: 'measurements',
-        header: 'Medidas del paciente',
-        className: '!whitespace-normal align-top',
-        render: (row: BmiRow) => {
-          const measurements = row.record.measurements;
-          if (!measurements) {
-            return EMPTY_VALUE;
-          }
-
-          const entries = [
-            { label: 'Peso', value: formatBodyMeasurement(measurements.weight, 'kg') },
-            { label: 'Cuello', value: formatBodyMeasurement(measurements.neck) },
-            { label: 'Busto', value: formatBodyMeasurement(measurements.bust) },
-            { label: 'Cintura', value: formatBodyMeasurement(measurements.waist) },
-            { label: 'Cadera', value: formatBodyMeasurement(measurements.hip) },
-            { label: 'Brazo derecho', value: formatBodyMeasurement(measurements.rightArm) },
-            { label: 'Muslo derecho', value: formatBodyMeasurement(measurements.rightThigh) },
-          ].filter((item) => Boolean(item.value));
-
-          if (!entries.length) {
-            return EMPTY_VALUE;
-          }
-
-          return (
-            <div className="flex flex-wrap gap-1.5">
-              {entries.map((item) => (
-                <span
-                  key={`${row.id}-${item.label}`}
-                  className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-700"
-                >
-                  {item.label}: {item.value}
-                </span>
-              ))}
-            </div>
-          );
+    () => {
+      const columns: Array<{
+        key: string;
+        header: string;
+        className?: string;
+        render?: (row: BmiRow) => React.ReactNode;
+      }> = [
+        { key: 'label', header: 'Fecha' },
+        {
+          key: 'bmi',
+          header: 'BMI',
+          render: (row: BmiRow) => formatDecimal(row.bmi, 1),
         },
-      },
-      {
-        key: 'photos',
-        header: 'Fotos',
-        className: '!whitespace-normal align-top',
-        render: (row: BmiRow) => {
-          if (!row.photos.length) {
-            return EMPTY_VALUE;
-          }
+        { key: 'category', header: 'Clasificacion' },
+        {
+          key: 'measurements',
+          header: 'Medidas del paciente',
+          className: '!whitespace-normal align-top',
+          render: (row: BmiRow) => {
+            const measurements = row.record.measurements;
+            if (!measurements) {
+              return EMPTY_VALUE;
+            }
 
-          return (
-            <div className="flex flex-wrap gap-3">
-              {row.photos.map(photo => (
-                <div
-                  key={`${row.id}-${photo.type}-${photo.path}`}
-                  className="flex flex-col items-center gap-1 max-w-[4.5rem]"
-                >
-                  <a href={photo.url} target="_blank" rel="noopener noreferrer" className="block">
-                    <img
-                      src={photo.url}
-                      alt={`Foto ${photo.label}`}
-                      className="h-16 w-16 rounded-md object-cover border border-gray-200 shadow-sm"
-                      loading="lazy"
-                    />
-                  </a>
-                  <span className="text-[10px] text-gray-500 text-center leading-tight">
-                    {photo.label}
+            const entries = [
+              { label: 'Peso', value: formatBodyMeasurement(measurements.weight, 'kg') },
+              { label: 'Cuello', value: formatBodyMeasurement(measurements.neck) },
+              { label: 'Busto', value: formatBodyMeasurement(measurements.bust) },
+              { label: 'Cintura', value: formatBodyMeasurement(measurements.waist) },
+              { label: 'Cadera', value: formatBodyMeasurement(measurements.hip) },
+              { label: 'Brazo derecho', value: formatBodyMeasurement(measurements.rightArm) },
+              { label: 'Muslo derecho', value: formatBodyMeasurement(measurements.rightThigh) },
+            ].filter((item) => Boolean(item.value));
+
+            if (!entries.length) {
+              return EMPTY_VALUE;
+            }
+
+            return (
+              <div className="flex flex-wrap gap-1.5">
+                {entries.map((item) => (
+                  <span
+                    key={`${row.id}-${item.label}`}
+                    className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-700"
+                  >
+                    {item.label}: {item.value}
                   </span>
-                </div>
-              ))}
-            </div>
-          );
+                ))}
+              </div>
+            );
+          },
         },
-      },
-      {
-        key: 'source',
-        header: 'Origen',
-        render: (row: BmiRow) => SOURCE_LABELS[row.source] ?? row.source,
-      },
-    ],
-    []
+        {
+          key: 'photos',
+          header: 'Fotos',
+          className: '!whitespace-normal align-top',
+          render: (row: BmiRow) => {
+            if (!row.photos.length) {
+              return EMPTY_VALUE;
+            }
+
+            return (
+              <div className="flex flex-wrap gap-3">
+                {row.photos.map(photo => (
+                  <div
+                    key={`${row.id}-${photo.type}-${photo.path}`}
+                    className="flex flex-col items-center gap-1 max-w-[4.5rem]"
+                  >
+                    <a href={photo.url} target="_blank" rel="noopener noreferrer" className="block">
+                      <img
+                        src={photo.url}
+                        alt={`Foto ${photo.label}`}
+                        className="h-16 w-16 rounded-md object-cover border border-gray-200 shadow-sm"
+                        loading="lazy"
+                      />
+                    </a>
+                    <span className="text-[10px] text-gray-500 text-center leading-tight">
+                      {photo.label}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            );
+          },
+        },
+        {
+          key: 'source',
+          header: 'Origen',
+          render: (row: BmiRow) => SOURCE_LABELS[row.source] ?? row.source,
+        },
+      ];
+
+      if (canManageRecords) {
+        columns.push({
+          key: 'actions',
+          header: 'Acciones',
+          render: (row: BmiRow) => (
+            <div className="flex items-center gap-1">
+              {row.source === 'body_mass' ? (
+                <>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 px-2 text-xs text-slate-600 hover:text-slate-900"
+                    onClick={event => {
+                      event.stopPropagation();
+                      handleOpenEdit('body_mass', row.record);
+                    }}
+                    disabled={isProcessingEdit}
+                  >
+                    <Edit className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 px-2 text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-50"
+                    onClick={event => {
+                      event.stopPropagation();
+                      handleOpenDelete('body_mass', row.record);
+                    }}
+                    disabled={isProcessingDelete}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </>
+              ) : null}
+            </div>
+          ),
+        });
+      }
+
+      return columns;
+    },
+    [canManageRecords, handleOpenDelete, handleOpenEdit, isProcessingDelete, isProcessingEdit]
   );
 
   const heartRateColumns = useMemo(() => {
@@ -6368,6 +6462,109 @@ export const EvolutionTracking: React.FC = () => {
                       setEditForm(prev => ({
                         ...prev,
                         sessionType: event.target.value,
+                      }))
+                    }
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+            )}
+
+            {editState.type === 'body_mass' && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Peso (kg)</label>
+                  <input
+                    type="text"
+                    value={editForm.numericValues.weight ?? ''}
+                    onChange={event =>
+                      setEditForm(prev => ({
+                        ...prev,
+                        numericValues: { ...prev.numericValues, weight: event.target.value },
+                      }))
+                    }
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Cuello (cm)</label>
+                  <input
+                    type="text"
+                    value={editForm.numericValues.neck ?? ''}
+                    onChange={event =>
+                      setEditForm(prev => ({
+                        ...prev,
+                        numericValues: { ...prev.numericValues, neck: event.target.value },
+                      }))
+                    }
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Busto (cm)</label>
+                  <input
+                    type="text"
+                    value={editForm.numericValues.bust ?? ''}
+                    onChange={event =>
+                      setEditForm(prev => ({
+                        ...prev,
+                        numericValues: { ...prev.numericValues, bust: event.target.value },
+                      }))
+                    }
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Cintura (cm)</label>
+                  <input
+                    type="text"
+                    value={editForm.numericValues.waist ?? ''}
+                    onChange={event =>
+                      setEditForm(prev => ({
+                        ...prev,
+                        numericValues: { ...prev.numericValues, waist: event.target.value },
+                      }))
+                    }
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Cadera (cm)</label>
+                  <input
+                    type="text"
+                    value={editForm.numericValues.hip ?? ''}
+                    onChange={event =>
+                      setEditForm(prev => ({
+                        ...prev,
+                        numericValues: { ...prev.numericValues, hip: event.target.value },
+                      }))
+                    }
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Brazo derecho (cm)</label>
+                  <input
+                    type="text"
+                    value={editForm.numericValues.rightArm ?? ''}
+                    onChange={event =>
+                      setEditForm(prev => ({
+                        ...prev,
+                        numericValues: { ...prev.numericValues, rightArm: event.target.value },
+                      }))
+                    }
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Muslo derecho (cm)</label>
+                  <input
+                    type="text"
+                    value={editForm.numericValues.rightThigh ?? ''}
+                    onChange={event =>
+                      setEditForm(prev => ({
+                        ...prev,
+                        numericValues: { ...prev.numericValues, rightThigh: event.target.value },
                       }))
                     }
                     className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
