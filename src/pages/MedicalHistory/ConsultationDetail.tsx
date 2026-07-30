@@ -41,13 +41,47 @@ const timestampFormatter = new Intl.DateTimeFormat('es-ES', {
   timeStyle: 'short',
 });
 
+const parseDateToLocalMidnight = (value?: string | null): Date | null => {
+  if (!value || typeof value !== 'string') {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const isoMatch = trimmed.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (isoMatch) {
+    const year = parseInt(isoMatch[1], 10);
+    const month = parseInt(isoMatch[2], 10) - 1;
+    const day = parseInt(isoMatch[3], 10);
+    return new Date(year, month, day);
+  }
+
+  const mdyMatch = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (mdyMatch) {
+    const month = parseInt(mdyMatch[1], 10) - 1;
+    const day = parseInt(mdyMatch[2], 10);
+    const year = parseInt(mdyMatch[3], 10);
+    return new Date(year, month, day);
+  }
+
+  const parsed = new Date(trimmed);
+  if (!Number.isNaN(parsed.getTime())) {
+    return parsed;
+  }
+
+  return null;
+};
+
 const formatConsultationDate = (value?: string | null): string => {
   if (!value) {
     return '—';
   }
 
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
+  const parsed = parseDateToLocalMidnight(value);
+  if (!parsed) {
     return '—';
   }
 

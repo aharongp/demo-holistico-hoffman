@@ -861,6 +861,8 @@ export const EvolutionTracking: React.FC = () => {
   const [isSavingOcularExam, setIsSavingOcularExam] = useState(false);
   const [ocularModalError, setOcularModalError] = useState<string | null>(null);
   const [ocularFormResetKey, setOcularFormResetKey] = useState(0);
+  const [editingOcularId, setEditingOcularId] = useState<number | null>(null);
+  const [isDeletingOcularId, setIsDeletingOcularId] = useState<number | null>(null);
   const [consultations, setConsultations] = useState<ConsultationRow[]>([]);
   const [isLoadingConsultations, setIsLoadingConsultations] = useState(false);
   const [consultationsError, setConsultationsError] = useState<string | null>(null);
@@ -870,6 +872,8 @@ export const EvolutionTracking: React.FC = () => {
   const [consultationModalError, setConsultationModalError] = useState<string | null>(null);
   const [consultationSuccess, setConsultationSuccess] = useState<string | null>(null);
   const [consultationsRefreshKey, setConsultationsRefreshKey] = useState(0);
+  const [editingConsultationId, setEditingConsultationId] = useState<number | null>(null);
+  const [isDeletingConsultationId, setIsDeletingConsultationId] = useState<number | null>(null);
   const [instrumentAssignments, setInstrumentAssignments] = useState<InstrumentAssignmentItem[]>([]);
   const [isLoadingInstrumentAssignments, setIsLoadingInstrumentAssignments] = useState(false);
   const [instrumentAssignmentsError, setInstrumentAssignmentsError] = useState<string | null>(null);
@@ -1423,7 +1427,7 @@ export const EvolutionTracking: React.FC = () => {
       return;
     }
 
-    const patientId = selectedPatient?.id ?? null;
+    const patientId = selectedPatientNumericId;
 
     if (!patientId) {
       setOcularExams([]);
@@ -1501,7 +1505,7 @@ export const EvolutionTracking: React.FC = () => {
       cancelled = true;
       controller.abort();
     };
-  }, [apiBase, assetsBase, ocularRefreshKey, selectedPatient?.id, shouldShowDoctorTabs, token]);
+  }, [apiBase, assetsBase, ocularRefreshKey, selectedPatientNumericId, shouldShowDoctorTabs, token]);
 
   useEffect(() => {
     if (!shouldShowDoctorTabs) {
@@ -1512,7 +1516,7 @@ export const EvolutionTracking: React.FC = () => {
       return;
     }
 
-    const patientId = selectedPatient?.id ?? null;
+    const patientId = selectedPatientNumericId;
 
     if (!patientId) {
       setConsultations([]);
@@ -1536,10 +1540,7 @@ export const EvolutionTracking: React.FC = () => {
       setConsultationsError(null);
 
       try {
-        const url = new URL(`${apiBase}/consultation`);
-        url.searchParams.set('patientId', String(patientId));
-
-        const response = await fetch(url.toString(), {
+        const response = await fetch(`${apiBase}/consultation?patientId=${patientId}`, {
           method: 'GET',
           headers: {
             Authorization: `Bearer ${token}`,
@@ -1592,7 +1593,7 @@ export const EvolutionTracking: React.FC = () => {
       cancelled = true;
       controller.abort();
     };
-  }, [apiBase, consultationsRefreshKey, selectedPatient?.id, shouldShowDoctorTabs, token]);
+  }, [apiBase, consultationsRefreshKey, selectedPatientNumericId, shouldShowDoctorTabs, token]);
 
   useEffect(() => {
     if (!medicalHistorySuccess) {
@@ -2306,9 +2307,23 @@ export const EvolutionTracking: React.FC = () => {
     }
   };
 
-  const handleOpenOcularModal = () => {
+  const handleOpenOcularModal = (examToEdit?: OcularExamRow) => {
     setOcularModalError(null);
-    setOcularForm(createInitialOcularForm());
+    if (examToEdit) {
+      setEditingOcularId(examToEdit.id);
+      setOcularForm({
+        date: examToEdit.rawDate ? examToEdit.rawDate.split('T')[0] : '',
+        reason: examToEdit.reason,
+        rightObservation: examToEdit.rightObservation,
+        leftObservation: examToEdit.leftObservation,
+        comment: examToEdit.rightComment || examToEdit.leftComment || '',
+        rightEyeFile: null,
+        leftEyeFile: null,
+      });
+    } else {
+      setEditingOcularId(null);
+      setOcularForm(createInitialOcularForm());
+    }
     setOcularFormResetKey((value) => value + 1);
     setIsOcularModalOpen(true);
   };
@@ -2320,6 +2335,7 @@ export const EvolutionTracking: React.FC = () => {
 
     setIsOcularModalOpen(false);
     setOcularModalError(null);
+    setEditingOcularId(null);
   };
 
   type OcularTextField = 'date' | 'reason' | 'rightObservation' | 'leftObservation' | 'comment';
@@ -2343,7 +2359,7 @@ export const EvolutionTracking: React.FC = () => {
   const handleSubmitOcularExam = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    const patientId = selectedPatient?.id ?? null;
+    const patientId = selectedPatientNumericId;
 
     if (!patientId || !token) {
       setOcularModalError('No se pudo identificar al paciente autenticado. Intenta nuevamente.');
@@ -2394,8 +2410,14 @@ export const EvolutionTracking: React.FC = () => {
     }
 
     try {
-      const response = await fetch(`${apiBase}/patients/history/${patientId}/ocular-exams`, {
-        method: 'POST',
+      const isEditing = editingOcularId !== null;
+      const url = isEditing
+        ? `${apiBase}/patients/history/${patientId}/ocular-exams/${editingOcularId}`
+        : `${apiBase}/patients/history/${patientId}/ocular-exams`;
+      const method = isEditing ? 'PUT' : 'POST';
+
+      const response = await fetch(url, {
+        method,
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -2403,29 +2425,94 @@ export const EvolutionTracking: React.FC = () => {
       });
 
       if (!response.ok) {
-        throw new Error(`Failed to create ocular exam (${response.status})`);
+        throw new Error(`Failed to save ocular exam (${response.status})`);
       }
 
       setIsOcularModalOpen(false);
       setOcularForm(createInitialOcularForm());
+      setEditingOcularId(null);
       setOcularFormResetKey((value) => value + 1);
       setOcularModalError(null);
       setOcularRefreshKey((value) => value + 1);
     } catch (error) {
-      console.error('Failed to create ocular exam', error);
-      setOcularModalError('No se pudo registrar el examen ocular. Intenta nuevamente.');
+      console.error('Failed to save ocular exam', error);
+      setOcularModalError('No se pudo guardar el examen ocular. Intenta nuevamente.');
     } finally {
       setIsSavingOcularExam(false);
     }
   };
 
-  const handleOpenConsultationModal = () => {
-    const patientId = selectedPatient?.id ?? null;
+  const handleDeleteOcularExam = async (examId: number) => {
+    const patientId = selectedPatientNumericId;
     if (!patientId || !token) {
       return;
     }
 
-    setConsultationForm(createInitialConsultationForm());
+    if (!window.confirm('¿Estás seguro de que deseas eliminar este examen ocular?')) {
+      return;
+    }
+
+    setIsDeletingOcularId(examId);
+    setOcularLoadError(null);
+
+    try {
+      const response = await fetch(`${apiBase}/patients/history/${patientId}/ocular-exams/${examId}`, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to delete ocular exam (${response.status})`);
+      }
+
+      setOcularRefreshKey((value) => value + 1);
+    } catch (error) {
+      console.error('Failed to delete ocular exam', error);
+      setOcularLoadError('No se pudo eliminar el examen ocular. Intenta nuevamente.');
+    } finally {
+      setIsDeletingOcularId(null);
+    }
+  };
+
+  const handleOpenConsultationModal = (consultationToEdit?: ConsultationRow) => {
+    const patientId = selectedPatientNumericId;
+    if (!patientId || !token) {
+      return;
+    }
+
+    if (consultationToEdit) {
+      setEditingConsultationId(consultationToEdit.id);
+      setConsultationForm({
+        date: consultationToEdit.rawDate ? consultationToEdit.rawDate.split('T')[0] : '',
+        reason: consultationToEdit.reason,
+        weight: consultationToEdit.weight,
+        bodyMassIndex: consultationToEdit.bodyMassIndex,
+        bodyFat: consultationToEdit.bodyFat,
+        pulse: consultationToEdit.pulse,
+        maxHeartRate: consultationToEdit.maxHeartRate,
+        bloodPressure: consultationToEdit.bloodPressure,
+        arm: consultationToEdit.arm ?? '',
+        thigh: consultationToEdit.thigh ?? '',
+        waist: consultationToEdit.waist,
+        hip: consultationToEdit.hip,
+        chest: consultationToEdit.chest ?? '',
+        neck: consultationToEdit.neck ?? '',
+        finding: consultationToEdit.finding ?? '',
+        recommendation: consultationToEdit.recommendation,
+        observation: consultationToEdit.observation,
+        diagnosis: consultationToEdit.diagnosis,
+        breathing: consultationToEdit.breathing ?? '',
+        evolution: consultationToEdit.evolution ?? '',
+        coachRecommendation: consultationToEdit.coachRecommendation ?? '',
+        indications: consultationToEdit.indications ?? '',
+      });
+    } else {
+      setEditingConsultationId(null);
+      setConsultationForm(createInitialConsultationForm());
+    }
+
     setConsultationModalError(null);
     setIsConsultationModalOpen(true);
   };
@@ -2437,6 +2524,7 @@ export const EvolutionTracking: React.FC = () => {
 
     setIsConsultationModalOpen(false);
     setConsultationModalError(null);
+    setEditingConsultationId(null);
     setConsultationForm(createInitialConsultationForm());
   };
 
@@ -2450,7 +2538,7 @@ export const EvolutionTracking: React.FC = () => {
   const handleSubmitConsultation = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    const patientId = selectedPatient?.id ?? null;
+    const patientId = selectedPatientNumericId;
 
     if (!patientId || !token) {
       setConsultationModalError('No se pudo identificar al paciente.');
@@ -2492,8 +2580,14 @@ export const EvolutionTracking: React.FC = () => {
     };
 
     try {
-      const response = await fetch(`${apiBase}/consultation`, {
-        method: 'POST',
+      const isEditing = editingConsultationId !== null;
+      const url = isEditing
+        ? `${apiBase}/consultation/${editingConsultationId}`
+        : `${apiBase}/consultation`;
+      const method = isEditing ? 'PATCH' : 'POST';
+
+      const response = await fetch(url, {
+        method,
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
@@ -2502,12 +2596,13 @@ export const EvolutionTracking: React.FC = () => {
       });
 
       if (!response.ok) {
-        throw new Error(`Failed to create consultation (${response.status})`);
+        throw new Error(`Failed to save consultation (${response.status})`);
       }
 
-      setConsultationSuccess('Consulta registrada correctamente.');
+      setConsultationSuccess(isEditing ? 'Consulta modificada correctamente.' : 'Consulta registrada correctamente.');
       setConsultationsError(null);
       setIsConsultationModalOpen(false);
+      setEditingConsultationId(null);
       setConsultationForm(createInitialConsultationForm());
       setConsultationsRefreshKey((key) => key + 1);
     } catch (error) {
@@ -2515,6 +2610,40 @@ export const EvolutionTracking: React.FC = () => {
       setConsultationModalError('No se pudo guardar la consulta. Intenta nuevamente.');
     } finally {
       setIsSavingConsultation(false);
+    }
+  };
+
+  const handleDeleteConsultation = async (consultationId: number) => {
+    if (!token) {
+      return;
+    }
+
+    if (!window.confirm('¿Estás seguro de que deseas eliminar esta consulta médica?')) {
+      return;
+    }
+
+    setIsDeletingConsultationId(consultationId);
+    setConsultationsError(null);
+
+    try {
+      const response = await fetch(`${apiBase}/consultation/${consultationId}`, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to delete consultation (${response.status})`);
+      }
+
+      setConsultationSuccess('Consulta eliminada correctamente.');
+      setConsultationsRefreshKey((key) => key + 1);
+    } catch (error) {
+      console.error('Failed to delete consultation', error);
+      setConsultationsError('No se pudo eliminar la consulta. Intenta nuevamente.');
+    } finally {
+      setIsDeletingConsultationId(null);
     }
   };
 
@@ -3969,7 +4098,7 @@ export const EvolutionTracking: React.FC = () => {
         const restingHeartRate = parseNumberInput(formData.heartRateResting);
 
         addEvolutionEntry({
-          patientId: user.id,
+          patientId: isPatient ? user.id : (selectedPatient?.id || user.id),
           date: now,
           weight: weightValue ?? bodyMassWeightValue ?? undefined,
           bloodSugar: bloodSugarValue,
@@ -4437,7 +4566,7 @@ export const EvolutionTracking: React.FC = () => {
                 <RefreshCw className="mr-2 h-4 w-4" />
                 {isLoadingVitals ? 'Actualizando' : 'Actualizar'}
               </Button>
-              {isPatient && (
+              {(isPatient || (isTherapist && Boolean(selectedPatient))) && (
                 <Button
                   onClick={() => {
                     setSaveError(null);
@@ -4943,6 +5072,7 @@ export const EvolutionTracking: React.FC = () => {
                         <th className="px-4 py-3">Imagen ojo izquierdo</th>
                         <th className="px-4 py-3">Comentario ojo izquierdo</th>
                         <th className="px-4 py-3">Comentario ojo derecho</th>
+                        <th className="px-4 py-3 text-right">Acciones</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
@@ -5002,13 +5132,38 @@ export const EvolutionTracking: React.FC = () => {
                               </td>
                               <td className="min-w-[12rem] px-4 py-3">{toDisplayText(exam.leftComment)}</td>
                               <td className="min-w-[12rem] px-4 py-3">{toDisplayText(exam.rightComment)}</td>
+                              <td className="whitespace-nowrap px-4 py-3 text-right">
+                                <div className="flex items-center justify-end gap-1">
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleOpenOcularModal(exam)}
+                                    title="Modificar examen ocular"
+                                    className="h-10 w-10 p-0 text-amber-600 hover:bg-amber-50 hover:text-amber-700 rounded-xl"
+                                  >
+                                    <Edit className="h-5 w-5" />
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleDeleteOcularExam(exam.id)}
+                                    disabled={isDeletingOcularId === exam.id}
+                                    title="Eliminar examen ocular"
+                                    className="h-10 w-10 p-0 text-rose-600 hover:bg-rose-50 hover:text-rose-700 rounded-xl"
+                                  >
+                                    <Trash2 className="h-5 w-5" />
+                                  </Button>
+                                </div>
+                              </td>
                             </tr>
                           );
                         })
                       ) : (
                         <tr>
                           <td
-                            colSpan={8}
+                            colSpan={9}
                             className="px-4 py-6 text-center text-sm text-slate-500"
                           >
                             No hay registros oculares disponibles.
@@ -5079,6 +5234,7 @@ export const EvolutionTracking: React.FC = () => {
                         <th className="px-4 py-3">Tensión</th>
                         <th className="px-4 py-3">Diagnóstico</th>
                         <th className="px-4 py-3">Recomendación</th>
+                        <th className="px-4 py-3 text-right">Acciones</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
@@ -5093,12 +5249,37 @@ export const EvolutionTracking: React.FC = () => {
                             <td className="px-4 py-3">{toDisplayText(consultation.bloodPressure)}</td>
                             <td className="min-w-[12rem] px-4 py-3">{toDisplayText(consultation.diagnosis)}</td>
                             <td className="min-w-[12rem] px-4 py-3">{toDisplayText(consultation.recommendation)}</td>
+                            <td className="whitespace-nowrap px-4 py-3 text-right">
+                              <div className="flex items-center justify-end gap-1">
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleOpenConsultationModal(consultation)}
+                                  title="Modificar consulta médica"
+                                  className="h-10 w-10 p-0 text-amber-600 hover:bg-amber-50 hover:text-amber-700 rounded-xl"
+                                >
+                                  <Edit className="h-5 w-5" />
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleDeleteConsultation(consultation.id)}
+                                  disabled={isDeletingConsultationId === consultation.id}
+                                  title="Eliminar consulta médica"
+                                  className="h-10 w-10 p-0 text-rose-600 hover:bg-rose-50 hover:text-rose-700 rounded-xl"
+                                >
+                                  <Trash2 className="h-5 w-5" />
+                                </Button>
+                              </div>
+                            </td>
                           </tr>
                         ))
                       ) : (
                         <tr>
                           <td
-                            colSpan={8}
+                            colSpan={9}
                             className="px-4 py-6 text-center text-sm text-slate-500"
                           >
                             No hay consultas registradas.
@@ -5172,6 +5353,30 @@ export const EvolutionTracking: React.FC = () => {
 
           {showRecordsSection && (
             <>
+              {(isPatient || (isTherapist && Boolean(selectedPatient))) && (
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 rounded-2xl border border-white/60 bg-white/70 p-4 backdrop-blur shadow-sm mb-4">
+                  <div>
+                    <h3 className="text-lg font-semibold text-slate-900">Registros de evolución detallados</h3>
+                    <p className="text-sm text-slate-500">
+                      {isPatient
+                        ? 'Registra y monitorea tus signos vitales y datos de evolución diaria.'
+                        : `Agrega nuevos registros de evolución y signos vitales para ${selectedPatient?.firstName || 'el paciente'}.`}
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      setSaveError(null);
+                      resetEvolutionForm();
+                      setIsModalOpen(true);
+                    }}
+                    className="whitespace-nowrap rounded-full bg-gradient-to-r from-[#F97316] via-[#FB7185] to-[#F472B6] px-5 py-2 text-sm font-semibold text-white shadow-lg hover:opacity-90"
+                  >
+                    <Plus className="mr-2 h-4 w-4 inline" />
+                    Nuevo registro
+                  </Button>
+                </div>
+              )}
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6">
             <Card
               padding="sm"
@@ -5452,7 +5657,7 @@ export const EvolutionTracking: React.FC = () => {
       <Modal
         isOpen={isConsultationModalOpen}
         onClose={handleCloseConsultationModal}
-        title="Registrar consulta médica"
+        title={editingConsultationId ? 'Modificar consulta médica' : 'Registrar consulta médica'}
       >
         <form className="space-y-5" onSubmit={handleSubmitConsultation}>
           {consultationModalError && (
@@ -5789,7 +5994,7 @@ export const EvolutionTracking: React.FC = () => {
               Cancelar
             </Button>
             <Button type="submit" disabled={isSavingConsultation}>
-              {isSavingConsultation ? 'Guardando...' : 'Guardar consulta'}
+              {isSavingConsultation ? 'Guardando...' : editingConsultationId ? 'Guardar cambios' : 'Guardar consulta'}
             </Button>
           </div>
         </form>
@@ -5798,7 +6003,7 @@ export const EvolutionTracking: React.FC = () => {
       <Modal
         isOpen={isOcularModalOpen}
         onClose={handleCloseOcularModal}
-        title="Registrar examen ocular"
+        title={editingOcularId ? 'Modificar examen ocular' : 'Registrar examen ocular'}
       >
         <form className="space-y-5" onSubmit={handleSubmitOcularExam}>
           {ocularModalError && (
@@ -5947,7 +6152,7 @@ export const EvolutionTracking: React.FC = () => {
               Cancelar
             </Button>
             <Button type="submit" disabled={isSavingOcularExam}>
-              {isSavingOcularExam ? 'Guardando...' : 'Guardar examen'}
+              {isSavingOcularExam ? 'Guardando...' : editingOcularId ? 'Guardar cambios' : 'Guardar examen'}
             </Button>
           </div>
         </form>
@@ -6230,8 +6435,8 @@ export const EvolutionTracking: React.FC = () => {
         </Modal>
       )}
 
-      {/* Add Entry Modal for Patients */}
-      {isPatient && (
+      {/* Add Entry Modal for Patients, Therapists, Doctors, Coaches, and Admins */}
+      {(isPatient || (isTherapist && Boolean(selectedPatient))) && (
         <Modal
           isOpen={isModalOpen}
           onClose={() => {
@@ -6242,7 +6447,7 @@ export const EvolutionTracking: React.FC = () => {
             resetEvolutionForm();
             setIsModalOpen(false);
           }}
-          title="Registrar tu salud"
+          title={isPatient ? 'Registrar tu salud' : `Registrar evolución de ${selectedPatient?.firstName || 'paciente'}`}
           size="lg"
         >
           <div className="space-y-6">

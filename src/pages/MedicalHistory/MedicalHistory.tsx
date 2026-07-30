@@ -604,6 +604,7 @@ export const DENTAL_PRESENCE_OPTIONS: Array<{
 
 export interface OcularExamRow {
   id: number;
+  rawDate?: string;
   dateLabel: string;
   reason: string;
   rightObservation: string;
@@ -643,6 +644,40 @@ export const createInitialOcularForm = (): OcularFormState => ({
   leftEyeFile: null,
 });
 
+export const parseDateToLocalMidnight = (value?: string | null): Date | null => {
+  if (!value || typeof value !== 'string') {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const isoMatch = trimmed.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (isoMatch) {
+    const year = parseInt(isoMatch[1], 10);
+    const month = parseInt(isoMatch[2], 10) - 1;
+    const day = parseInt(isoMatch[3], 10);
+    return new Date(year, month, day);
+  }
+
+  const mdyMatch = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (mdyMatch) {
+    const month = parseInt(mdyMatch[1], 10) - 1;
+    const day = parseInt(mdyMatch[2], 10);
+    const year = parseInt(mdyMatch[3], 10);
+    return new Date(year, month, day);
+  }
+
+  const parsed = new Date(trimmed);
+  if (!Number.isNaN(parsed.getTime())) {
+    return parsed;
+  }
+
+  return null;
+};
+
 const consultationDateFormatter = new Intl.DateTimeFormat('es-ES', {
   dateStyle: 'medium',
 });
@@ -652,8 +687,8 @@ const formatConsultationDate = (value?: string | null): string => {
     return '—';
   }
 
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
+  const parsed = parseDateToLocalMidnight(value);
+  if (!parsed) {
     return '—';
   }
 
@@ -674,6 +709,7 @@ const sanitizeConsultationString = (value: unknown): string => {
 
 export interface ConsultationRow {
   id: number;
+  rawDate?: string;
   dateLabel: string;
   reason: string;
   weight: string;
@@ -682,11 +718,20 @@ export interface ConsultationRow {
   pulse: string;
   maxHeartRate: string;
   bloodPressure: string;
+  arm?: string;
+  thigh?: string;
   waist: string;
   hip: string;
+  chest?: string;
+  neck?: string;
+  finding?: string;
   recommendation: string;
   observation: string;
   diagnosis: string;
+  breathing?: string;
+  evolution?: string;
+  coachRecommendation?: string;
+  indications?: string;
 }
 
 export interface ConsultationFormState {
@@ -758,7 +803,8 @@ export const normalizeConsultationRecords = (
     const rawDate = typeof raw.date === 'string' ? raw.date : null;
     const legacyDate = typeof raw['fecha'] === 'string' ? raw['fecha'] : null;
     const dateValue = rawDate ?? legacyDate ?? null;
-    const timestamp = dateValue ? new Date(dateValue).getTime() : Number.NaN;
+    const parsedDateObj = parseDateToLocalMidnight(dateValue);
+    const timestamp = parsedDateObj ? parsedDateObj.getTime() : Number.NaN;
     const sortKey = Number.isFinite(timestamp) ? timestamp : Number.NEGATIVE_INFINITY;
 
     const idCandidate = Number(raw.id);
@@ -789,6 +835,7 @@ export const normalizeConsultationRecords = (
       sortKey,
       row: {
         id,
+        rawDate: dateValue ?? '',
         dateLabel: formatConsultationDate(dateValue),
         reason,
         weight,
@@ -797,11 +844,20 @@ export const normalizeConsultationRecords = (
         pulse,
         maxHeartRate,
         bloodPressure,
+        arm: sanitizeConsultationString(raw.arm ?? raw['brazo']),
+        thigh: sanitizeConsultationString(raw.thigh ?? raw['muslo']),
         waist,
         hip,
+        chest: sanitizeConsultationString(raw.chest ?? raw['busto_pecho']),
+        neck: sanitizeConsultationString(raw.neck ?? raw['cuello']),
+        finding: sanitizeConsultationString(raw.finding ?? raw['hallazgo']),
         recommendation,
         observation,
         diagnosis,
+        breathing: sanitizeConsultationString(raw.breathing ?? raw['respiracion']),
+        evolution: sanitizeConsultationString(raw.evolution ?? raw['evolucion']),
+        coachRecommendation: sanitizeConsultationString(raw.coachRecommendation ?? raw['recomendacion_coach']),
+        indications: sanitizeConsultationString(raw.indications ?? raw['indicaciones']),
       },
     });
   });
@@ -981,12 +1037,12 @@ const formatOcularDate = (value?: string | null): string => {
     return '—';
   }
 
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
+  const parsed = parseDateToLocalMidnight(value);
+  if (!parsed) {
     return value;
   }
 
-  return ocularDateFormatter.format(date);
+  return ocularDateFormatter.format(parsed);
 };
 
 const sanitizeOcularString = (value: unknown): string => {
@@ -1064,7 +1120,8 @@ export const normalizeOcularExamRecords = (
 
     const rawRecord = record as OcularExamRecordInput;
     const rawDate = typeof rawRecord.date === 'string' ? rawRecord.date : null;
-    const timestamp = rawDate ? new Date(rawDate).getTime() : Number.NaN;
+    const parsedOcularDate = parseDateToLocalMidnight(rawDate);
+    const timestamp = parsedOcularDate ? parsedOcularDate.getTime() : Number.NaN;
     const sortKey = Number.isFinite(timestamp)
       ? timestamp
       : Number.NEGATIVE_INFINITY;
@@ -1097,6 +1154,7 @@ export const normalizeOcularExamRecords = (
       sortKey,
       row: {
         id,
+        rawDate: rawDate ?? '',
         dateLabel: formatOcularDate(rawDate),
         reason,
         rightObservation,

@@ -613,7 +613,7 @@ export const InstrumentResponseModal: React.FC<InstrumentResponseModalProps> = (
       onClose={onClose}
       title={mode === 'readonly' ? 'Respuestas registradas' : 'Responder instrumento'}
       size="lg"
-      closeOnOverlayClick={mode !== 'form'}
+      closeOnOverlayClick={false}
     >
       <div className="space-y-6">
         <div className="rounded-3xl border border-white/60 bg-white/85 p-5 shadow-[0_25px_60px_-45px_rgba(76,29,149,0.35)]">

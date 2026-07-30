@@ -17,7 +17,7 @@ export const Modal: React.FC<ModalProps> = ({
   title,
   children,
   size = 'md',
-  closeOnOverlayClick = true,
+  closeOnOverlayClick = false,
 }) => {
   if (!isOpen) return null;
 

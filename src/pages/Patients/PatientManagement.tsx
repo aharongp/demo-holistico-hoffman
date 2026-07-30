@@ -21,7 +21,8 @@ import {
 export const PatientManagement: React.FC = () => {
   const { patients, addPatient, updatePatient, assignProgramToPatient, deletePatient, programs } = useApp();
   const { token } = useAuth();
-  const { isAdmin } = usePermissions();
+  const { isAdmin, isTherapist } = usePermissions();
+  const canAssignProgram = isAdmin || isTherapist;
   // const {
   //   canViewPatients,
   //   canCreatePatients,
@@ -200,8 +201,7 @@ export const PatientManagement: React.FC = () => {
   };
 
   const handleOpenAssignModal = (patient: Patient) => {
-    if (!isAdmin) {
-    // if (!canAssignPatients) {
+    if (!canAssignProgram) {
       return;
     }
     setSelectedPatientForAssign(patient);
@@ -389,7 +389,7 @@ export const PatientManagement: React.FC = () => {
       render: (patient: Patient) => (
         <div className="flex flex-wrap gap-2">
           {/* {canAssignPatients && ( */}
-          {isAdmin && (
+          {canAssignProgram && (
             <Button
               variant="outline"
               size="sm"

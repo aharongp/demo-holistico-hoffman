@@ -296,6 +296,23 @@ const HEALTH_WHEEL_TOPIC_ALIASES = [
   },
 ];
 
+const WHEEL_OF_LIFE_TOPICS = [
+  'FAMILIA',
+  'SALUD',
+  'MANUTENCION',
+  'AMIGOS',
+  'RECREACION',
+  'COMUNICACIÓN',
+  'ESTUDIOS',
+  'FINANZAS',
+  'NEGOCIOS',
+  'ESPIRITUALIDAD',
+  'SEGURIDAD',
+  'ORGANIZACIÓN',
+  'JUSTICIA',
+  'CRECIMIENTO PERSONAL',
+];
+
 const normalizeWheelTopic = (value: string): string =>
   value
     .toLowerCase()
@@ -742,22 +759,31 @@ export const InstrumentResults: React.FC<InstrumentResultsProps> = ({
     () => `${healthRadarIdSource}-health-fill`.replace(/[:]/g, '-'),
     [healthRadarIdSource]
   );
-  const sortedWheelOfLife = useMemo(
-    () => [...wheelOfLife].sort((a, b) => b.average - a.average),
+  const wheelOfLifeEntries = useMemo(
+    () =>
+      WHEEL_OF_LIFE_TOPICS.map((topicLabel, index) => {
+        const normalizedTopic = normalizeWheelTopic(topicLabel);
+        const directMatch = wheelOfLife.find(
+          (item) => normalizeWheelTopic(item.topic ?? '') === normalizedTopic,
+        );
+        const fallbackItem = wheelOfLife[index] ?? null;
+        const averageSource = directMatch ?? fallbackItem ?? { topic: topicLabel, average: 0 };
+
+        return {
+          topic: topicLabel,
+          average: Number.isFinite(averageSource.average) ? Number(averageSource.average) : 0,
+        };
+      }),
     [wheelOfLife]
   );
   const lifeRadarData = useMemo(
     () =>
-      wheelOfLife.map((item, index) => {
-        const average = Number.isFinite(item.average) ? Number(item.average) : 0;
-        const topicLabel = item.topic?.trim().length ? item.topic.trim() : `Dimensión ${index + 1}`;
-        return {
-          topic: item.topic ?? null,
-          topicLabel,
-          average,
-        };
-      }),
-    [wheelOfLife]
+      wheelOfLifeEntries.map((item) => ({
+        topic: item.topic,
+        topicLabel: item.topic,
+        average: item.average,
+      })),
+    [wheelOfLifeEntries]
   );
   const lifeRadarTooltip = useCallback(
     (props: TooltipProps<number, string>) => buildWheelTooltip(10)(props),
@@ -1237,13 +1263,13 @@ export const InstrumentResults: React.FC<InstrumentResultsProps> = ({
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-[11px] font-semibold uppercase tracking-[0.35em] text-slate-500">Rueda</p>
-                      <h3 className="text-lg font-semibold text-slate-900">Dimensiones de vida</h3>
+                      <h3 className="text-lg font-semibold text-slate-900">Rueda de la vida</h3>
                     </div>
                     <span className="rounded-full border border-white/50 bg-white/70 px-3 py-1 text-xs font-semibold uppercase tracking-[0.35em] text-slate-500">
-                      {wheelOfLife.length} tópicos
+                      {WHEEL_OF_LIFE_TOPICS.length} tópicos
                     </span>
                   </div>
-                  {renderSectionDateSelect('wellnessLife', 'Corte rueda de vida', 'Selecciona la fecha de referencia para esta rueda.')}
+                  {renderSectionDateSelect('wellnessLife', 'Corte rueda de la vida', 'Selecciona la fecha de referencia para esta rueda.')}
                   <p className="text-sm text-slate-600">Promedios generales por dimensión con escala 0-10.</p>
                   <div className="rounded-2xl border border-white/60 bg-white/70 p-4">
                     <div className="space-y-6">
@@ -1290,15 +1316,14 @@ export const InstrumentResults: React.FC<InstrumentResultsProps> = ({
                         )}
                       </div>
                       <div className="space-y-3">
-                        {sortedWheelOfLife.length ? (
+                        {wheelOfLifeEntries.length ? (
                           <ul className="space-y-3">
-                            {sortedWheelOfLife.map((item: WheelResult, index) => {
+                            {wheelOfLifeEntries.map((item, index) => {
                               const width = wheelValueToPercent(item.average, 10);
-                              const label = item.topicLabel?.trim().length ? item.topicLabel.trim() : `Dimensión ${index + 1}`;
                               return (
-                                <li key={`${label}-${index}`} className="space-y-2">
+                                <li key={`${item.topic}-${index}`} className="space-y-2">
                                   <div className="flex items-center justify-between">
-                                    <span className="text-sm font-medium text-slate-700">{label}</span>
+                                    <span className="text-sm font-medium text-slate-700">{item.topic}</span>
                                     <span className="text-lg font-semibold text-slate-900">{item.average.toFixed(2)}</span>
                                   </div>
                                   <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
@@ -1389,11 +1414,10 @@ export const InstrumentResults: React.FC<InstrumentResultsProps> = ({
                           <ul className="space-y-3">
                             {healthWheelEntries.map((item, index) => {
                               const width = wheelValueToPercent(item.average, HEALTH_WHEEL_MAX);
-                              const label = item.topic?.trim().length ? item.topic.trim() : `Dimensión ${index + 1}`;
                               return (
-                                <li key={`${label}-${index}`} className="space-y-2">
+                                <li key={`${item.topic}-${index}`} className="space-y-2">
                                   <div className="flex items-center justify-between">
-                                    <span className="text-sm font-medium text-slate-700">{label}</span>
+                                    <span className="text-sm font-medium text-slate-700">{item.topic}</span>
                                     <span className="text-lg font-semibold text-slate-900">{item.average.toFixed(2)}</span>
                                   </div>
                                   <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
