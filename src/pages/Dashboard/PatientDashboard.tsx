@@ -46,8 +46,18 @@ const parseNumericId = (value: unknown): number | null => {
     return null;
   }
 
-  const numeric = Number(value);
-  return Number.isFinite(numeric) ? numeric : null;
+  if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
+    return value;
+  }
+
+  const str = String(value).trim();
+  const match = str.match(/\d+/);
+  if (match) {
+    const num = Number(match[0]);
+    return Number.isFinite(num) && num > 0 ? num : null;
+  }
+
+  return null;
 };
 
 const readStoredUserId = (): number | null => {

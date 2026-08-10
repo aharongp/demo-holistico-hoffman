@@ -177,8 +177,18 @@ const parseNumericId = (value: unknown): number | null => {
     return null;
   }
 
-  const numeric = Number(value);
-  return Number.isFinite(numeric) ? numeric : null;
+  if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
+    return value;
+  }
+
+  const str = String(value).trim();
+  const match = str.match(/\d+/);
+  if (match) {
+    const num = Number(match[0]);
+    return Number.isFinite(num) && num > 0 ? num : null;
+  }
+
+  return null;
 };
 
 const normalizeQuestionKey = (value: string): string =>
@@ -1256,9 +1266,7 @@ export const EvolutionTracking: React.FC = () => {
         console.error('Failed to load patient medical history', error);
         setMedicalHistoryError('No se pudo cargar la historia médica. Intenta nuevamente.');
       } finally {
-        if (!isCancelled) {
-          setIsLoadingMedicalHistory(false);
-        }
+        setIsLoadingMedicalHistory(false);
       }
     };
 
@@ -1407,9 +1415,7 @@ export const EvolutionTracking: React.FC = () => {
         console.error('Failed to load dental exam data', error);
         resetDentalState('No se pudo cargar el examen dental. Intenta nuevamente.');
       } finally {
-        if (!cancelled) {
-          setIsLoadingDental(false);
-        }
+        setIsLoadingDental(false);
       }
     };
 
@@ -1495,9 +1501,7 @@ export const EvolutionTracking: React.FC = () => {
         setOcularLoadError('No se pudo cargar el examen ocular. Intenta nuevamente.');
         setOcularExams([]);
       } finally {
-        if (!cancelled) {
-          setIsLoadingOcular(false);
-        }
+        setIsLoadingOcular(false);
       }
     };
 
@@ -1583,9 +1587,7 @@ export const EvolutionTracking: React.FC = () => {
         setConsultationsError('No se pudo cargar el historial de consultas. Intenta nuevamente.');
         setConsultations([]);
       } finally {
-        if (!cancelled) {
-          setIsLoadingConsultations(false);
-        }
+        setIsLoadingConsultations(false);
       }
     };
 
@@ -2311,14 +2313,22 @@ export const EvolutionTracking: React.FC = () => {
 
   const handleOpenOcularModal = (examToEdit?: OcularExamRow) => {
     setOcularModalError(null);
-    if (examToEdit) {
-      setEditingOcularId(examToEdit.id);
+    const isRealExam =
+      examToEdit &&
+      typeof examToEdit === 'object' &&
+      'id' in examToEdit &&
+      typeof (examToEdit as any).id === 'number' &&
+      Number.isFinite((examToEdit as any).id) &&
+      (examToEdit as any).id > 0;
+
+    if (isRealExam) {
+      setEditingOcularId((examToEdit as OcularExamRow).id);
       setOcularForm({
-        date: examToEdit.rawDate ? examToEdit.rawDate.split('T')[0] : '',
-        reason: examToEdit.reason,
-        rightObservation: examToEdit.rightObservation,
-        leftObservation: examToEdit.leftObservation,
-        comment: examToEdit.rightComment || examToEdit.leftComment || '',
+        date: (examToEdit as OcularExamRow).rawDate ? (examToEdit as OcularExamRow).rawDate.split('T')[0] : '',
+        reason: (examToEdit as OcularExamRow).reason,
+        rightObservation: (examToEdit as OcularExamRow).rightObservation,
+        leftObservation: (examToEdit as OcularExamRow).leftObservation,
+        comment: (examToEdit as OcularExamRow).rightComment || (examToEdit as OcularExamRow).leftComment || '',
         rightEyeFile: null,
         leftEyeFile: null,
       });
@@ -2484,31 +2494,40 @@ export const EvolutionTracking: React.FC = () => {
       return;
     }
 
-    if (consultationToEdit) {
-      setEditingConsultationId(consultationToEdit.id);
+    const isRealConsultation =
+      consultationToEdit &&
+      typeof consultationToEdit === 'object' &&
+      'id' in consultationToEdit &&
+      typeof (consultationToEdit as any).id === 'number' &&
+      Number.isFinite((consultationToEdit as any).id) &&
+      (consultationToEdit as any).id > 0;
+
+    if (isRealConsultation) {
+      const realRow = consultationToEdit as ConsultationRow;
+      setEditingConsultationId(realRow.id);
       setConsultationForm({
-        date: consultationToEdit.rawDate ? consultationToEdit.rawDate.split('T')[0] : '',
-        reason: consultationToEdit.reason,
-        weight: consultationToEdit.weight,
-        bodyMassIndex: consultationToEdit.bodyMassIndex,
-        bodyFat: consultationToEdit.bodyFat,
-        pulse: consultationToEdit.pulse,
-        maxHeartRate: consultationToEdit.maxHeartRate,
-        bloodPressure: consultationToEdit.bloodPressure,
-        arm: consultationToEdit.arm ?? '',
-        thigh: consultationToEdit.thigh ?? '',
-        waist: consultationToEdit.waist,
-        hip: consultationToEdit.hip,
-        chest: consultationToEdit.chest ?? '',
-        neck: consultationToEdit.neck ?? '',
-        finding: consultationToEdit.finding ?? '',
-        recommendation: consultationToEdit.recommendation,
-        observation: consultationToEdit.observation,
-        diagnosis: consultationToEdit.diagnosis,
-        breathing: consultationToEdit.breathing ?? '',
-        evolution: consultationToEdit.evolution ?? '',
-        coachRecommendation: consultationToEdit.coachRecommendation ?? '',
-        indications: consultationToEdit.indications ?? '',
+        date: realRow.rawDate ? realRow.rawDate.split('T')[0] : '',
+        reason: realRow.reason ?? '',
+        weight: realRow.weight ?? '',
+        bodyMassIndex: realRow.bodyMassIndex ?? '',
+        bodyFat: realRow.bodyFat ?? '',
+        pulse: realRow.pulse ?? '',
+        maxHeartRate: realRow.maxHeartRate ?? '',
+        bloodPressure: realRow.bloodPressure ?? '',
+        arm: realRow.arm ?? '',
+        thigh: realRow.thigh ?? '',
+        waist: realRow.waist ?? '',
+        hip: realRow.hip ?? '',
+        chest: realRow.chest ?? '',
+        neck: realRow.neck ?? '',
+        finding: realRow.finding ?? '',
+        recommendation: realRow.recommendation ?? '',
+        observation: realRow.observation ?? '',
+        diagnosis: realRow.diagnosis ?? '',
+        breathing: realRow.breathing ?? '',
+        evolution: realRow.evolution ?? '',
+        coachRecommendation: realRow.coachRecommendation ?? '',
+        indications: realRow.indications ?? '',
       });
     } else {
       setEditingConsultationId(null);
@@ -2550,39 +2569,48 @@ export const EvolutionTracking: React.FC = () => {
     setIsSavingConsultation(true);
     setConsultationModalError(null);
 
-    const normalizeInput = (value: string): string | null => {
-      const trimmed = value.trim();
-      return trimmed.length > 0 ? trimmed : null;
-    };
-
-    const payload = {
-      id_paciente: patientId,
-      motivo: normalizeInput(consultationForm.reason),
-      fecha: normalizeInput(consultationForm.date),
-      peso: normalizeInput(consultationForm.weight),
-      imc: normalizeInput(consultationForm.bodyMassIndex),
-      gc: normalizeInput(consultationForm.bodyFat),
-      pulso: normalizeInput(consultationForm.pulse),
-      fcm: normalizeInput(consultationForm.maxHeartRate),
-      tension: normalizeInput(consultationForm.bloodPressure),
-      brazo: normalizeInput(consultationForm.arm),
-      muslo: normalizeInput(consultationForm.thigh),
-      cintura: normalizeInput(consultationForm.waist),
-      cadera: normalizeInput(consultationForm.hip),
-      busto_pecho: normalizeInput(consultationForm.chest),
-      cuello: normalizeInput(consultationForm.neck),
-      hallazgo: normalizeInput(consultationForm.finding),
-      recomendacion: normalizeInput(consultationForm.recommendation),
-      observacion: normalizeInput(consultationForm.observation),
-      diagnostico: normalizeInput(consultationForm.diagnosis),
-      respiracion: normalizeInput(consultationForm.breathing),
-      evolucion: normalizeInput(consultationForm.evolution),
-      recomendacion_coach: normalizeInput(consultationForm.coachRecommendation),
-      indicaciones: normalizeInput(consultationForm.indications),
-    };
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
 
     try {
-      const isEditing = editingConsultationId !== null;
+      const normalizeInput = (value?: string | null): string | null => {
+        if (value === null || typeof value === 'undefined') {
+          return null;
+        }
+        const trimmed = String(value).trim();
+        return trimmed.length > 0 ? trimmed : null;
+      };
+
+      const payload = {
+        id_paciente: patientId,
+        motivo: normalizeInput(consultationForm.reason),
+        fecha: normalizeInput(consultationForm.date),
+        peso: normalizeInput(consultationForm.weight),
+        imc: normalizeInput(consultationForm.bodyMassIndex),
+        gc: normalizeInput(consultationForm.bodyFat),
+        pulso: normalizeInput(consultationForm.pulse),
+        fcm: normalizeInput(consultationForm.maxHeartRate),
+        tension: normalizeInput(consultationForm.bloodPressure),
+        brazo: normalizeInput(consultationForm.arm),
+        muslo: normalizeInput(consultationForm.thigh),
+        cintura: normalizeInput(consultationForm.waist),
+        cadera: normalizeInput(consultationForm.hip),
+        busto_pecho: normalizeInput(consultationForm.chest),
+        cuello: normalizeInput(consultationForm.neck),
+        hallazgo: normalizeInput(consultationForm.finding),
+        recomendacion: normalizeInput(consultationForm.recommendation),
+        observacion: normalizeInput(consultationForm.observation),
+        diagnostico: normalizeInput(consultationForm.diagnosis),
+        respiracion: normalizeInput(consultationForm.breathing),
+        evolucion: normalizeInput(consultationForm.evolution),
+        recomendacion_coach: normalizeInput(consultationForm.coachRecommendation),
+        indicaciones: normalizeInput(consultationForm.indications),
+      };
+
+      const isEditing =
+        typeof editingConsultationId === 'number' &&
+        Number.isFinite(editingConsultationId) &&
+        editingConsultationId > 0;
       const url = isEditing
         ? `${apiBase}/consultation/${editingConsultationId}`
         : `${apiBase}/consultation`;
@@ -2595,10 +2623,16 @@ export const EvolutionTracking: React.FC = () => {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify(payload),
+        signal: controller.signal,
       });
+      clearTimeout(timeoutId);
 
       if (!response.ok) {
-        throw new Error(`Failed to save consultation (${response.status})`);
+        const errorData = await response.json().catch(() => null);
+        const errorMessage = errorData?.message
+          ? (Array.isArray(errorData.message) ? errorData.message.join(', ') : errorData.message)
+          : `No se pudo guardar la consulta (${response.status})`;
+        throw new Error(errorMessage);
       }
 
       setConsultationSuccess(isEditing ? 'Consulta modificada correctamente.' : 'Consulta registrada correctamente.');
@@ -2607,9 +2641,16 @@ export const EvolutionTracking: React.FC = () => {
       setEditingConsultationId(null);
       setConsultationForm(createInitialConsultationForm());
       setConsultationsRefreshKey((key) => key + 1);
-    } catch (error) {
+    } catch (error: any) {
+      clearTimeout(timeoutId);
       console.error('Failed to save consultation', error);
-      setConsultationModalError('No se pudo guardar la consulta. Intenta nuevamente.');
+      const isTimeout = error?.name === 'AbortError';
+      const msg = isTimeout
+        ? 'La solicitud expiró (tiempo de espera agotado). Verifica que el servidor backend esté en ejecución.'
+        : error instanceof Error
+          ? error.message
+          : 'No se pudo guardar la consulta. Intenta nuevamente.';
+      setConsultationModalError(msg);
     } finally {
       setIsSavingConsultation(false);
     }
@@ -5133,7 +5174,7 @@ export const EvolutionTracking: React.FC = () => {
                 <Button
                   type="button"
                   variant="primary"
-                  onClick={handleOpenOcularModal}
+                  onClick={() => handleOpenOcularModal()}
                   className="inline-flex items-center gap-2 self-start md:self-auto"
                   disabled={!token || !selectedPatient}
                   title={!token ? 'Inicia sesión nuevamente para registrar un examen ocular' : 'Registrar examen ocular'}
@@ -5285,7 +5326,7 @@ export const EvolutionTracking: React.FC = () => {
                 <Button
                   type="button"
                   variant="primary"
-                  onClick={handleOpenConsultationModal}
+                  onClick={() => handleOpenConsultationModal()}
                   className="inline-flex items-center gap-2 self-start md:self-auto"
                   disabled={!selectedPatient?.id || !token}
                   title={

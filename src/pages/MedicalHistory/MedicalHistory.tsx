@@ -7,6 +7,24 @@ import { Modal } from '../../components/UI/Modal';
 import { PatientMedicalHistoryForm } from '../Evolution/components/PatientMedicalHistoryForm';
 import { useAuth } from '../../context/AuthContext';
 
+const parseNumericId = (value: unknown): number | null => {
+  if (value === null || typeof value === 'undefined') {
+    return null;
+  }
+  if (typeof value === 'number') {
+    return Number.isFinite(value) && value > 0 ? Math.trunc(value) : null;
+  }
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    const match = trimmed.match(/\d+/);
+    if (!match) return null;
+    const parsed = parseInt(match[0], 10);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+  }
+  return null;
+};
+
 export type AlterationKey =
   | 'perdidaDePeso'
   | 'gananciaDePeso'
@@ -2179,8 +2197,8 @@ export const MedicalHistory: React.FC = () => {
       return;
     }
 
-    const numericUserId = Number(user.id);
-    if (!Number.isFinite(numericUserId)) {
+    const numericUserId = parseNumericId(user.id);
+    if (numericUserId === null) {
       setPatientId(null);
       return;
     }
@@ -2214,16 +2232,13 @@ export const MedicalHistory: React.FC = () => {
           const match = payload.find((entry: any) => {
             const rawUserId =
               entry?.id_usuario ?? entry?.userId ?? entry?.idUsuario ?? entry?.user_id;
-            if (rawUserId === null || typeof rawUserId === 'undefined') {
-              return false;
-            }
-            const numeric = Number(String(rawUserId).trim());
-            return Number.isFinite(numeric) && numeric === numericUserId;
+            const numeric = parseNumericId(rawUserId);
+            return numeric !== null && numeric === numericUserId;
           });
 
-          if (match && typeof match.id !== 'undefined' && match.id !== null) {
-            const numericPatientId = Number(String(match.id).trim());
-            setPatientId(Number.isFinite(numericPatientId) ? numericPatientId : null);
+          if (match) {
+            const numericPatientId = parseNumericId(match.id);
+            setPatientId(numericPatientId);
             return;
           }
         }
@@ -2301,9 +2316,7 @@ export const MedicalHistory: React.FC = () => {
         console.error('Failed to load medical history', error);
         setHistoryError('No se pudo cargar la historia médica. Intenta nuevamente.');
       } finally {
-        if (!cancelled) {
-          setIsLoadingHistory(false);
-        }
+        setIsLoadingHistory(false);
       }
     };
 
@@ -2377,9 +2390,7 @@ export const MedicalHistory: React.FC = () => {
         );
         setConsultations([]);
       } finally {
-        if (!cancelled) {
-          setIsLoadingConsultations(false);
-        }
+        setIsLoadingConsultations(false);
       }
     };
 
@@ -2528,9 +2539,7 @@ export const MedicalHistory: React.FC = () => {
         setDentalPresenceRecordId(null);
         setDentalExamRecordId(null);
       } finally {
-        if (!cancelled) {
-          setIsLoadingDental(false);
-        }
+        setIsLoadingDental(false);
       }
     };
 
@@ -2604,9 +2613,7 @@ export const MedicalHistory: React.FC = () => {
         setOcularLoadError('No se pudo cargar el examen ocular. Intenta nuevamente.');
         setOcularExams([]);
       } finally {
-        if (!cancelled) {
-          setIsLoadingOcular(false);
-        }
+        setIsLoadingOcular(false);
       }
     };
 
@@ -3164,46 +3171,58 @@ export const MedicalHistory: React.FC = () => {
       Authorization: `Bearer ${token}`,
     };
 
-    const normalizeInput = (value: string): string | null => {
-      const trimmed = value.trim();
-      return trimmed.length > 0 ? trimmed : null;
-    };
-
-    const payload = {
-      id_paciente: patientId,
-      motivo: normalizeInput(consultationForm.reason),
-      fecha: normalizeInput(consultationForm.date),
-      peso: normalizeInput(consultationForm.weight),
-      imc: normalizeInput(consultationForm.bodyMassIndex),
-      gc: normalizeInput(consultationForm.bodyFat),
-      pulso: normalizeInput(consultationForm.pulse),
-      fcm: normalizeInput(consultationForm.maxHeartRate),
-      tension: normalizeInput(consultationForm.bloodPressure),
-      brazo: normalizeInput(consultationForm.arm),
-      muslo: normalizeInput(consultationForm.thigh),
-      cintura: normalizeInput(consultationForm.waist),
-      cadera: normalizeInput(consultationForm.hip),
-      busto_pecho: normalizeInput(consultationForm.chest),
-      cuello: normalizeInput(consultationForm.neck),
-      hallazgo: normalizeInput(consultationForm.finding),
-      recomendacion: normalizeInput(consultationForm.recommendation),
-      observacion: normalizeInput(consultationForm.observation),
-      diagnostico: normalizeInput(consultationForm.diagnosis),
-      respiracion: normalizeInput(consultationForm.breathing),
-      evolucion: normalizeInput(consultationForm.evolution),
-      recomendacion_coach: normalizeInput(consultationForm.coachRecommendation),
-      indicaciones: normalizeInput(consultationForm.indications),
-    };
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
 
     try {
+      const normalizeInput = (value?: string | null): string | null => {
+        if (value === null || typeof value === 'undefined') {
+          return null;
+        }
+        const trimmed = String(value).trim();
+        return trimmed.length > 0 ? trimmed : null;
+      };
+
+      const payload = {
+        id_paciente: patientId,
+        motivo: normalizeInput(consultationForm.reason),
+        fecha: normalizeInput(consultationForm.date),
+        peso: normalizeInput(consultationForm.weight),
+        imc: normalizeInput(consultationForm.bodyMassIndex),
+        gc: normalizeInput(consultationForm.bodyFat),
+        pulso: normalizeInput(consultationForm.pulse),
+        fcm: normalizeInput(consultationForm.maxHeartRate),
+        tension: normalizeInput(consultationForm.bloodPressure),
+        brazo: normalizeInput(consultationForm.arm),
+        muslo: normalizeInput(consultationForm.thigh),
+        cintura: normalizeInput(consultationForm.waist),
+        cadera: normalizeInput(consultationForm.hip),
+        busto_pecho: normalizeInput(consultationForm.chest),
+        cuello: normalizeInput(consultationForm.neck),
+        hallazgo: normalizeInput(consultationForm.finding),
+        recomendacion: normalizeInput(consultationForm.recommendation),
+        observacion: normalizeInput(consultationForm.observation),
+        diagnostico: normalizeInput(consultationForm.diagnosis),
+        respiracion: normalizeInput(consultationForm.breathing),
+        evolucion: normalizeInput(consultationForm.evolution),
+        recomendacion_coach: normalizeInput(consultationForm.coachRecommendation),
+        indicaciones: normalizeInput(consultationForm.indications),
+      };
+
       const res = await fetch(`${apiBase}/consultation`, {
         method: 'POST',
         headers,
         body: JSON.stringify(payload),
+        signal: controller.signal,
       });
+      clearTimeout(timeoutId);
 
       if (!res.ok) {
-        throw new Error(`Failed to create consultation (${res.status})`);
+        const errorData = await res.json().catch(() => null);
+        const errorMessage = errorData?.message
+          ? (Array.isArray(errorData.message) ? errorData.message.join(', ') : errorData.message)
+          : `No se pudo guardar la consulta (${res.status})`;
+        throw new Error(errorMessage);
       }
 
       setConsultationSuccess('Consulta registrada correctamente.');
@@ -3211,9 +3230,16 @@ export const MedicalHistory: React.FC = () => {
       setIsConsultationModalOpen(false);
       setConsultationForm(createInitialConsultationForm());
       setConsultationsRefreshKey((key) => key + 1);
-    } catch (error) {
+    } catch (error: any) {
+      clearTimeout(timeoutId);
       console.error('Failed to save consultation', error);
-      setConsultationModalError('No se pudo guardar la consulta. Intenta nuevamente.');
+      const isTimeout = error?.name === 'AbortError';
+      const msg = isTimeout
+        ? 'La solicitud expiró (tiempo de espera agotado). Verifica que el servidor backend esté en ejecución.'
+        : error instanceof Error
+          ? error.message
+          : 'No se pudo guardar la consulta. Intenta nuevamente.';
+      setConsultationModalError(msg);
     } finally {
       setIsSavingConsultation(false);
     }
