@@ -77,6 +77,7 @@ const hydrateUser = (payload: any): User => {
   //   : [];
   return {
     id: payload?.id?.toString?.() ?? '',
+    patientId: payload?.patientId ?? payload?.id_paciente ?? undefined,
     username: payload?.username ?? '',
     email: payload?.email ?? '',
     firstName: payload?.firstName ?? '',

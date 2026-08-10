@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Play, Clock, CheckCircle, FileText, RefreshCw, Sparkles } from 'lucide-react';
 import { Card } from '../../components/UI/Card';
 import { Button } from '../../components/UI/Button';
@@ -277,14 +278,28 @@ export const PatientActivities: React.FC = () => {
 
   const apiBase = (import.meta as any).env?.VITE_API_BASE ?? 'http://localhost:3000';
   const normalizedApiBase = useMemo(() => sanitizeApiBase(apiBase), [apiBase]);
+  const [searchParams] = useSearchParams();
+  const queryUserId = useMemo(() => {
+    const rawUser = searchParams.get('userId');
+    const rawPatient = searchParams.get('patientId');
+    return parseNumericId(rawUser ?? rawPatient);
+  }, [searchParams]);
+
   const storedUserId = useMemo(() => readStoredUserId(), []);
   const resolvedUserId = useMemo(() => {
+    if (queryUserId !== null) {
+      return queryUserId;
+    }
+    const userPatientId = parseNumericId(user?.patientId);
+    if (userPatientId !== null) {
+      return userPatientId;
+    }
     const contextId = parseNumericId(user?.id ?? (user as { userId?: number } | null)?.userId);
     if (contextId !== null) {
       return contextId;
     }
     return storedUserId;
-  }, [storedUserId, user?.id]);
+  }, [queryUserId, storedUserId, user?.id, user?.patientId]);
   const hasAuthContext = Boolean(token) && resolvedUserId !== null;
   const dateFormatter = useMemo(() => new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium', timeStyle: 'short' }), []);
   const shortDateFormatter = useMemo(() => new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium' }), []);
