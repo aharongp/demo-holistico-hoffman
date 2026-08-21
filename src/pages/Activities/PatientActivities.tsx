@@ -133,9 +133,13 @@ const mapAssignmentToActivity = (assignment: BackendPatientInstrumentAssignment)
   const category = resolveCategory(assignment);
   const fallbackInstrumentId = assignment.instrumentTypeId ?? assignment.id;
 
+  const primaryTopicFromAssignment = Array.isArray(assignment.topics)
+    ? assignment.topics.map((t) => t?.trim()).find((t) => Boolean(t))
+    : null;
+
   return {
     id: assignment.id.toString(),
-    name: assignment.instrumentTypeName ?? `Instrumento #${fallbackInstrumentId}`,
+    name: primaryTopicFromAssignment || assignment.instrumentTypeName || `Instrumento #${fallbackInstrumentId}`,
     description: assignment.instrumentTypeDescription ?? assignment.origin ?? null,
     category,
     status,

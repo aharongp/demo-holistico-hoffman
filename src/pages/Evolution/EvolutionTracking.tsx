@@ -4823,7 +4823,7 @@ export const EvolutionTracking: React.FC = () => {
                     const topicTitleFromResponses = assignmentResponses
                       .map((response) => response.theme?.trim() ?? '')
                       .find((theme) => theme.length > 0) ?? null;
-                    const primaryTopic = topicTitleFromResponses;
+                    const primaryTopic = topicTitleFromResponses || normalizedTopics[0] || null;
                     const instrumentTitle =
                       primaryTopic ||
                       assignment.instrumentTypeName?.trim() ||

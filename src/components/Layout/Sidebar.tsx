@@ -89,7 +89,7 @@ const navigation: NavItem[] = [
     to: '/programs',
     icon: Calendar,
     label: 'Programas',
-    roles: ['administrator', 'trainer', 'therapist', 'doctor', 'coach'],
+    roles: ['administrator', 'trainer'],
   },
   {
     to: '/evolution',
