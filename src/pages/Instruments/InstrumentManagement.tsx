@@ -421,10 +421,19 @@ export const InstrumentManagement: React.FC = () => {
     setBulkAssignLoading(true);
     setBulkAssignResult(null);
 
+    const itemsToAssign = bulkSelectedInstrumentIds
+      .map((instrumentId) => visibleInstruments.find((item) => item.id === instrumentId))
+      .filter((inst): inst is typeof visibleInstruments[0] => Boolean(inst) && Boolean(inst.instrumentTypeId))
+      .map((inst) => ({
+        instrumentTypeId: inst.instrumentTypeId!,
+        array_tema: inst.subjectId ?? inst.name,
+        topics: [inst.subjectId ?? inst.name],
+      }));
+
     try {
       const result = await assignInstrumentsBulk({
         patientIds: bulkSelectedPatientIds,
-        instrumentTypeIds: selectedInstrumentTypeIdsForBulk,
+        items: itemsToAssign,
       });
 
       setBulkAssignResult(result);
@@ -433,7 +442,7 @@ export const InstrumentManagement: React.FC = () => {
     } finally {
       setBulkAssignLoading(false);
     }
-    }, [assignInstrumentsBulk, bulkSelectedInstrumentIds, bulkSelectedPatientIds, selectedInstrumentTypeIdsForBulk]);
+  }, [assignInstrumentsBulk, bulkSelectedInstrumentIds, bulkSelectedPatientIds, visibleInstruments]);
 
     // }, [assignInstrumentsBulk, bulkSelectedInstrumentIds, bulkSelectedPatientIds, isAdmin, selectedInstrumentTypeIdsForBulk]);
   // }, [

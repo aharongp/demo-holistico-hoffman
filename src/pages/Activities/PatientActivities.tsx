@@ -283,28 +283,26 @@ export const PatientActivities: React.FC = () => {
   const apiBase = (import.meta as any).env?.VITE_API_BASE ?? 'http://localhost:3000';
   const normalizedApiBase = useMemo(() => sanitizeApiBase(apiBase), [apiBase]);
   const [searchParams] = useSearchParams();
-  const queryUserId = useMemo(() => {
-    const rawUser = searchParams.get('userId');
-    const rawPatient = searchParams.get('patientId');
-    return parseNumericId(rawUser ?? rawPatient);
-  }, [searchParams]);
+  const explicitPatientId = useMemo(() => parseNumericId(searchParams.get('patientId')), [searchParams]);
+  const explicitUserId = useMemo(() => parseNumericId(searchParams.get('userId')), [searchParams]);
 
   const storedUserId = useMemo(() => readStoredUserId(), []);
-  const resolvedUserId = useMemo(() => {
-    if (queryUserId !== null) {
-      return queryUserId;
-    }
+
+  const targetPatientId = useMemo(() => {
+    if (explicitPatientId !== null) return explicitPatientId;
     const userPatientId = parseNumericId(user?.patientId);
-    if (userPatientId !== null) {
-      return userPatientId;
-    }
+    if (userPatientId !== null) return userPatientId;
+    return null;
+  }, [explicitPatientId, user?.patientId]);
+
+  const targetUserId = useMemo(() => {
+    if (explicitUserId !== null) return explicitUserId;
     const contextId = parseNumericId(user?.id ?? (user as { userId?: number } | null)?.userId);
-    if (contextId !== null) {
-      return contextId;
-    }
+    if (contextId !== null) return contextId;
     return storedUserId;
-  }, [queryUserId, storedUserId, user?.id, user?.patientId]);
-  const hasAuthContext = Boolean(token) && resolvedUserId !== null;
+  }, [explicitUserId, storedUserId, user?.id]);
+
+  const hasAuthContext = Boolean(token) && (targetPatientId !== null || targetUserId !== null);
   const dateFormatter = useMemo(() => new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium', timeStyle: 'short' }), []);
   const shortDateFormatter = useMemo(() => new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium' }), []);
 
@@ -347,7 +345,13 @@ export const PatientActivities: React.FC = () => {
       return;
     }
 
-    if (resolvedUserId === null) {
+    const endpoint = targetPatientId !== null
+      ? `${normalizedApiBase}/patient-instruments/patient/${targetPatientId}`
+      : targetUserId !== null
+        ? `${normalizedApiBase}/patient-instruments/user/${targetUserId}`
+        : null;
+
+    if (!endpoint) {
       setError('No se encontró un paciente asociado al usuario actual.');
       setActivities([]);
       return;
@@ -357,7 +361,7 @@ export const PatientActivities: React.FC = () => {
     setError(null);
 
     try {
-      const res = await fetch(`${normalizedApiBase}/patient-instruments/user/${resolvedUserId}`, {
+      const res = await fetch(endpoint, {
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
@@ -379,7 +383,7 @@ export const PatientActivities: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [normalizedApiBase, resolvedUserId, token]);
+  }, [normalizedApiBase, targetPatientId, targetUserId, token]);
 
   const loadResponses = useCallback(async () => {
     if (!token) {
@@ -388,7 +392,13 @@ export const PatientActivities: React.FC = () => {
       return;
     }
 
-    if (resolvedUserId === null) {
+    const responsesEndpoint = targetPatientId !== null
+      ? `${normalizedApiBase}/patient-instruments/responses/patient/${targetPatientId}`
+      : targetUserId !== null
+        ? `${normalizedApiBase}/patient-instruments/responses/user/${targetUserId}`
+        : null;
+
+    if (!responsesEndpoint) {
       setResponsesByAssignment({});
       setResponsesError('No se encontró un paciente asociado al usuario actual.');
       return;
@@ -398,7 +408,7 @@ export const PatientActivities: React.FC = () => {
     setResponsesError(null);
 
     try {
-      const res = await fetch(`${normalizedApiBase}/patient-instruments/responses/user/${resolvedUserId}`, {
+      const res = await fetch(responsesEndpoint, {
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
@@ -444,7 +454,7 @@ export const PatientActivities: React.FC = () => {
     } finally {
       setIsLoadingResponses(false);
     }
-  }, [normalizedApiBase, resolvedUserId, token]);
+  }, [normalizedApiBase, targetPatientId, targetUserId, token]);
 
   const loadInstrumentForAssignment = useCallback(
     async (assignment: BackendPatientInstrumentAssignment): Promise<Instrument | null> => {

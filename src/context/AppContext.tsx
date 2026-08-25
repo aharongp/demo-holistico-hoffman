@@ -30,9 +30,16 @@ type ProgramActivityInput = {
 
 type ProgramActivityUpdateInput = Partial<ProgramActivityInput>;
 
+export type BulkAssignItemInput = {
+  instrumentTypeId: string;
+  array_tema?: string | null;
+  topics?: string[] | null;
+};
+
 type BulkAssignInstrumentsInput = {
   patientIds: string[];
-  instrumentTypeIds: string[];
+  instrumentTypeIds?: string[];
+  items?: BulkAssignItemInput[];
   assignedAt?: string | null;
   validUntil?: string | null;
 };
@@ -1047,7 +1054,7 @@ interface AppContextType {
   createQuestion: (instrumentId: string, input: QuestionInput) => Promise<Question>;
   updateQuestion: (instrumentId: string, questionId: string, input: QuestionInput) => Promise<Question>;
   deleteQuestion: (instrumentId: string, questionId: string) => Promise<boolean>;
-  assignInstrumentToPatients: (instrumentTypeId: string, patientIds: string[]) => Promise<void>;
+  assignInstrumentToPatients: (instrumentTypeId: string, patientIds: string[], subjectId?: string | null) => Promise<void>;
   assignInstrumentsBulk: (input: BulkAssignInstrumentsInput) => Promise<BulkAssignInstrumentsResult>;
   getInstrumentTopics: (instrumentId: string) => Promise<InstrumentTopic[]>;
   createInstrumentTopic: (instrumentId: string, input: InstrumentTopicInput) => Promise<InstrumentTopic>;
@@ -2772,7 +2779,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   }, [apiBase]);
 
-  const assignInstrumentToPatients = useCallback(async (instrumentTypeId: string, patientIds: string[]): Promise<void> => {
+  const assignInstrumentToPatients = useCallback(async (
+    instrumentTypeId: string,
+    patientIds: string[],
+    subjectId?: string | null,
+  ): Promise<void> => {
     const numericInstrumentTypeId = Number(instrumentTypeId);
     if (Number.isNaN(numericInstrumentTypeId)) {
       throw new Error('El tipo de instrumento es inválido.');
@@ -2800,15 +2811,22 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
 
       try {
+        const bodyPayload: Record<string, unknown> = {
+          id_paciente: numericPatientId,
+          id_instrumento_tipo: numericInstrumentTypeId,
+          disponible: 'paciente',
+        };
+
+        if (subjectId && subjectId.trim().length > 0) {
+          bodyPayload.array_tema = subjectId.trim();
+        }
+
         const res = await fetch(`${apiBase}/patient-instruments`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({
-            id_paciente: numericPatientId,
-            id_instrumento_tipo: numericInstrumentTypeId,
-          }),
+          body: JSON.stringify(bodyPayload),
         });
 
         if (!res.ok) {
@@ -2843,14 +2861,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       throw new Error('Selecciona al menos un paciente.');
     }
 
-    if (!normalizedInstrumentTypeIds.length) {
-      throw new Error('Selecciona al menos un tipo de instrumento.');
-    }
-
     const payload: Record<string, unknown> = {
       patientIds: uniquePatientIds,
-      instrumentTypeIds: normalizedInstrumentTypeIds,
     };
+
+    if (Array.isArray(input.items) && input.items.length > 0) {
+      payload.items = input.items;
+    } else if (normalizedInstrumentTypeIds.length > 0) {
+      payload.instrumentTypeIds = Array.from(new Set(normalizedInstrumentTypeIds));
+    } else {
+      throw new Error('Selecciona al menos un tipo de instrumento o instrumento.');
+    }
 
     if (typeof input.assignedAt === 'string' && input.assignedAt.trim().length) {
       payload.assignedAt = input.assignedAt.trim();

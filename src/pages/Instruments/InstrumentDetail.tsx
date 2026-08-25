@@ -882,7 +882,11 @@ export const InstrumentDetail: React.FC = () => {
     setAssignError(null);
 
     try {
-      await assignInstrumentToPatients(instrument.instrumentTypeId, selectedPatientIds);
+      await assignInstrumentToPatients(
+        instrument.instrumentTypeId,
+        selectedPatientIds,
+        instrument.subjectId ?? instrument.name,
+      );
       setAssignSuccessMessage(`Instrumento asignado a ${selectedPatientIds.length} paciente${selectedPatientIds.length === 1 ? '' : 's'}.`);
       setIsAssignModalOpen(false);
       setSelectedPatientIds([]);
