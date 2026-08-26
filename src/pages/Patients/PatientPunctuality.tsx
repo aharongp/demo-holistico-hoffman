@@ -17,11 +17,20 @@ export const PatientPunctuality: React.FC = () => {
   const isPatientRole = user?.role === 'patient' || user?.role === 'student';
 
   const ownPatientRecord = useMemo(() => {
-    if (!isPatientRole || !user?.id) {
+    if (!isPatientRole || (!user?.id && !user?.patientId)) {
       return null;
     }
-    return patients.find((patient) => patient.userId === user.id || patient.id === user.id) ?? null;
-  }, [isPatientRole, patients, user?.id]);
+    const targetPatientId = user?.patientId ? String(user.patientId) : null;
+    const targetUserId = user?.id ? String(user.id) : null;
+
+    return patients.find((patient) => {
+      const candId = String(patient.id);
+      const candUserId = patient.userId ? String(patient.userId) : null;
+      if (targetPatientId && candId === targetPatientId) return true;
+      if (targetUserId && (candUserId === targetUserId || candId === targetUserId)) return true;
+      return false;
+    }) ?? null;
+  }, [isPatientRole, patients, user?.id, user?.patientId]);
 
   useEffect(() => {
     if (!isPatientRole || !ownPatientRecord) {

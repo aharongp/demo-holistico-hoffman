@@ -193,18 +193,34 @@ export const PatientDetail: React.FC = () => {
   const isSelfService = user?.role === 'patient' || user?.role === 'student';
 
   const ownPatientRecord = useMemo(() => {
-    if (!isSelfService || !user?.id) {
+    if (!isSelfService || (!user?.id && !user?.patientId)) {
       return null;
     }
-    return patients.find((candidate) => candidate.userId === user.id || candidate.id === user.id) ?? null;
-  }, [isSelfService, patients, user?.id]);
+    const targetPatientId = user?.patientId ? String(user.patientId) : null;
+    const targetUserId = user?.id ? String(user.id) : null;
+
+    return patients.find((candidate) => {
+      const candId = String(candidate.id);
+      const candUserId = candidate.userId ? String(candidate.userId) : null;
+
+      // 1. Match strictly by patientId (paciente.id)
+      if (targetPatientId && candId === targetPatientId) {
+        return true;
+      }
+      // 2. Match strictly by userId (paciente.id_usuario === usuario.id)
+      if (targetUserId && candUserId && candUserId === targetUserId) {
+        return true;
+      }
+      return false;
+    }) ?? null;
+  }, [isSelfService, patients, user?.id, user?.patientId]);
 
   useEffect(() => {
     if (!isSelfService || !ownPatientRecord) {
       return;
     }
 
-    if (!patientId || patientId !== ownPatientRecord.id) {
+    if (!patientId || String(patientId) !== String(ownPatientRecord.id)) {
       navigate(`/patients/${ownPatientRecord.id}`, { replace: true });
     }
   }, [isSelfService, navigate, ownPatientRecord, patientId]);
@@ -213,7 +229,8 @@ export const PatientDetail: React.FC = () => {
     if (!patientId) {
       return null;
     }
-    return patients.find((item) => item.id === patientId) ?? null;
+    const pid = String(patientId);
+    return patients.find((item) => String(item.id) === pid) ?? null;
   }, [patientId, patients]);
 
   const assignedProgram: Program | null = useMemo(() => {
