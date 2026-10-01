@@ -1099,72 +1099,6 @@ export const useApp = () => {
 };
 
 // Mock data
-const mockPatients: Patient[] = [
-  {
-    id: '1',
-    userId: '1',
-    firstName: 'Jane',
-    lastName: 'Doe',
-    email: 'jane.doe@email.com',
-    cedula: 'V-12345678',
-    dateOfBirth: new Date('1990-05-15'),
-    gender: 'female',
-    phone: '+1234567890',
-    assignedTherapists: [],
-    createdAt: new Date('2024-01-01'),
-    isActive: true,
-  },
-  {
-    id: '2',
-    userId: '2',
-    firstName: 'John',
-    lastName: 'Smith',
-    email: 'john.smith@email.com',
-    cedula: 'V-87654321',
-    dateOfBirth: new Date('1985-10-20'),
-    gender: 'male',
-    phone: '+1234567891',
-    assignedTherapists: [],
-    createdAt: new Date('2024-01-02'),
-    isActive: true,
-  },
-];
-
-const mockInstruments: Instrument[] = [
-  {
-    id: '1',
-    name: 'Anxiety Assessment',
-    description: 'Comprehensive anxiety evaluation instrument',
-    category: 'psychological',
-    questions: [
-      {
-        id: '1',
-        text: 'How often do you feel anxious?',
-        type: 'scale',
-        required: true,
-        order: 1,
-      },
-      {
-        id: '2',
-        text: 'What triggers your anxiety the most?',
-        type: 'text',
-        required: false,
-        order: 2,
-      },
-    ],
-    estimatedDuration: 15,
-    isActive: true,
-    createdAt: new Date('2024-01-01'),
-    instrumentTypeId: '1',
-    subjectId: '1',
-    availability: 'web',
-    resource: 'Documento PDF',
-    resultDelivery: null,
-    colorResponse: 0,
-    topics: [],
-  },
-];
-
 const mockDashboardStats: DashboardStats = {
   totalPatients: 150,
   totalUsers: 25,
@@ -1190,24 +1124,11 @@ const mockDashboardStats: DashboardStats = {
 };
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [patients, setPatients] = useState<Patient[]>(mockPatients);
-  const [instruments, setInstruments] = useState<Instrument[]>(mockInstruments);
-  const instrumentsRef = useRef<Instrument[]>(mockInstruments);
+  const [patients, setPatients] = useState<Patient[]>([]);
+  const [instruments, setInstruments] = useState<Instrument[]>([]);
+  const instrumentsRef = useRef<Instrument[]>([]);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
-  const mockPrograms: Program[] = [
-    {
-      id: 'p1',
-      name: 'Wellness Starter',
-      description: 'Introductory program for new patients',
-      instruments: ['1'],
-      isActive: true,
-      createdAt: new Date('2024-01-01'),
-      updatedAt: new Date('2024-01-02'),
-      createdBy: 'system',
-    },
-  ];
-
-  const [programs, setPrograms] = useState<Program[]>(mockPrograms);
+  const [programs, setPrograms] = useState<Program[]>([]);
   const [ribbons, setRibbons] = useState<Ribbon[]>([]);
   const [instrumentTypes, setInstrumentTypes] = useState<InstrumentType[]>([]);
   const [evolutionEntries, setEvolutionEntries] = useState<EvolutionEntry[]>([]);
@@ -1483,7 +1404,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     const loadPatients = async () => {
       if (!token) {
-        setPatients(mockPatients);
+        setPatients([]);
         return;
       }
 
@@ -1504,12 +1425,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (mapped.length > 0) {
           setPatients(mapped);
         } else {
-          setPatients(mockPatients);
+          setPatients([]);
         }
       } catch (err) {
         if (!cancelled) {
-          setPatients(mockPatients);
-          console.error('Error loading patients from API, using mock data.', err);
+          setPatients([]);
+          console.error('Error loading patients from API.', err);
         }
       }
     };
@@ -1533,13 +1454,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (!res.ok) throw new Error(`Failed to fetch programs: ${res.status}`);
         const data = await res.json();
         if (!mounted) return;
-        if (Array.isArray(data) && data.length > 0) {
-          // map backend program shape to frontend Program
-          const mapped = data.map((p: any) => mapProgramFromApi(p, currentUserDisplayName));
-          setPrograms(mapped);
-        }
+        const mapped = Array.isArray(data) ? data.map((p: any) => mapProgramFromApi(p, currentUserDisplayName)) : [];
+        setPrograms(mapped);
       } catch (err) {
-        console.error('Error loading programs from API, keeping mock programs.', err);
+        console.error('Error loading programs from API.', err);
       }
     })();
     return () => { mounted = false; };
@@ -1628,7 +1546,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           }
         }
       } catch (err) {
-        console.error('Error loading instruments from API, keeping mock instruments.', err);
+        console.error('Error loading instruments from API.', err);
       }
     })();
     return () => { mounted = false; };
@@ -2272,16 +2190,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
               };
             }
 
-            const labels = answers.map((answer) => answer.label).filter((label) => label.length > 0);
-            // const normalizedOptions: QuestionOption[] = labels.map((label) => ({
-            //   label,
-            //   value: label,
-            // }));
+            const options = answers.filter(answer => answer.label?.length).map(answer => ({
+              label: answer.label, value: answer.value ?? answer.label,
+            }));
             return {
               ...question,
               answers,
-              options: labels.length ? labels : question.options,
-              // options: normalizedOptions.length ? normalizedOptions : question.options,
+              options: options.length ? options : question.options,
             };
           });
         } catch (answersError) {

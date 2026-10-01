@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, BookOpen, ChevronDown, Edit3, Loader2, Plus, Search, Trash2, UserPlus2 } from 'lucide-react';
 import { Card } from '../../components/UI/Card';
 import { Button } from '../../components/UI/Button';
-import { Table } from '../../components/UI/Table';
+import { Table, type Column } from '../../components/UI/Table';
 import { Modal } from '../../components/UI/Modal';
 import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
@@ -365,7 +365,7 @@ export const InstrumentDetail: React.FC = () => {
 
       if (Array.isArray(question.options) && question.options.length) {
         const options = question.options.reduce<PreviewOption[]>((acc, option, index) => {
-          const label = typeof option === 'string' ? option.trim() : '';
+          const label = option.label?.trim() ?? '';
           if (!label.length) {
             return acc;
           }
@@ -904,7 +904,7 @@ export const InstrumentDetail: React.FC = () => {
   }, [assignInstrumentToPatients, instrument, selectedPatientIds]);
 
   const questionColumns = useMemo(() => {
-    const columns = [
+    const columns: Column<Question>[] = [
       {
         key: 'order',
         header: 'Orden',
@@ -988,7 +988,7 @@ export const InstrumentDetail: React.FC = () => {
     return columns;
   }, [formatQuestionType, handleDeleteQuestion, handleOpenEditForm, isAdmin, isSaving, pendingQuestionId]);
   const topicColumns = useMemo(() => {
-    const columns = [
+    const columns: Column<InstrumentTopic>[] = [
       {
         key: 'name',
         header: 'Nombre',

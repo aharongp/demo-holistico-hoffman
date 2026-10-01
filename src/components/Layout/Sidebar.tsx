@@ -12,7 +12,6 @@ import {
   Activity,
   BarChart3,
   X,
-  Shield,
   Settings,
   Bell,
   User,

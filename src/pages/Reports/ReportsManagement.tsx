@@ -597,10 +597,6 @@ export const ReportsManagement: React.FC = () => {
 
   const totalPatients = patients.length;
   const filteredPatientCount = filteredPatients.length;
-  const activePatients = useMemo(
-    () => enrichedPatients.filter(row => row.base.isActive).length,
-    [enrichedPatients]
-  );
   const assignedProgramCount = useMemo(
     () => enrichedPatients.filter(row => Boolean(row.base.programId)).length,
     [enrichedPatients]

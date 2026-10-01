@@ -4,7 +4,7 @@ import { ArrowLeft, Calendar, Clock, Edit, FileText, Loader2, Plus, Trash2, User
 import { Card } from '../../components/UI/Card';
 import { Button } from '../../components/UI/Button';
 import { Modal } from '../../components/UI/Modal';
-import { Table } from '../../components/UI/Table';
+import { Table, type Column } from '../../components/UI/Table';
 import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
 import { ProgramActivity, ProgramDetails } from '../../types';
@@ -242,7 +242,7 @@ export const ProgramDetail: React.FC = () => {
   }, [program, sortedActivities]);
 
   const activityColumns = useMemo(() => {
-    const base = [
+    const base: Column<ProgramActivity>[] = [
       {
         key: 'name',
         header: 'Actividad',

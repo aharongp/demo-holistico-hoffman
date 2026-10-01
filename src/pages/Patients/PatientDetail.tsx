@@ -1,3 +1,4 @@
+import { PatientStudies } from '../../components/Patients/PatientStudies';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Calendar, Clock, Percent, AlertCircle, ListChecks, CheckCircle } from 'lucide-react';
@@ -593,38 +594,6 @@ export const PatientDetail: React.FC = () => {
     }
   };
 
-  if (!patientId || !patient) {
-    if (isSelfService) {
-      return (
-        <section className="px-4 py-8 sm:px-8">
-          <Card className="border border-amber-100 bg-white text-sm text-slate-600">
-            <p>No pudimos localizar tu expediente de puntualidad. Solicita asistencia al equipo de soporte.</p>
-          </Card>
-        </section>
-      );
-    }
-
-    return (
-      <section className="px-4 py-8 sm:px-8">
-        <Card className="border border-red-100 bg-white">
-          <div className="flex flex-col gap-4">
-            <div className="flex items-center gap-3 text-red-600">
-              <AlertCircle className="h-5 w-5" />
-              <p className="text-sm font-semibold">Paciente no encontrado</p>
-            </div>
-            <p className="text-sm text-slate-600">
-              No pudimos localizar la ficha del paciente solicitada. Verifica el enlace e intenta nuevamente.
-            </p>
-            <div>
-              <Button variant="outline" onClick={() => navigate('/patients')}>
-                <ArrowLeft className="mr-2 h-4 w-4" /> Volver a pacientes
-              </Button>
-            </div>
-          </div>
-        </Card>
-      </section>
-    );
-  }
   const punctualityColumns = useMemo(() => ([
     {
       key: 'activity',
@@ -668,6 +637,40 @@ export const PatientDetail: React.FC = () => {
     },
   ]), []);
 
+
+  if (!patientId || !patient) {
+    if (isSelfService) {
+      return (
+        <section className="px-4 py-8 sm:px-8">
+          <Card className="border border-amber-100 bg-white text-sm text-slate-600">
+            <p>No pudimos localizar tu expediente de puntualidad. Solicita asistencia al equipo de soporte.</p>
+          </Card>
+        </section>
+      );
+    }
+
+    return (
+      <section className="px-4 py-8 sm:px-8">
+        <Card className="border border-red-100 bg-white">
+          <div className="flex flex-col gap-4">
+            <div className="flex items-center gap-3 text-red-600">
+              <AlertCircle className="h-5 w-5" />
+              <p className="text-sm font-semibold">Paciente no encontrado</p>
+            </div>
+            <p className="text-sm text-slate-600">
+              No pudimos localizar la ficha del paciente solicitada. Verifica el enlace e intenta nuevamente.
+            </p>
+            <div>
+              <Button variant="outline" onClick={() => navigate('/patients')}>
+                <ArrowLeft className="mr-2 h-4 w-4" /> Volver a pacientes
+              </Button>
+            </div>
+          </div>
+        </Card>
+      </section>
+    );
+  }
+
   return (
     <section className="space-y-8 px-4 py-8 sm:px-8">
       {!isSelfService && (
@@ -693,10 +696,10 @@ export const PatientDetail: React.FC = () => {
               {patient.cedula ? ` • ${patient.cedula}` : ''}
             </p>
           </div>
-          {assignedProgram ? (
+          {patient.programId ? (
             <div className="rounded-3xl border border-violet-200 bg-violet-50 px-4 py-3 text-sm text-violet-700">
               <p className="text-[0.7rem] font-semibold uppercase tracking-[0.35em] text-violet-500">Programa asignado</p>
-              <p className="text-base font-semibold text-violet-700">{assignedProgram.name}</p>
+              <p className="text-base font-semibold text-violet-700">{assignedProgram?.name ?? `Programa ${patient.programId}`}</p>
             </div>
           ) : (
             <div className="rounded-3xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
@@ -706,6 +709,8 @@ export const PatientDetail: React.FC = () => {
           )}
         </div>
       </Card>
+
+      <PatientStudies key={patient.id} patientId={patient.id} />
 
       <Card className="border border-white/50 bg-white/85 backdrop-blur-xl">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

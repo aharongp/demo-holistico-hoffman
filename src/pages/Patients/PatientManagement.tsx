@@ -200,31 +200,43 @@ export const PatientManagement: React.FC = () => {
     setIsModalOpen(true);
   };
 
+  const [assignmentError, setAssignmentError] = useState<string | null>(null);
+  const [isAssigningProgram, setIsAssigningProgram] = useState(false);
+
   const handleOpenAssignModal = (patient: Patient) => {
     if (!canAssignProgram) {
       return;
     }
-    setSelectedPatientForAssign(patient);
+    setAssignmentError(null);
+    setSelectedPatientForAssign(patients.find(item => item.id === patient.id) ?? patient);
     setIsAssignModalOpen(true);
   };
 
   const handleAssignProgram = async (programId: string) => {
-    if (!selectedPatientForAssign) return;
+    if (!selectedPatientForAssign || isAssigningProgram) return;
+    setIsAssigningProgram(true);
+    setAssignmentError(null);
     try {
       await assignProgramToPatient(selectedPatientForAssign.id, programId);
       setIsAssignModalOpen(false);
     } catch (error) {
-      console.error('No se pudo asignar el programa al paciente', error);
+      setAssignmentError(error instanceof Error ? error.message : 'No se pudo asignar el programa al paciente');
+    } finally {
+      setIsAssigningProgram(false);
     }
   };
 
   const handleRemoveProgram = async () => {
-    if (!selectedPatientForAssign) return;
+    if (!selectedPatientForAssign || isAssigningProgram) return;
+    setIsAssigningProgram(true);
+    setAssignmentError(null);
     try {
       await assignProgramToPatient(selectedPatientForAssign.id, null);
       setIsAssignModalOpen(false);
     } catch (error) {
-      console.error('No se pudo quitar el programa del paciente', error);
+      setAssignmentError(error instanceof Error ? error.message : 'No se pudo quitar el programa del paciente');
+    } finally {
+      setIsAssigningProgram(false);
     }
   };
 
@@ -642,6 +654,7 @@ export const PatientManagement: React.FC = () => {
       >
         {selectedPatientForAssign && (
           <div className="space-y-4">
+            {assignmentError && <p role="alert" className="text-sm text-red-600">{assignmentError}</p>}
             <p className="text-sm text-slate-600">Selecciona el protocolo más adecuado para {selectedPatientForAssign.firstName}.</p>
             {selectedPatientForAssign.programId && (
               <div className="flex items-center justify-between rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
@@ -649,7 +662,7 @@ export const PatientManagement: React.FC = () => {
                   <p className="text-xs font-semibold uppercase tracking-[0.3em] text-amber-600">Programa actual</p>
                   <p className="font-semibold text-amber-800">{programNameById[selectedPatientForAssign.programId] ?? 'Programa sin nombre'}</p>
                 </div>
-                <Button variant="outline" size="sm" onClick={handleRemoveProgram}>
+                <Button variant="outline" size="sm" disabled={isAssigningProgram} onClick={handleRemoveProgram}>
                   Quitar programa
                 </Button>
               </div>
@@ -661,7 +674,7 @@ export const PatientManagement: React.FC = () => {
                     <div className="text-sm font-semibold text-slate-900">{program.name}</div>
                     <div className="text-xs text-slate-500">{program.description}</div>
                   </div>
-                  <Button size="sm" onClick={() => handleAssignProgram(program.id)}>Asignar</Button>
+                  <Button size="sm" disabled={isAssigningProgram} onClick={() => handleAssignProgram(program.id)}>Asignar</Button>
                 </div>
               ))}
             </div>

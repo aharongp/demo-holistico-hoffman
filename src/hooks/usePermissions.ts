@@ -1,5 +1,4 @@
 import { useAuth } from '../context/AuthContext';
-import { UserRole } from '../types';
 // type PermissionKey =
 //   | 'instruments.view'
 //   | 'instruments.create'

@@ -1,3 +1,8 @@
+import { InstrumentResponseChart } from '../../components/Patients/InstrumentResponseChart';
+import { format } from 'date-fns';
+import { PatientStudies } from '../../components/Patients/PatientStudies';
+import { prepareUpload } from '../../utils/uploads';
+import { assignedInstrumentId, expandAssignedInstruments, type AssignmentInstruments } from '../../utils/assignedInstruments';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Plus, TrendingUp, User, Heart, Scale, Droplets, RefreshCw, Edit, Trash2, Search, LineChart, Ribbon, LayoutDashboard, Activity, ClipboardList, FileText, BarChart3 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
@@ -452,7 +457,7 @@ type HeartRateFormKey =
 
 type DoctorTabId = 'summary' | 'charts' | 'records' | 'results' | 'instruments';
 
-type BackendPatientInstrumentAssignment = {
+type BackendPatientInstrumentAssignment = AssignmentInstruments & {
   id: number;
   patientId: number | null;
   instrumentTypeId: number | null;
@@ -613,6 +618,7 @@ type EvolutionFormData = {
   heartRateAfter30Minutes: string;
   heartRateAfter45Minutes: string;
   heartRateSessionType: string;
+  recordedDate: string;
   bodyMassWeight: string;
   bodyMassNeck: string;
   bodyMassBust: string;
@@ -640,6 +646,7 @@ const INITIAL_FORM_DATA: EvolutionFormData = {
   heartRateAfter30Minutes: '',
   heartRateAfter45Minutes: '',
   heartRateSessionType: '',
+  recordedDate: format(new Date(), 'yyyy-MM-dd'),
   bodyMassWeight: '',
   bodyMassNeck: '',
   bodyMassBust: '',
@@ -688,8 +695,8 @@ const extractDateParts = (value: string | null | undefined) => {
   }
 
   return {
-    date: `${reference.getFullYear()}-${padTwo(reference.getMonth() + 1)}-${padTwo(reference.getDate())}`,
-    time: `${padTwo(reference.getHours())}:${padTwo(reference.getMinutes())}`,
+    date: `${reference.getUTCFullYear()}-${padTwo(reference.getUTCMonth() + 1)}-${padTwo(reference.getUTCDate())}`,
+    time: `${padTwo(reference.getUTCHours())}:${padTwo(reference.getUTCMinutes())}`,
   };
 };
 
@@ -716,7 +723,7 @@ const combineDateAndTimeToIso = (date: string, time: string): string | undefined
     }
   }
 
-  const combined = new Date(year, (month || 1) - 1, day || 1, hours, minutes, 0, 0);
+  const combined = new Date(Date.UTC(year, (month || 1) - 1, day || 1, hours, minutes, 0, 0));
   return Number.isNaN(combined.getTime()) ? undefined : combined.toISOString();
 };
 
@@ -768,12 +775,12 @@ const parseDateInput = (value: string, endOfDay: boolean): number | null => {
   if (!value) {
     return null;
   }
-  const base = new Date(`${value}T00:00:00`);
+  const base = new Date(`${value}T00:00:00.000Z`);
   if (Number.isNaN(base.getTime())) {
     return null;
   }
   if (endOfDay) {
-    base.setHours(23, 59, 59, 999);
+    base.setUTCHours(23, 59, 59, 999);
   }
   return base.getTime();
 };
@@ -783,16 +790,6 @@ export const EvolutionTracking: React.FC = () => {
   const { addEvolutionEntry, patients, programs, ribbons, reloadRibbons, updatePatient, getInstrumentDetails } = useApp();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
-  const selectedPatientUserId = useMemo(() => {
-    if (!selectedPatient) {
-      return null;
-    }
-    const primary = parseNumericId(selectedPatient.userId ?? null);
-    if (primary !== null) {
-      return primary;
-    }
-    return parseNumericId(selectedPatient.id);
-  }, [selectedPatient]);
   const selectedPatientFullName = useMemo(() => {
     if (!selectedPatient) {
       return '';
@@ -804,7 +801,7 @@ export const EvolutionTracking: React.FC = () => {
   const [formData, setFormData] = useState<EvolutionFormData>(() => ({ ...INITIAL_FORM_DATA }));
   const [bodyMassPhotoResetKey, setBodyMassPhotoResetKey] = useState(0);
   const resetEvolutionForm = useCallback(() => {
-    setFormData({ ...INITIAL_FORM_DATA });
+    setFormData({ ...INITIAL_FORM_DATA, recordedDate: format(new Date(), 'yyyy-MM-dd') });
     setBodyMassPhotoResetKey(value => value + 1);
   }, []);
   const [vitals, setVitals] = useState<PatientVitalsSummary | null>(null);
@@ -889,9 +886,9 @@ export const EvolutionTracking: React.FC = () => {
   const [instrumentAssignments, setInstrumentAssignments] = useState<InstrumentAssignmentItem[]>([]);
   const [isLoadingInstrumentAssignments, setIsLoadingInstrumentAssignments] = useState(false);
   const [instrumentAssignmentsError, setInstrumentAssignmentsError] = useState<string | null>(null);
-  const [instrumentCommentDrafts, setInstrumentCommentDrafts] = useState<Record<number, string>>({});
-  const [instrumentCommentSavingId, setInstrumentCommentSavingId] = useState<number | null>(null);
-  const [instrumentActionMessages, setInstrumentActionMessages] = useState<Record<number, { type: 'success' | 'error'; message: string } | null>>({});
+  const [instrumentCommentDrafts, setInstrumentCommentDrafts] = useState<Record<string, string>>({});
+  const [instrumentCommentSavingId, setInstrumentCommentSavingId] = useState<string | null>(null);
+  const [instrumentActionMessages, setInstrumentActionMessages] = useState<Record<string, { type: 'success' | 'error'; message: string } | null>>({});
   const [instrumentDeletingId, setInstrumentDeletingId] = useState<number | null>(null);
   const [instrumentAssignmentsRefreshKey, setInstrumentAssignmentsRefreshKey] = useState(0);
   const [instrumentCache, setInstrumentCache] = useState<Record<number, Instrument | null>>({});
@@ -1079,7 +1076,7 @@ export const EvolutionTracking: React.FC = () => {
   const filteredPatientCount = filteredPatients.length;
   const totalPatients = useMemo(() => patients.length, [patients]);
   const dateFormatter = useMemo(
-    () => new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium', timeStyle: 'short' }),
+    () => new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium', timeZone: 'UTC' }),
     []
   );
   const formatRecordedAt = useCallback(
@@ -1164,7 +1161,7 @@ export const EvolutionTracking: React.FC = () => {
   };
 
   type EditState =
-    | { type: 'weight' | 'pulse' | 'glycemia'; record: NumericVitalRecord }
+    | { type: 'weight' | 'pulse' | 'glycemia' | 'body_mass'; record: NumericVitalRecord }
     | { type: 'blood_pressure'; record: BloodPressureRecord }
     | { type: 'heart_rate'; record: HeartRateRecoveryRecord };
 
@@ -1205,9 +1202,9 @@ export const EvolutionTracking: React.FC = () => {
       return;
     }
 
-    const patientUserId = selectedPatient?.userId;
+    const patientId = selectedPatient?.id;
 
-    if (!patientUserId) {
+    if (!patientId) {
       setMedicalHistoryData(createInitialMedicalHistory());
       setMedicalHistoryNotice('El paciente no tiene un usuario vinculado para consultar la historia médica.');
       setMedicalHistoryError(null);
@@ -1233,7 +1230,7 @@ export const EvolutionTracking: React.FC = () => {
       setMedicalHistorySuccess(null);
 
       try {
-        const response = await fetch(`${apiBase}/patient/user/${patientUserId}/history`, {
+        const response = await fetch(`${apiBase}/patient/${patientId}/history`, {
           method: 'GET',
           headers: {
             Authorization: `Bearer ${token}`,
@@ -1276,7 +1273,7 @@ export const EvolutionTracking: React.FC = () => {
       isCancelled = true;
       controller.abort();
     };
-  }, [apiBase, selectedPatient?.userId, shouldShowDoctorTabs, token]);
+  }, [apiBase, selectedPatient?.id, shouldShowDoctorTabs, token]);
 
   useEffect(() => {
     if (!shouldShowDoctorTabs) {
@@ -1629,61 +1626,15 @@ export const EvolutionTracking: React.FC = () => {
 
   const loadInstrumentForAssignment = useCallback(
     async (assignment: BackendPatientInstrumentAssignment): Promise<Instrument | null> => {
-      const typeId = assignment.instrumentTypeId;
-      if (!typeId) {
-        return null;
-      }
-
-      const cached = instrumentCache[typeId];
-      if (typeof cached !== 'undefined') {
-        return cached;
-      }
-
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-      };
-
-      if (token) {
-        headers.Authorization = `Bearer ${token}`;
-      }
-
-      try {
-        const response = await fetch(`${normalizedApiBase}/instruments/by-type/${typeId}`, {
-          headers,
-        });
-
-        if (!response.ok) {
-          throw new Error(`Falló la carga con estado ${response.status}`);
-        }
-
-        const payload = await response.json().catch(() => []);
-        const instrumentCandidate = Array.isArray(payload) && payload.length ? payload[0] : null;
-
-        if (!instrumentCandidate) {
-          setInstrumentCache((prev) => ({ ...prev, [typeId]: null }));
-          return null;
-        }
-
-        const rawInstrumentId =
-          instrumentCandidate?.id ??
-          instrumentCandidate?.instrumento_id ??
-          instrumentCandidate?.instrumentId;
-        const numericInstrumentId = Number(rawInstrumentId);
-
-        if (!Number.isFinite(numericInstrumentId)) {
-          throw new Error('No se pudo determinar el identificador del instrumento.');
-        }
-
-        const instrument = await getInstrumentDetails(String(numericInstrumentId));
-        setInstrumentCache((prev) => ({ ...prev, [typeId]: instrument ?? null }));
-        return instrument ?? null;
-      } catch (error) {
-        console.error('Error al cargar el detalle del instrumento', error);
-        setInstrumentCache((prev) => ({ ...prev, [typeId]: null }));
-        return null;
-      }
+      const instrumentId = assignedInstrumentId(assignment);
+      const cached = instrumentCache[instrumentId];
+      if (cached) return cached;
+      const instrument = await getInstrumentDetails(String(instrumentId));
+      if (!instrument) throw new Error('No se pudo obtener el cuestionario asignado.');
+      setInstrumentCache(prev => ({ ...prev, [instrumentId]: instrument }));
+      return instrument;
     },
-    [getInstrumentDetails, instrumentCache, normalizedApiBase, token],
+    [getInstrumentDetails, instrumentCache],
   );
 
   const resolveInstrumentIdForAssignment = useCallback(
@@ -1799,16 +1750,16 @@ export const EvolutionTracking: React.FC = () => {
       });
 
       const responsesRecord: Record<number, BackendInstrumentResponse[]> = {};
-      const items = assignmentsPayload.map<InstrumentAssignmentItem>((assignment) => {
-        const responseList = [...(responsesByAssignment.get(assignment.id) ?? [])].sort((a, b) => {
+      const items = assignmentsPayload.flatMap(expandAssignedInstruments).map<InstrumentAssignmentItem>((assignment) => {
+        const responseList = [...(responsesByAssignment.get(assignment.id) ?? [])].filter(response => response.instrumentId === assignment.instrumentId).sort((a, b) => {
           const orderDiff = (a.order ?? 0) - (b.order ?? 0);
           if (orderDiff !== 0) {
             return orderDiff;
           }
           return a.id - b.id;
         });
-        responsesRecord[assignment.id] = responseList;
-        let instrumentId: number | null = null;
+        responsesRecord[assignment.id] = responsesByAssignment.get(assignment.id) ?? [];
+        let instrumentId: number | null = assignment.instrumentId ?? null;
         for (const response of responseList) {
           const numericInstrumentId = Number(response.instrumentId);
           if (Number.isFinite(numericInstrumentId)) {
@@ -1837,12 +1788,12 @@ export const EvolutionTracking: React.FC = () => {
         return bTimestamp - aTimestamp;
       });
 
-      const drafts: Record<number, string> = {};
-      const feedback: Record<number, { type: 'success' | 'error'; message: string } | null> = {};
+      const drafts: Record<string, string> = {};
+      const feedback: Record<string, { type: 'success' | 'error'; message: string } | null> = {};
 
       items.forEach((item) => {
-        drafts[item.assignment.id] = item.observation?.comment ?? '';
-        feedback[item.assignment.id] = null;
+        drafts[`${item.assignment.id}:${item.instrumentId}`] = item.observation?.comment ?? '';
+        feedback[`${item.assignment.id}:${item.instrumentId}`] = null;
       });
 
       setInstrumentResponsesByAssignment(responsesRecord);
@@ -1880,7 +1831,7 @@ export const EvolutionTracking: React.FC = () => {
 
   const handleViewInstrumentResponses = useCallback(
     async (item: InstrumentAssignmentItem) => {
-      const responses = instrumentResponsesByAssignment[item.assignment.id] ?? [];
+      const responses = (instrumentResponsesByAssignment[item.assignment.id] ?? []).filter(response => response.instrumentId === item.assignment.instrumentId);
       setInstrumentResponsesModalError(null);
       setInstrumentResponsesModalAssignment(item);
       setInstrumentResponsesModalData([...responses]);
@@ -1917,7 +1868,7 @@ export const EvolutionTracking: React.FC = () => {
     setInstrumentResponsesModalError(null);
   }, []);
 
-  const handleInstrumentCommentChange = useCallback((assignmentId: number, value: string) => {
+  const handleInstrumentCommentChange = useCallback((assignmentId: string, value: string) => {
     setInstrumentCommentDrafts((prev) => ({
       ...prev,
       [assignmentId]: value,
@@ -1935,8 +1886,8 @@ export const EvolutionTracking: React.FC = () => {
   }, []);
 
   const handleSaveInstrumentComment = useCallback(
-    async (assignmentId: number) => {
-      const item = instrumentAssignments.find((candidate) => candidate.assignment.id === assignmentId);
+    async (assignmentId: string) => {
+      const item = instrumentAssignments.find((candidate) => `${candidate.assignment.id}:${candidate.instrumentId}` === assignmentId);
       if (!item) {
         return;
       }
@@ -2017,7 +1968,7 @@ export const EvolutionTracking: React.FC = () => {
 
         setInstrumentAssignments((prev) =>
           prev.map((assignmentItem) =>
-            assignmentItem.assignment.id === assignmentId
+            `${assignmentItem.assignment.id}:${assignmentItem.instrumentId}` === assignmentId
               ? {
                   ...assignmentItem,
                   instrumentId,
@@ -2324,7 +2275,7 @@ export const EvolutionTracking: React.FC = () => {
     if (isRealExam) {
       setEditingOcularId((examToEdit as OcularExamRow).id);
       setOcularForm({
-        date: (examToEdit as OcularExamRow).rawDate ? (examToEdit as OcularExamRow).rawDate.split('T')[0] : '',
+        date: (examToEdit as OcularExamRow).rawDate ? (examToEdit as OcularExamRow).rawDate?.split('T')[0] ?? '' : '',
         reason: (examToEdit as OcularExamRow).reason,
         rightObservation: (examToEdit as OcularExamRow).rightObservation,
         leftObservation: (examToEdit as OcularExamRow).leftObservation,
@@ -2433,7 +2384,7 @@ export const EvolutionTracking: React.FC = () => {
         headers: {
           Authorization: `Bearer ${token}`,
         },
-        body: formData,
+        body: await prepareUpload(formData),
       });
 
       if (!response.ok) {
@@ -2825,11 +2776,6 @@ export const EvolutionTracking: React.FC = () => {
         return;
       }
 
-      if (!selectedPatient.userId) {
-        setMedicalHistoryError('El paciente no tiene un usuario vinculado para actualizar la historia médica.');
-        return;
-      }
-
       if (!token) {
         setMedicalHistoryError('No se pudo autenticar la solicitud. Intenta iniciar sesión nuevamente.');
         return;
@@ -2841,7 +2787,7 @@ export const EvolutionTracking: React.FC = () => {
 
       try {
         const payload = buildUpdatePayload(medicalHistoryData);
-        const response = await fetch(`${apiBase}/patient/user/${selectedPatient.userId}/history`, {
+        const response = await fetch(`${apiBase}/patient/${selectedPatient.id}/history`, {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
@@ -2896,7 +2842,7 @@ export const EvolutionTracking: React.FC = () => {
       const response = await fetch(targetUrl, {
         method: 'POST',
         headers,
-        body: isFormData ? payload : JSON.stringify(payload),
+        body: isFormData ? await prepareUpload(payload as FormData) : JSON.stringify(payload),
       });
 
       if (!response.ok) {
@@ -4060,8 +4006,8 @@ export const EvolutionTracking: React.FC = () => {
     return columns;
   }, [canManageRecords, handleOpenDelete, handleOpenEdit, isProcessingDelete, isProcessingEdit]);
 
-  const calculateBMI = (weight: number, height: number = 1.7): number | undefined => {
-    if (!Number.isFinite(weight) || !Number.isFinite(height) || height <= 0) {
+  const calculateBMI = (weight: number, height?: number): number | undefined => {
+    if (!Number.isFinite(weight) || typeof height !== 'number' || !Number.isFinite(height) || height <= 0) {
       return undefined;
     }
 
@@ -4092,7 +4038,7 @@ export const EvolutionTracking: React.FC = () => {
 
     setSaveError(null);
 
-    if (resolvedUserId === null) {
+    if (selectedPatientNumericId === null && resolvedUserId === null) {
       setSaveError('No se encontro el usuario asociado para registrar los signos vitales.');
       return;
     }
@@ -4102,8 +4048,12 @@ export const EvolutionTracking: React.FC = () => {
       return;
     }
 
-    const now = new Date();
-    const nowIso = now.toISOString();
+    const now = new Date(`${formData.recordedDate}T12:00:00`);
+    if (Number.isNaN(now.getTime())) {
+      setSaveError('Selecciona la fecha en que se tomaron las fotos o mediciones.');
+      return;
+    }
+    const nowIso = `${formData.recordedDate}T12:00:00.000Z`;
     const queue: Array<() => Promise<unknown>> = [];
 
     const weightInput = normalizeNumberInput(formData.weight);
@@ -4165,8 +4115,6 @@ export const EvolutionTracking: React.FC = () => {
       }
 
       queue.push(() => registerVital('body-mass', requestPayload));
-    } else if (weightInput) {
-      queue.push(() => registerVital('body-mass', { peso: weightInput, fecha: nowIso }));
     }
 
     const pulseInput = normalizeNumberInput(formData.pulse);
@@ -4209,6 +4157,10 @@ export const EvolutionTracking: React.FC = () => {
       );
     }
 
+    if (!queue.length) {
+      setSaveError('Agrega al menos una medición o fotografía.');
+      return;
+    }
     setIsSavingEntry(true);
 
     try {
@@ -4681,6 +4633,7 @@ export const EvolutionTracking: React.FC = () => {
                     ? `${selectedPatient.firstName} ${selectedPatient.lastName}`
                     : 'Seguimiento de evolución'}
                 </h1>
+                {selectedPatient && <p className="text-sm font-medium text-slate-700">Cédula: {selectedPatient.cedula || 'Sin registrar'}</p>}
                 <p className="text-sm text-slate-600 sm:text-base">
                   {isPatient
                     ? 'Revisa tu progreso diario, energía y signos vitales en un panel integrado.'
@@ -4743,10 +4696,12 @@ export const EvolutionTracking: React.FC = () => {
           </div>
         )}
 
+        {shouldShowDoctorTabs && showSummarySection && selectedPatient && <PatientStudies key={selectedPatient.id} patientId={selectedPatient.id} />}
+
         {shouldShowDoctorTabs && showResultsSection && (
-          selectedPatientUserId !== null ? (
+          selectedPatientNumericId !== null ? (
             <InstrumentResults
-              patientUserId={selectedPatientUserId}
+              patientId={selectedPatientNumericId}
               titleOverride={selectedPatientFullName ? `Resultados clínicos de ${selectedPatientFullName}` : undefined}
               subtitleOverride="Consulta la síntesis de instrumentos completados por el paciente para orientar su plan terapéutico."
               className="px-0 sm:px-0 lg:px-0"
@@ -4811,6 +4766,7 @@ export const EvolutionTracking: React.FC = () => {
                 <div className="space-y-4">
                   {instrumentAssignments.map((item) => {
                     const { assignment } = item;
+                    const commentKey = `${assignment.id}:${item.instrumentId}`;
                     const statusLabel = item.isCompleted
                       ? 'Completado'
                       : item.responsesCount > 0
@@ -4837,12 +4793,12 @@ export const EvolutionTracking: React.FC = () => {
                         ? 'bg-amber-50 text-amber-600 border border-amber-200'
                         : 'bg-slate-100 text-slate-600 border border-slate-200';
                     const hasTopics = normalizedTopics.length > 0;
-                    const actionFeedback = instrumentActionMessages[assignment.id] ?? null;
-                    const commentDraft = instrumentCommentDrafts[assignment.id] ?? '';
+                    const actionFeedback = instrumentActionMessages[commentKey] ?? null;
+                    const commentDraft = instrumentCommentDrafts[commentKey] ?? '';
 
                     return (
                       <div
-                        key={assignment.id}
+                        key={`${assignment.id}-${assignment.instrumentId}`}
                         className="space-y-4 rounded-2xl border border-slate-100 bg-white/85 p-5 shadow-sm"
                       >
                         <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
@@ -4897,7 +4853,7 @@ export const EvolutionTracking: React.FC = () => {
                         {item.isCompleted ? (
                           <div className="space-y-3 rounded-xl border border-slate-200/70 bg-slate-50/60 p-4">
                             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                              <label className="text-sm font-semibold text-slate-700" htmlFor={`instrument-comment-${assignment.id}`}>
+                              <label className="text-sm font-semibold text-slate-700" htmlFor={`instrument-comment-${commentKey}`}>
                                 Comentario para el paciente
                               </label>
                               {item.responsesCount > 0 ? (
@@ -4913,11 +4869,11 @@ export const EvolutionTracking: React.FC = () => {
                               ) : null}
                             </div>
                             <textarea
-                              id={`instrument-comment-${assignment.id}`}
+                              id={`instrument-comment-${commentKey}`}
                               rows={3}
                               value={commentDraft}
-                              onChange={(event) => handleInstrumentCommentChange(assignment.id, event.target.value)}
-                              disabled={instrumentCommentSavingId === assignment.id}
+                              onChange={(event) => handleInstrumentCommentChange(commentKey, event.target.value)}
+                              disabled={instrumentCommentSavingId === commentKey}
                               className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:border-[#FB923C] focus:outline-none focus:ring-2 focus:ring-[#FDBA74] disabled:cursor-not-allowed"
                               placeholder="Comparte hallazgos o recomendaciones breves."
                             />
@@ -4936,15 +4892,15 @@ export const EvolutionTracking: React.FC = () => {
                               <Button
                                 type="button"
                                 size="sm"
-                                onClick={() => handleSaveInstrumentComment(assignment.id)}
-                                disabled={instrumentCommentSavingId === assignment.id}
+                                onClick={() => handleSaveInstrumentComment(commentKey)}
+                                disabled={instrumentCommentSavingId === commentKey}
                                 className="self-start sm:self-auto"
                               >
-                                {instrumentCommentSavingId === assignment.id ? 'Guardando...' : 'Guardar comentario'}
+                                {instrumentCommentSavingId === commentKey ? 'Guardando...' : 'Guardar comentario'}
                               </Button>
                             </div>
                           </div>
-                        ) : item.responsesCount === 0 ? (
+                        ) : item.responsesCount === 0 && (assignment.instruments?.length ?? 1) === 1 ? (
                           <div className="flex flex-col gap-3 rounded-xl border border-slate-200/70 bg-slate-50/60 p-4 sm:flex-row sm:items-center sm:justify-between">
                             <p className="text-sm text-slate-600">
                               Este instrumento todavía no tiene respuestas. Puedes eliminar la asignación si fue creada por error.
@@ -5298,7 +5254,7 @@ export const EvolutionTracking: React.FC = () => {
                       ) : (
                         <tr>
                           <td
-                            colSpan={9}
+                            colSpan={11}
                             className="px-4 py-6 text-center text-sm text-slate-500"
                           >
                             No hay registros oculares disponibles.
@@ -5369,6 +5325,8 @@ export const EvolutionTracking: React.FC = () => {
                         <th className="px-4 py-3">Tensión</th>
                         <th className="px-4 py-3">Diagnóstico</th>
                         <th className="px-4 py-3">Recomendación</th>
+                        <th className="px-4 py-3">Observaciones / Profesional</th>
+                        <th className="px-4 py-3">Indicaciones</th>
                         <th className="px-4 py-3 text-right">Acciones</th>
                       </tr>
                     </thead>
@@ -5383,7 +5341,9 @@ export const EvolutionTracking: React.FC = () => {
                             <td className="px-4 py-3">{toDisplayText(consultation.pulse)}</td>
                             <td className="px-4 py-3">{toDisplayText(consultation.bloodPressure)}</td>
                             <td className="min-w-[12rem] px-4 py-3">{toDisplayText(consultation.diagnosis)}</td>
-                            <td className="min-w-[12rem] px-4 py-3">{toDisplayText(consultation.recommendation)}</td>
+                            <td className="min-w-[12rem] whitespace-pre-wrap px-4 py-3">{toDisplayText(consultation.recommendation)}</td>
+                            <td className="min-w-[16rem] whitespace-pre-wrap px-4 py-3">{toDisplayText(consultation.observation)}</td>
+                            <td className="min-w-[16rem] whitespace-pre-wrap px-4 py-3">{toDisplayText(consultation.indications ?? '')}</td>
                             <td className="whitespace-nowrap px-4 py-3 text-right">
                               <div className="flex items-center justify-end gap-1">
                                 <Button
@@ -5414,7 +5374,7 @@ export const EvolutionTracking: React.FC = () => {
                       ) : (
                         <tr>
                           <td
-                            colSpan={9}
+                            colSpan={11}
                             className="px-4 py-6 text-center text-sm text-slate-500"
                           >
                             No hay consultas registradas.
@@ -5744,6 +5704,7 @@ export const EvolutionTracking: React.FC = () => {
             <p className="text-sm text-slate-500">Cargando información del instrumento...</p>
           ) : instrumentResponsesModalData.length > 0 ? (
             <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+              <InstrumentResponseChart responses={instrumentResponsesModalData} />
               {instrumentResponsesModalData.map((response, index) => {
                 const questionLabel = response.question?.trim().length
                   ? response.question.trim()
@@ -6689,6 +6650,12 @@ export const EvolutionTracking: React.FC = () => {
           size="lg"
         >
           <div className="space-y-6">
+            <label className="block text-sm font-medium text-gray-700">
+              Fecha de las fotos o mediciones
+              <input type="date" required value={formData.recordedDate}
+                onChange={event => setFormData(prev => ({ ...prev, recordedDate: event.target.value }))}
+                className="mt-2 block w-full rounded-lg border border-gray-300 px-3 py-2" />
+            </label>
             {/* Navegación por pestañas */}
             <div className="border-b border-gray-200">
               <nav className="-mb-px flex space-x-4 sm:space-x-8 overflow-x-auto">

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState, useId } from 'react';
-import { BarChart3, Calendar, Download, RefreshCw, Sparkles } from 'lucide-react';
+import { Calendar, Download, RefreshCw, Sparkles } from 'lucide-react';
 import { Card } from '../../components/UI/Card';
 import { Button } from '../../components/UI/Button';
 import { useAuth } from '../../context/AuthContext';
@@ -13,10 +13,10 @@ import {
   PatientAggregatedResults,
   PatientResultsSectionMetadata,
   TestResult,
-  WheelResult,
 } from '../../types/patientResults';
-import type { TooltipProps } from 'recharts';
+import type { TooltipContentProps } from 'recharts';
 import {
+  BarChart, Bar, XAxis, YAxis,
   ResponsiveContainer,
   RadarChart,
   PolarGrid,
@@ -110,28 +110,8 @@ const FIRMNESS_BALANCE_METADATA: Record<
   },
 };
 
-const timelineMilestones = [
-  {
-    title: 'Revisión mensual programada',
-    date: '12 febrero 2026',
-    description: 'Sesión de retroalimentación integral con terapeuta asignado.',
-    tag: 'Agenda',
-  },
-  {
-    title: 'Instrumento Insight 360',
-    date: 'Completado hace 4 días',
-    description: 'Resultados listos para análisis comparativo contra el mes anterior.',
-    tag: 'Historial',
-  },
-  {
-    title: 'Nueva meta de respiración consciente',
-    date: 'Pendiente de activar',
-    description: 'Configura micro objetivos diarios vinculados a nivel de estrés percibido.',
-    tag: 'Plan personal',
-  },
-];
-
 type InstrumentResultsProps = {
+  patientId?: number;
   patientUserId?: number;
   titleOverride?: string;
   subtitleOverride?: string;
@@ -219,7 +199,7 @@ const WheelAxisTick: React.FC<{ x?: number; y?: number; payload?: { value: strin
   );
 };
 
-const buildWheelTooltip = (maxValue: number) => ({ active, payload }: TooltipProps<number, string>) => {
+const buildWheelTooltip = (maxValue: number) => ({ active, payload }: TooltipContentProps<number, string>) => {
   if (!active || !payload || !payload.length) {
     return null;
   }
@@ -497,6 +477,7 @@ const createEmptySectionFilters = (): SectionDateState => ({
 });
 
 export const InstrumentResults: React.FC<InstrumentResultsProps> = ({
+  patientId,
   patientUserId,
   titleOverride,
   subtitleOverride,
@@ -550,7 +531,7 @@ export const InstrumentResults: React.FC<InstrumentResultsProps> = ({
     setMetadata(null);
     setResults(null);
     setError(null);
-  }, [resolvedUserId]);
+  }, [patientId, resolvedUserId]);
 
   const fetchAggregatedResults = useCallback(
     async (customFilters?: SectionDateState) => {
@@ -560,7 +541,7 @@ export const InstrumentResults: React.FC<InstrumentResultsProps> = ({
         return;
       }
 
-      if (resolvedUserId === null) {
+      if (!patientId && resolvedUserId === null) {
         setError('No se encontró un paciente asociado al usuario actual.');
         setResults(null);
         return;
@@ -596,7 +577,7 @@ export const InstrumentResults: React.FC<InstrumentResultsProps> = ({
         }
 
         const query = params.toString();
-        const endpoint = `${normalizedApiBase}/patient-instruments/results/user/${resolvedUserId}${
+        const endpoint = `${normalizedApiBase}/patient-instruments/results/${patientId ? `patient/${patientId}` : `user/${resolvedUserId}`}${
           query ? `?${query}` : ''
         }`;
 
@@ -636,7 +617,7 @@ export const InstrumentResults: React.FC<InstrumentResultsProps> = ({
         setIsLoading(false);
       }
     },
-    [normalizedApiBase, resolvedUserId, token],
+    [normalizedApiBase, patientId, resolvedUserId, token],
   );
 
   const handleSectionDateChange = useCallback(
@@ -796,7 +777,7 @@ export const InstrumentResults: React.FC<InstrumentResultsProps> = ({
     [wheelOfLifeEntries]
   );
   const lifeRadarTooltip = useCallback(
-    (props: TooltipProps<number, string>) => buildWheelTooltip(10)(props),
+    (props: TooltipContentProps<number, string>) => buildWheelTooltip(10)(props),
     []
   );
   const aggregatedRegiflexEntries = useMemo<RegiflexAggregatedEntry[]>(() => {
@@ -835,7 +816,7 @@ export const InstrumentResults: React.FC<InstrumentResultsProps> = ({
     [aggregatedRegiflexEntries]
   );
   const regiflexPieTooltip = useCallback(
-    ({ active, payload }: TooltipProps<number, string>) => {
+    ({ active, payload }: TooltipContentProps<number, string>) => {
       if (!active || !payload || !payload.length) {
         return null;
       }
@@ -880,7 +861,7 @@ export const InstrumentResults: React.FC<InstrumentResultsProps> = ({
   );
   const healthRadarData = healthWheelEntries;
   const healthRadarTooltip = useCallback(
-    (props: TooltipProps<number, string>) => buildWheelTooltip(HEALTH_WHEEL_MAX)(props),
+    (props: TooltipContentProps<number, string>) => buildWheelTooltip(HEALTH_WHEEL_MAX)(props),
     []
   );
 
@@ -1397,7 +1378,7 @@ export const InstrumentResults: React.FC<InstrumentResultsProps> = ({
                               <PolarRadiusAxis
                                 angle={90}
                                 domain={[0, HEALTH_WHEEL_MAX]}
-                                ticks={HEALTH_WHEEL_TICKS}
+                                tickCount={HEALTH_WHEEL_TICKS.length}
                                 axisLine={false}
                                 tickLine={false}
                                 tick={{ fill: '#111827', fontSize: 11 }}
@@ -1694,6 +1675,16 @@ export const InstrumentResults: React.FC<InstrumentResultsProps> = ({
                         <>
                           <p className="text-xs font-semibold uppercase tracking-[0.35em] text-slate-500">Total registrado</p>
                           <p className={`text-3xl font-semibold ${toneClass}`}>{result.total.toFixed(2)}</p>
+                          <div className="mt-3 h-36" aria-label={`Gráfico de ${meta.title}: ${result.total}`}>
+                            <ResponsiveContainer width="100%" height="100%">
+                              <BarChart data={[{ name: meta.title, total: result.total }]} layout="vertical" margin={{ left: 0, right: 30 }}>
+                                <XAxis type="number" domain={[0, 'auto']} />
+                                <YAxis type="category" dataKey="name" hide />
+                                <PieTooltip />
+                                <Bar dataKey="total" name="Total registrado" fill="#7c3aed" label={{ position: 'right' }} />
+                              </BarChart>
+                            </ResponsiveContainer>
+                          </div>
                           {result.enunciado ? (
                             <p className="mt-2 text-sm text-slate-600">{result.enunciado}</p>
                           ) : null}

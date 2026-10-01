@@ -1,3 +1,4 @@
+import { prepareUpload, uploadError } from '../../utils/uploads';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Upload, File, Download, Trash2, Plus, Edit, Eye } from 'lucide-react';
@@ -268,6 +269,7 @@ type NullableStringRecord<T> = {
 };
 
 export interface RemotePatientMedicalHistory {
+  alterations?: Record<string, boolean | number | string | null>;
   personal?: NullableStringRecord<MedicalHistoryData['personal']>;
   contacts?: NullableStringRecord<MedicalHistoryData['contacts']>;
   treatingDoctor?: NullableStringRecord<MedicalHistoryData['treatingDoctor']>;
@@ -338,6 +340,8 @@ const DISEASE_NAME_TO_KEY: Record<string, DiseaseKey> = {
   sifilis: 'sifilis',
   blenorragia: 'blenorragia',
   otravenera: 'otraVenerea',
+  otravenerea: 'otraVenerea',
+  otrasenfermedadesvenereas: 'otraVenerea',
   fiebrereumatica: 'fiebreReumatica',
   artritis: 'artritis',
   enfermedadmuscular: 'enfermedadMuscular',
@@ -1642,6 +1646,11 @@ export const mapRemoteMedicalHistoryToState = (
   }
 
   history.diseases = mapRemoteDiseasesToState(remoteHistory.diseases);
+  const savedAlterations = new Map(Object.entries(remoteHistory.alterations ?? {})
+    .map(([key, value]) => [normalizeLabelKey(key), value === true || value === 1 || value === '1']));
+  for (const key of Object.keys(history.alterations) as AlterationKey[]) {
+    history.alterations[key] = savedAlterations.get(normalizeLabelKey(key)) ?? false;
+  }
 
   return history;
 };
@@ -2086,6 +2095,8 @@ export const MedicalHistory: React.FC = () => {
   const [isViewHistoryModalOpen, setIsViewHistoryModalOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [uploadingFile, setUploadingFile] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadMessage, setUploadMessage] = useState<string | null>(null);
   const [uploadCategory, setUploadCategory] = useState<MedicalFile['category']>('other');
   const [medicalHistoryData, setMedicalHistoryData] = useState<MedicalHistoryData>(createInitialMedicalHistory());
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
@@ -2827,7 +2838,7 @@ export const MedicalHistory: React.FC = () => {
           headers: {
             Authorization: `Bearer ${token}`,
           },
-          body: formData,
+          body: await prepareUpload(formData),
         },
       );
 
@@ -2848,23 +2859,22 @@ export const MedicalHistory: React.FC = () => {
     }
   };
 
-  const handleUploadSubmit = () => {
-    if (uploadingFile) {
-      const newFile: MedicalFile = {
-        id: Date.now().toString(),
-        name: uploadingFile.name,
-        type: uploadingFile.type,
-        size: uploadingFile.size,
-        uploadedAt: new Date(),
-        category: uploadCategory,
-        attachmentId: null,
-        downloadPath: null,
-      };
-      
-      setFiles(prev => [...prev, newFile]);
+  const handleUploadSubmit = async () => {
+    if (!uploadingFile || !token || !user?.id || isUploading) return;
+    setIsUploading(true);
+    setUploadMessage(null);
+    try {
+      const data = new FormData();
+      data.append('file', uploadingFile);
+      const response = await fetch(`${apiBase}/patient/user/${user.id}/attachments`, {
+        method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: await prepareUpload(data),
+      });
+      if (!response.ok) throw await uploadError(response);
+      setFiles(mapRemoteAttachmentsToFiles(await fetchAttachments()));
       setUploadingFile(null);
       setIsModalOpen(false);
-    }
+    } catch (error) { setUploadMessage(error instanceof Error ? error.message : 'No se pudo subir el estudio.'); }
+    finally { setIsUploading(false); }
   };
 
   const handleDelete = (fileId: string) => {
@@ -3582,7 +3592,7 @@ export const MedicalHistory: React.FC = () => {
                   ) : (
                     <tr>
                       <td
-                        colSpan={8}
+                        colSpan={10}
                         className="px-4 py-6 text-center text-sm text-slate-500"
                       >
                         No hay registros oculares disponibles.
@@ -3645,6 +3655,8 @@ export const MedicalHistory: React.FC = () => {
                     <th className="px-4 py-3">Tensión</th>
                     <th className="px-4 py-3">Diagnóstico</th>
                     <th className="px-4 py-3">Recomendación</th>
+                    <th className="px-4 py-3">Observaciones / Profesional</th>
+                    <th className="px-4 py-3">Indicaciones</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -3670,13 +3682,15 @@ export const MedicalHistory: React.FC = () => {
                         <td className="px-4 py-3">{toDisplayText(consultation.pulse)}</td>
                         <td className="px-4 py-3">{toDisplayText(consultation.bloodPressure)}</td>
                         <td className="min-w-[12rem] px-4 py-3">{toDisplayText(consultation.diagnosis)}</td>
-                        <td className="min-w-[12rem] px-4 py-3">{toDisplayText(consultation.recommendation)}</td>
+                        <td className="min-w-[12rem] whitespace-pre-wrap px-4 py-3">{toDisplayText(consultation.recommendation)}</td>
+                        <td className="min-w-[16rem] whitespace-pre-wrap px-4 py-3">{toDisplayText(consultation.observation)}</td>
+                        <td className="min-w-[16rem] whitespace-pre-wrap px-4 py-3">{toDisplayText(consultation.indications ?? '')}</td>
                       </tr>
                     ))
                   ) : (
                     <tr>
                       <td
-                        colSpan={8}
+                        colSpan={10}
                         className="px-4 py-6 text-center text-sm text-slate-500"
                       >
                         No hay consultas registradas.
@@ -3811,8 +3825,9 @@ export const MedicalHistory: React.FC = () => {
       <Modal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        title="Upload Medical File"
+        title="Subir estudio médico"
       >
+        {uploadMessage && <p role="alert" className="text-sm text-red-600">{uploadMessage}</p>}
         {uploadingFile && (
           <div className="space-y-4">
             <div>
@@ -3850,8 +3865,8 @@ export const MedicalHistory: React.FC = () => {
               >
                 Cancel
               </Button>
-              <Button onClick={handleUploadSubmit}>
-                Upload File
+              <Button disabled={isUploading} onClick={handleUploadSubmit}>
+                {isUploading ? 'Subiendo…' : 'Subir estudio'}
               </Button>
             </div>
           </div>

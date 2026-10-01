@@ -1,3 +1,4 @@
+import { InstrumentResponseChart } from '../../../components/Patients/InstrumentResponseChart';
 import React, { useEffect, useMemo, useState } from 'react';
 import { Instrument, Question, QuestionAnswer, QuestionOption } from '../../../types';
 import { Modal } from '../../../components/UI/Modal';
@@ -487,7 +488,7 @@ export const InstrumentResponseModal: React.FC<InstrumentResponseModalProps> = (
     }
   };
 
-  const renderFormQuestion = (question: Question, index: number) => {
+  const renderFormQuestion = (question: Question) => {
     const options = normalizeOptionList(question);
     const key = String(question.id);
     const value = formValues[key];
@@ -626,6 +627,7 @@ export const InstrumentResponseModal: React.FC<InstrumentResponseModalProps> = (
           ) : null}
         </div>
 
+        {mode === 'readonly' && !isLoadingInstrument && <InstrumentResponseChart responses={responses} />}
         {infoMessage ? (
           <div className="rounded-2xl border border-emerald-100/80 bg-emerald-50/70 px-4 py-3 text-sm text-emerald-600">
             {infoMessage}
@@ -733,7 +735,7 @@ export const InstrumentResponseModal: React.FC<InstrumentResponseModalProps> = (
                 </div>
 
                 <div className="mt-4">
-                  {mode === 'readonly' ? renderReadonlyAnswer(question, index) : renderFormQuestion(question, index)}
+                  {mode === 'readonly' ? renderReadonlyAnswer(question, index) : renderFormQuestion(question)}
                 </div>
               </div>
             ))}

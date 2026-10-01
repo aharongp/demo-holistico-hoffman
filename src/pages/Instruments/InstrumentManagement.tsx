@@ -362,12 +362,6 @@ export const InstrumentManagement: React.FC = () => {
     });
   }, [visibleInstruments, instrumentTypeNameById, getInstrumentThemeName, bulkThemeSearch, bulkInstrumentTypeFilter]);
 
-  const selectedInstrumentTypeIdsForBulk = useMemo(() => {
-    return bulkSelectedInstrumentIds
-      .map((instrumentId) => visibleInstruments.find((item) => item.id === instrumentId)?.instrumentTypeId ?? '')
-      .filter((instrumentTypeId) => instrumentTypeId.length > 0);
-  }, [bulkSelectedInstrumentIds, visibleInstruments]);
-
   const clearBulkAssignState = useCallback(() => {
     setBulkAssignLoading(false);
     setBulkAssignError(null);
@@ -423,7 +417,7 @@ export const InstrumentManagement: React.FC = () => {
 
     const itemsToAssign = bulkSelectedInstrumentIds
       .map((instrumentId) => visibleInstruments.find((item) => item.id === instrumentId))
-      .filter((inst): inst is typeof visibleInstruments[0] => Boolean(inst) && Boolean(inst.instrumentTypeId))
+      .filter((inst): inst is typeof visibleInstruments[0] => Boolean(inst?.instrumentTypeId))
       .map((inst) => ({
         instrumentTypeId: inst.instrumentTypeId!,
         array_tema: inst.subjectId ?? inst.name,

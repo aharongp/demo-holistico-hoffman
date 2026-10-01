@@ -1,3 +1,4 @@
+import { assignedInstrumentId, expandAssignedInstruments, type AssignmentInstruments } from '../../utils/assignedInstruments';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Play, Clock, CheckCircle, FileText, RefreshCw, Sparkles } from 'lucide-react';
@@ -15,7 +16,7 @@ import {
 
 type ActivityStatus = 'pending' | 'in_progress' | 'completed';
 
-interface BackendPatientInstrumentAssignment {
+interface BackendPatientInstrumentAssignment extends AssignmentInstruments {
   id: number;
   patientId: number | null;
   instrumentTypeId: number | null;
@@ -138,7 +139,7 @@ const mapAssignmentToActivity = (assignment: BackendPatientInstrumentAssignment)
     : null;
 
   return {
-    id: assignment.id.toString(),
+    id: `${assignment.id}-${assignment.instrumentId ?? "unresolved"}`,
     name: primaryTopicFromAssignment || assignment.instrumentTypeName || `Instrumento #${fallbackInstrumentId}`,
     description: assignment.instrumentTypeDescription ?? assignment.origin ?? null,
     category,
@@ -373,7 +374,7 @@ export const PatientActivities: React.FC = () => {
       }
 
       const payload: BackendPatientInstrumentAssignment[] = await res.json();
-      const mapped = payload.map(mapAssignmentToActivity);
+      const mapped = payload.flatMap(expandAssignedInstruments).map(mapAssignmentToActivity);
       mapped.sort((a, b) => resolveTimestamp(b.createdAt) - resolveTimestamp(a.createdAt));
       setActivities(mapped);
       setLastUpdated(new Date().toISOString());
@@ -458,61 +459,15 @@ export const PatientActivities: React.FC = () => {
 
   const loadInstrumentForAssignment = useCallback(
     async (assignment: BackendPatientInstrumentAssignment): Promise<Instrument | null> => {
-      if (!assignment.instrumentTypeId) {
-        throw new Error('La asignación no tiene un tipo de instrumento asociado.');
-      }
-
-      const cached = instrumentCache[assignment.instrumentTypeId];
-      if (cached) {
-        return cached;
-      }
-
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-      };
-
-      if (token) {
-        headers.Authorization = `Bearer ${token}`;
-      }
-
-      const instrumentsResponse = await fetch(
-        `${normalizedApiBase}/instruments/by-type/${assignment.instrumentTypeId}`,
-        { headers },
-      );
-
-      if (!instrumentsResponse.ok) {
-        const message = await instrumentsResponse.text();
-        throw new Error(message || 'No se pudo cargar el instrumento asociado.');
-      }
-
-      const instrumentsPayload = await instrumentsResponse.json();
-
-      if (!Array.isArray(instrumentsPayload) || !instrumentsPayload.length) {
-        throw new Error('No se encontraron instrumentos configurados para esta asignación.');
-      }
-
-      const instrumentCandidate = instrumentsPayload[0];
-      const rawInstrumentId = instrumentCandidate?.id ?? instrumentCandidate?.instrumento_id ?? instrumentCandidate?.instrumentId;
-
-      if (!Number.isFinite(Number(rawInstrumentId))) {
-        throw new Error('No se pudo determinar el identificador del instrumento.');
-      }
-
-      const instrumentId = String(rawInstrumentId);
-      const detailedInstrument = await getInstrumentDetails(instrumentId);
-
-      if (!detailedInstrument) {
-        throw new Error('No se pudo obtener el detalle del instrumento.');
-      }
-
-      setInstrumentCache((prev) => ({
-        ...prev,
-        [assignment.instrumentTypeId!]: detailedInstrument,
-      }));
-
-      return detailedInstrument;
+      const instrumentId = assignedInstrumentId(assignment);
+      const cached = instrumentCache[instrumentId];
+      if (cached) return cached;
+      const instrument = await getInstrumentDetails(String(instrumentId));
+      if (!instrument) throw new Error('No se pudo obtener el cuestionario asignado.');
+      setInstrumentCache(prev => ({ ...prev, [instrumentId]: instrument }));
+      return instrument;
     },
-    [getInstrumentDetails, instrumentCache, normalizedApiBase, token],
+    [getInstrumentDetails, instrumentCache],
   );
 
   const loadCoachObservationForAssignment = useCallback(
@@ -581,7 +536,7 @@ export const PatientActivities: React.FC = () => {
 
         setCoachObservationByAssignment((prev) => ({
           ...prev,
-          [assignment.id]: selected ?? null,
+          [numericInstrumentId]: selected ?? null,
         }));
 
         return selected ?? null;
@@ -599,6 +554,7 @@ export const PatientActivities: React.FC = () => {
   const handleOpenInstrument = useCallback(
     async (activity: Activity, desiredMode?: 'form' | 'readonly') => {
       setActiveActivity(activity);
+      setActiveInstrument(null);
       const nextMode: 'form' | 'readonly' = desiredMode ?? (activity.status === 'completed' || activity.evaluated ? 'readonly' : 'form');
       setModalMode(nextMode);
       setModalError(null);
@@ -621,7 +577,7 @@ export const PatientActivities: React.FC = () => {
 
         if (nextMode === 'readonly') {
           const assignmentId = activity.rawAssignment.id;
-          const cachedObservation = coachObservationByAssignment[assignmentId] ?? null;
+          const cachedObservation = coachObservationByAssignment[activity.rawAssignment.instrumentId ?? assignmentId] ?? null;
 
           if (cachedObservation) {
             setActiveCoachObservation(cachedObservation);
@@ -848,7 +804,7 @@ export const PatientActivities: React.FC = () => {
     const normalizedTopics = activity.topics
       .map((topic) => topic?.trim() ?? '')
       .filter((topic) => topic.length > 0);
-    const assignmentResponses = responsesByAssignment[activity.rawAssignment.id] ?? [];
+    const assignmentResponses = (responsesByAssignment[activity.rawAssignment.id] ?? []).filter(response => response.instrumentId === activity.rawAssignment.instrumentId);
     const topicTitleFromResponses = assignmentResponses
       .map((response) => response.theme?.trim() ?? '')
       .find((theme) => theme.length > 0) ?? null;
@@ -875,7 +831,7 @@ export const PatientActivities: React.FC = () => {
       return [] as BackendInstrumentResponse[];
     }
     const assignmentId = activeActivity.rawAssignment.id;
-    return responsesByAssignment[assignmentId] ?? [];
+    return (responsesByAssignment[assignmentId] ?? []).filter(response => response.instrumentId === activeActivity.rawAssignment.instrumentId);
   }, [activeActivity, responsesByAssignment]);
 
   return (
