@@ -137,13 +137,36 @@ export const UserManagement: React.FC = () => {
       //   return;
       // }
 
-      // Update user locally for now; backend integration pending dedicated endpoint support
-      setUsers((prev: User[]) => prev.map((u: User) =>
-        u.id === editingUser.id
-          ? { ...u, ...formData, username: `${formData.firstName} ${formData.lastName}`.trim() }
-          : u
-      ));
-      setIsModalOpen(false);
+      setIsSaving(true);
+      try {
+        const response = await fetch(`${apiBase}/users/${editingUser.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            firstName: formData.firstName,
+            lastName: formData.lastName,
+            email: formData.email,
+            role: formData.role,
+          }),
+        });
+
+        if (!response.ok) {
+          const errBody = await response.json().catch(() => null);
+          const message = errBody?.message ?? `No se pudo actualizar el usuario (estado ${response.status})`;
+          throw new Error(Array.isArray(message) ? message.join(', ') : message);
+        }
+
+        const updatedUser = mapUserFromApi(await response.json());
+        setUsers((prev: User[]) => prev.map((user) =>
+          user.id === editingUser.id ? updatedUser : user
+        ));
+        setEditingUser(null);
+        setIsModalOpen(false);
+      } catch (err: any) {
+        setError(err?.message ?? 'Error actualizando usuario');
+      } finally {
+        setIsSaving(false);
+      }
       return;
     }
 
