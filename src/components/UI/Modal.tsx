@@ -43,6 +43,8 @@ export const Modal: React.FC<ModalProps> = ({
           <div className="flex items-center justify-between border-b border-white/60 bg-white/70 px-4 py-3 sm:px-6 sm:py-4">
             <h3 className="pr-4 text-base font-semibold text-slate-900 sm:text-lg">{title}</h3>
             <button
+              type="button"
+              aria-label="Cerrar"
               onClick={onClose}
               className="flex h-9 w-9 items-center justify-center rounded-full border border-white/60 text-slate-400 transition hover:text-slate-700"
             >

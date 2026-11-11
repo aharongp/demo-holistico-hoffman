@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState, useId } from 'react';
 import { Calendar, Download, RefreshCw, Sparkles } from 'lucide-react';
 import { Card } from '../../components/UI/Card';
+import { AssignedInstrumentResults } from '../../components/Patients/AssignedInstrumentResults';
 import { Button } from '../../components/UI/Button';
 import { useAuth } from '../../context/AuthContext';
 import {
@@ -492,6 +493,7 @@ export const InstrumentResults: React.FC<InstrumentResultsProps> = ({
   const [exportError, setExportError] = useState<string | null>(null);
   const [filters, setFilters] = useState<SectionDateState>(() => createEmptySectionFilters());
   const [metadata, setMetadata] = useState<PatientAggregatedResults['metadata'] | null>(null);
+  const [chartRefreshKey, setChartRefreshKey] = useState(0);
   const filtersRef = useRef(filters);
 
   useEffect(() => {
@@ -1091,6 +1093,7 @@ export const InstrumentResults: React.FC<InstrumentResultsProps> = ({
   }, [healthDiagnosticsPages, resultsRef, titleOverride, user]);
 
   const handleRefresh = () => {
+    setChartRefreshKey(value => value + 1);
     void fetchAggregatedResults();
   };
 
@@ -1189,6 +1192,8 @@ export const InstrumentResults: React.FC<InstrumentResultsProps> = ({
           {error}
         </Card>
       ) : null}
+
+      <AssignedInstrumentResults patientId={patientId} patientUserId={resolvedUserId ?? undefined} refreshKey={chartRefreshKey} />
 
       {isLoading ? (
         <Card className="rounded-[28px] border border-white/35 bg-white/75 p-6 text-sm text-slate-500 shadow-[0_25px_70px_-55px_rgba(79,70,229,0.35)]">

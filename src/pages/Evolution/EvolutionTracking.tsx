@@ -1,4 +1,5 @@
-import { InstrumentResponseChart } from '../../components/Patients/InstrumentResponseChart';
+import { AssignedInstrumentResults } from '../../components/Patients/AssignedInstrumentResults';
+import { CoachObservations } from '../../components/Patients/CoachObservations';
 import { format } from 'date-fns';
 import { PatientStudies } from '../../components/Patients/PatientStudies';
 import { prepareUpload } from '../../utils/uploads';
@@ -1963,8 +1964,10 @@ export const EvolutionTracking: React.FC = () => {
         }
 
         const data = await response.json().catch(() => null);
-        const updatedObservation =
-          data && typeof data === 'object' ? (data as CoachDiagnosticObservation) : item.observation;
+        if (!data?.id || data.comment !== trimmedComment) {
+          throw new Error('No se pudo confirmar el guardado del comentario. Conserva el texto y vuelve a intentarlo.');
+        }
+        const updatedObservation = data as CoachDiagnosticObservation;
 
         setInstrumentAssignments((prev) =>
           prev.map((assignmentItem) =>
@@ -4698,6 +4701,8 @@ export const EvolutionTracking: React.FC = () => {
 
         {shouldShowDoctorTabs && showSummarySection && selectedPatient && <PatientStudies key={selectedPatient.id} patientId={selectedPatient.id} />}
 
+        {showSummarySection && selectedPatientNumericId && <CoachObservations key={selectedPatientNumericId} patientId={selectedPatientNumericId} canEdit={isTherapist} />}
+
         {shouldShowDoctorTabs && showResultsSection && (
           selectedPatientNumericId !== null ? (
             <InstrumentResults
@@ -4775,7 +4780,7 @@ export const EvolutionTracking: React.FC = () => {
                     const normalizedTopics = assignment.topics
                       .map((topic) => topic?.trim() ?? '')
                       .filter((topic) => topic.length > 0);
-                    const assignmentResponses = instrumentResponsesByAssignment[assignment.id] ?? [];
+                    const assignmentResponses = (instrumentResponsesByAssignment[assignment.id] ?? []).filter(response => response.instrumentId === item.instrumentId);
                     const topicTitleFromResponses = assignmentResponses
                       .map((response) => response.theme?.trim() ?? '')
                       .find((theme) => theme.length > 0) ?? null;
@@ -5342,7 +5347,7 @@ export const EvolutionTracking: React.FC = () => {
                             <td className="px-4 py-3">{toDisplayText(consultation.bloodPressure)}</td>
                             <td className="min-w-[12rem] px-4 py-3">{toDisplayText(consultation.diagnosis)}</td>
                             <td className="min-w-[12rem] whitespace-pre-wrap px-4 py-3">{toDisplayText(consultation.recommendation)}</td>
-                            <td className="min-w-[16rem] whitespace-pre-wrap px-4 py-3">{toDisplayText(consultation.observation)}</td>
+                            <td className="min-w-[16rem] whitespace-pre-wrap px-4 py-3">{toDisplayText(consultation.observation)}{consultation.coachRecommendation && <p className="mt-2"><span className="font-medium">Recomendación del coach: </span>{consultation.coachRecommendation}</p>}</td>
                             <td className="min-w-[16rem] whitespace-pre-wrap px-4 py-3">{toDisplayText(consultation.indications ?? '')}</td>
                             <td className="whitespace-nowrap px-4 py-3 text-right">
                               <div className="flex items-center justify-end gap-1">
@@ -5704,7 +5709,7 @@ export const EvolutionTracking: React.FC = () => {
             <p className="text-sm text-slate-500">Cargando información del instrumento...</p>
           ) : instrumentResponsesModalData.length > 0 ? (
             <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
-              <InstrumentResponseChart responses={instrumentResponsesModalData} />
+              <AssignedInstrumentResults responses={instrumentResponsesModalData} />
               {instrumentResponsesModalData.map((response, index) => {
                 const questionLabel = response.question?.trim().length
                   ? response.question.trim()

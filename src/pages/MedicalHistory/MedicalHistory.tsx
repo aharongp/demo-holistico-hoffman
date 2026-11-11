@@ -1,4 +1,5 @@
 import { prepareUpload, uploadError } from '../../utils/uploads';
+import { CoachObservations } from '../../components/Patients/CoachObservations';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Upload, File, Download, Trash2, Plus, Edit, Eye } from 'lucide-react';
@@ -3683,7 +3684,7 @@ export const MedicalHistory: React.FC = () => {
                         <td className="px-4 py-3">{toDisplayText(consultation.bloodPressure)}</td>
                         <td className="min-w-[12rem] px-4 py-3">{toDisplayText(consultation.diagnosis)}</td>
                         <td className="min-w-[12rem] whitespace-pre-wrap px-4 py-3">{toDisplayText(consultation.recommendation)}</td>
-                        <td className="min-w-[16rem] whitespace-pre-wrap px-4 py-3">{toDisplayText(consultation.observation)}</td>
+                        <td className="min-w-[16rem] whitespace-pre-wrap px-4 py-3">{toDisplayText(consultation.observation)}{consultation.coachRecommendation && <p className="mt-2"><span className="font-medium">Recomendación del coach: </span>{consultation.coachRecommendation}</p>}</td>
                         <td className="min-w-[16rem] whitespace-pre-wrap px-4 py-3">{toDisplayText(consultation.indications ?? '')}</td>
                       </tr>
                     ))
@@ -3703,6 +3704,8 @@ export const MedicalHistory: React.FC = () => {
           )}
         </div>
       </Card>
+
+      {patientId && <CoachObservations key={patientId} patientId={patientId} canEdit={['administrator', 'trainer', 'therapist', 'doctor', 'coach'].includes(user?.role || '')} />}
 
       {/* Upload Area */}
       <Card className="rounded-[24px] border-white/60 bg-white/80 shadow-xl shadow-slate-200/70 backdrop-blur">
