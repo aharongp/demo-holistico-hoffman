@@ -10,6 +10,7 @@ import {
   PieChart,
   PolarAngleAxis,
   PolarGrid,
+  PolarRadiusAxis,
   Radar,
   RadarChart,
   ResponsiveContainer,
@@ -24,9 +25,11 @@ type ResultChart = {
   title: string;
   kind: 'bar' | 'radar' | 'pie' | 'line';
   unit: string;
+  axisMax?: number;
   points: Array<{ label: string; value: number }>;
 };
 type InstrumentResult = {
+  firmnessHistory?: { firmness: number; adaptability: number };
   resultKey?: string;
   assignmentId: number;
   instrumentId: number | null;
@@ -49,6 +52,7 @@ export function ResultChartView({ chart }: { chart: ResultChart }) {
           {chart.kind === 'radar' ? (
             <RadarChart data={chart.points} outerRadius="65%">
               <PolarGrid />
+              {chart.axisMax && <PolarRadiusAxis domain={[0, chart.axisMax]} />}
               <PolarAngleAxis dataKey="label" tick={{ fontSize: 11 }} />
               <Radar
                 isAnimationActive={false}
@@ -70,8 +74,8 @@ export function ResultChartView({ chart }: { chart: ResultChart }) {
                 label={({ name }) => name}
                 outerRadius="65%"
               >
-                {chart.points.map((point, index) => (
-                  <Cell key={point.label} fill={colors[index % colors.length]} />
+                {chart.points.map((_, index) => (
+                  <Cell key={index} fill={colors[index % colors.length]} />
                 ))}
               </Pie>
               <Tooltip />
@@ -182,6 +186,9 @@ export function AssignedInstrumentResults({
       (statusFilter === 'answered' ? item.charts.length > 0 : item.charts.length === 0),
   );
   const matching = filtered.filter((item) => selected === 'all' || resultKey(item) === selected);
+  const history = responses || selected !== 'all' || statusFilter === 'pending' ? [] : results
+    .filter(item => item.firmnessHistory && item.assignedAt)
+    .sort((a, b) => a.assignedAt!.localeCompare(b.assignedAt!));
   const visible = matching.slice(page * 6, (page + 1) * 6);
   return (
     <div className="space-y-4" data-testid="assigned-instrument-results">
@@ -190,6 +197,15 @@ export function AssignedInstrumentResults({
           Resultados de cada instrumento asignado
         </h3>
       )}
+      {history.length > 0 && (['firmness', 'adaptability'] as const).map(axis => (
+        <ResultChartView key={axis} chart={{
+          title: axis === 'firmness' ? 'Evolución de firmeza' : 'Evolución de adaptabilidad',
+          kind: 'line', unit: '%',
+          points: history.map(item => ({
+            label: item.assignedAt!.slice(0, 10), value: item.firmnessHistory![axis],
+          })),
+        }} />
+      ))}
       {loading && <p role="status">Cargando gráficos de los tests…</p>}
       {error && (
         <p role="alert" className="text-rose-600">
