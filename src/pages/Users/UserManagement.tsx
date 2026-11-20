@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
 import { Plus, Edit, Trash2, Search, Shield, Users, Sparkles } from 'lucide-react';
 import { Card } from '../../components/UI/Card';
@@ -31,6 +32,8 @@ const mapUserFromApi = (u: any): User => {
 };
 
 export const UserManagement: React.FC = () => {
+  const { refreshPatients } = useApp();
+  const [phone, setPhone] = useState('');
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -87,6 +90,7 @@ export const UserManagement: React.FC = () => {
         role: 'patient',
       });
     }
+    setPhone('');
     setIsModalOpen(true);
   };
 
@@ -160,6 +164,7 @@ export const UserManagement: React.FC = () => {
         setUsers((prev: User[]) => prev.map((user) =>
           user.id === editingUser.id ? updatedUser : user
         ));
+        refreshPatients();
         setEditingUser(null);
         setIsModalOpen(false);
       } catch (err: any) {
@@ -195,6 +200,7 @@ export const UserManagement: React.FC = () => {
           lastName: formData.lastName,
           email: formData.email,
           role: formData.role,
+          phone: formData.role === 'patient' ? phone.trim() : undefined,
         }),
       });
 
@@ -205,6 +211,7 @@ export const UserManagement: React.FC = () => {
       }
 
       const payload = await response.json();
+      if (formData.role === 'patient') refreshPatients();
       const createdUser = mapUserFromApi(payload);
       setUsers((prev: User[]) => [...prev, createdUser]);
       setIsModalOpen(false);
@@ -457,7 +464,7 @@ export const UserManagement: React.FC = () => {
               </label>
               <input
                 type="text"
-                required
+                required={formData.role !== 'patient'}
                 value={formData.lastName}
                 onChange={(e) => setFormData(prev => ({ ...prev, lastName: e.target.value }))}
                 className="w-full rounded-2xl border border-slate-200 bg-slate-50/70 px-3 py-2 focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/10"
@@ -478,6 +485,13 @@ export const UserManagement: React.FC = () => {
             />
           </div>
           
+          {!editingUser && formData.role === 'patient' && (
+            <label className="block text-sm font-medium text-gray-700">
+              Teléfono
+              <input type="tel" value={phone} onChange={e => setPhone(e.target.value)}
+                className="mt-2 w-full rounded-2xl border border-slate-200 px-3 py-2" />
+            </label>
+          )}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Rol

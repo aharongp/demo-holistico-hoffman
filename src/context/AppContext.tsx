@@ -1032,6 +1032,7 @@ const buildInstrumentTopicPayload = (input: InstrumentTopicInput): Record<string
 
 interface AppContextType {
   // State
+  refreshPatients: () => void;
   patients: Patient[];
   instruments: Instrument[];
   assignments: Assignment[];
@@ -1124,6 +1125,8 @@ const mockDashboardStats: DashboardStats = {
 };
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  const [patientRevision, setPatientRevision] = useState(0);
+  const refreshPatients = () => setPatientRevision(value => value + 1);
   const [patients, setPatients] = useState<Patient[]>([]);
   const [instruments, setInstruments] = useState<Instrument[]>([]);
   const instrumentsRef = useRef<Instrument[]>([]);
@@ -1440,7 +1443,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     return () => {
       cancelled = true;
     };
-  }, [apiBase, token]);
+  }, [apiBase, token, patientRevision]);
 
   // Load programs from backend on mount
   useEffect(() => {
@@ -3602,6 +3605,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const contextValue: AppContextType = {
+    refreshPatients,
     patients,
     instruments,
     assignments,
